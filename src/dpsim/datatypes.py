@@ -24,11 +24,103 @@ class PolymerFamily(Enum):
     v7.x platform (thermal TIPS + optional covalent crosslinking);
     ALGINATE uses diffusion-limited Ca²⁺ ionic gelation; CELLULOSE and
     PLGA are stubs for future F1-b / F1-c work.
+
+    v9.2 additions (Tier-1; SA screening § 6.1):
+        AGAROSE       — chitosan-free thermal-gelation agarose beads (M1)
+        CHITOSAN      — agarose-free chitosan beads with pH-protonation model (M2)
+        DEXTRAN       — Sephadex-class ECH-crosslinked dextran beads (M3)
+
+    v9.2 placeholder enum members (data-only; not enabled in UI yet — Tier 2):
+        HYALURONATE, KAPPA_CARRAGEENAN, AGAROSE_DEXTRAN, AGAROSE_ALGINATE,
+        ALGINATE_CHITOSAN, AMYLOSE, CHITIN
+
+    Per CLAUDE.md, ALWAYS compare PolymerFamily members by ``.value``,
+    never by identity (``is``). The Streamlit app reloads ``dpsim.datatypes``
+    on every rerun, minting a new enum class; identity comparisons silently
+    break after the first rerun.
     """
+    # v9.1 baseline (4)
     AGAROSE_CHITOSAN = "agarose_chitosan"
     ALGINATE = "alginate"
     CELLULOSE = "cellulose"
     PLGA = "plga"
+
+    # v9.2 Tier-1 additions (3)
+    AGAROSE = "agarose"
+    CHITOSAN = "chitosan"
+    DEXTRAN = "dextran"
+
+    # v9.2 Tier-2 placeholders (data-only; is_enabled_in_ui = False)
+    HYALURONATE = "hyaluronate"
+    KAPPA_CARRAGEENAN = "kappa_carrageenan"
+    AGAROSE_DEXTRAN = "agarose_dextran"
+    AGAROSE_ALGINATE = "agarose_alginate"
+    ALGINATE_CHITOSAN = "alginate_chitosan"
+    AMYLOSE = "amylose"
+    CHITIN = "chitin"
+
+
+# ─── PolymerFamily metadata (v9.2 family-flag system) ───────────────────
+#
+# A2.1 + B9.1: per-family metadata flags that guard which families are
+# rendered in the v9.0 Family-First UI and which carry the material-as-
+# ligand pattern (amylose/chitin). Stored externally to the Enum so that
+# the Enum itself stays a thin string-valued vocabulary (which preserves
+# the `.value`-comparison reload semantics).
+
+# Tier-1 v9.2 families that should appear in the M1 family selector.
+# AMYLOSE is Tier-1 because B9 (material-as-ligand for MBP-tag) is in
+# Tier-1 of the SA screening report.
+#
+# v9.3 Tier-2 promotions: HYALURONATE, KAPPA_CARRAGEENAN, AGAROSE_DEXTRAN,
+# AGAROSE_ALGINATE, ALGINATE_CHITOSAN, CHITIN — promoted from data-only
+# placeholders (v9.2) to UI-enabled (v9.3) as their L2 solvers and
+# reagent profiles land. Each carries SEMI_QUANTITATIVE evidence tier
+# pending wet-lab calibration (Q-013/Q-014).
+_TIER1_UI_FAMILIES: frozenset[str] = frozenset({
+    # v9.1 baseline
+    PolymerFamily.AGAROSE_CHITOSAN.value,
+    PolymerFamily.ALGINATE.value,
+    PolymerFamily.CELLULOSE.value,
+    PolymerFamily.PLGA.value,
+    # v9.2 Tier-1 additions
+    PolymerFamily.AGAROSE.value,
+    PolymerFamily.CHITOSAN.value,
+    PolymerFamily.DEXTRAN.value,
+    PolymerFamily.AMYLOSE.value,        # M8 B9 material-as-ligand
+    # v9.3 Tier-2 promotions (SA screening § 6.2)
+    PolymerFamily.HYALURONATE.value,
+    PolymerFamily.KAPPA_CARRAGEENAN.value,
+    PolymerFamily.AGAROSE_DEXTRAN.value,
+    PolymerFamily.AGAROSE_ALGINATE.value,
+    PolymerFamily.ALGINATE_CHITOSAN.value,
+    PolymerFamily.CHITIN.value,
+})
+
+# Families where the polymer IS the affinity matrix (B9 pattern).
+_MATERIAL_AS_LIGAND_FAMILIES: frozenset[str] = frozenset({
+    PolymerFamily.AMYLOSE.value,    # MBP affinity (v9.2 Tier-1)
+    PolymerFamily.CHITIN.value,     # CBD/intein (v9.3 Tier-2 — UI promoted)
+})
+
+
+def is_family_enabled_in_ui(family: PolymerFamily) -> bool:
+    """Return True if ``family`` should be rendered in the v9.0 Family-First UI.
+
+    Tier-2 placeholder families return False; they exist as data-only enum
+    members until their UI surface lands in v9.3.
+    """
+    return family.value in _TIER1_UI_FAMILIES
+
+
+def is_material_as_ligand(family: PolymerFamily) -> bool:
+    """Return True if ``family`` is itself an affinity matrix (B9 pattern).
+
+    For these families, the polymer (e.g. amylose, chitin) IS the affinity
+    ligand; M2 ligand-coupling steps are bypassed and replaced by
+    competitive-eluent elution workflows in M3.
+    """
+    return family.value in _MATERIAL_AS_LIGAND_FAMILIES
 
 
 # ─── Equipment Enums ─────────────────────────────────────────────────────
@@ -556,6 +648,14 @@ class FormulationParameters:
     m1_wash_mixing_efficiency: float = 0.80           # [-] approach to well-mixed extraction per cycle
     m1_oil_retention_factor: float = 1.0              # [-] larger = oil harder to extract
     m1_surfactant_retention_factor: float = 1.5       # [-] larger = surfactant harder to extract
+    # ── v9.2 Q-010: dextran-ECH crosslink-density parameter ──
+    # ECH:OH molar ratio for the DEXTRAN family L2 solver. Sephadex
+    # G-class baselines: G-25 ≈ 0.15 (high crosslink), G-100 ≈ 0.10,
+    # G-200 ≈ 0.04 (low crosslink). Default 0.0 means "use Sephadex
+    # G-100 baseline" via the dextran solver's getattr fallback. Range
+    # validated by the solver as [0.02, 0.30] before tier degrades to
+    # QUALITATIVE_TREND. See `level2_gelation/dextran_ech.py`.
+    ech_oh_ratio_dextran: float = 0.0    # [-] dextran ECH:OH ratio; 0 = Sephadex G-100 default
 
     @property
     def agarose_fraction(self) -> float:

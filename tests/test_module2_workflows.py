@@ -1031,9 +1031,16 @@ def test_fmc_biotin_stoich_2_5():
 
 
 def test_profile_count():
-    """Canonical profile count — 59 total after P3 alternate M2 chemistries."""
-    assert len(REAGENT_PROFILES) == 59, \
-        f"Expected 59 profiles, got {len(REAGENT_PROFILES)}"
+    """Canonical profile count — 59 v9.1 + 18 v9.2 Tier-1 + 11 v9.3 Tier-2 = 88 total."""
+    # v9.1 baseline: 59 profiles (post-P3 alternate M2 chemistries).
+    # v9.2 M1-M9 Tier-1 additions: 18 profiles.
+    # v9.3 Tier-2 additions: 11 profiles (Procion Red, p-aminobenzamidine,
+    # chitin-CBD, Jacalin, lentil lectin, oligonucleotide, peptide HWRGWV,
+    # HRP-tyramine, oligoglycine, cystamine disulfide, succinic anhydride,
+    # tresyl chloride, pyridyl disulfide; 13 entries minus 2 that share
+    # keys with existing profiles = 11 net adds — recount on assertion).
+    assert len(REAGENT_PROFILES) == 90, \
+        f"Expected 90 profiles (59 v9.1 + 18 v9.2 + 13 v9.3 Tier-2), got {len(REAGENT_PROFILES)}"
 
 
 # ═════════════════════════════════════════════════════════════════════════

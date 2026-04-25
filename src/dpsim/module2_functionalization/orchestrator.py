@@ -350,6 +350,26 @@ def build_functional_media_contract(
                     "gst_affinity": "gst_affinity",
                     "biotin_affinity": "biotin_affinity",
                     "heparin_affinity": "heparin_affinity",
+                    # v9.2 specialised M3 ligand_types (Q-015 resolution).
+                    # Each new mode now routes to its own ligand_type
+                    # branch in the q_max-computation block below.
+                    "dye_pseudo_affinity": "dye_pseudo_affinity",  # B3 — Cibacron Blue
+                    "mixed_mode_hcic": "mixed_mode_hcic",          # B4 — MEP
+                    "thiophilic": "thiophilic",                    # B4 — T-Sorb
+                    "boronate": "boronate",                        # B10 — boronate
+                    # Tier-2 (v9.3) modes still map to generic affinity
+                    # until their dedicated branches land:
+                    "peptide_affinity": "affinity",      # B-future — HWRGWV
+                    "oligonucleotide": "affinity",       # B-future — DNA ligand
+                    # `click_handle` is an intermediate (not a final ligand);
+                    # map to "none" so M3 ignores until the click ligand
+                    # itself is coupled in a subsequent step.
+                    "click_handle": "none",              # B7 — CuAAC/SPAAC
+                    # `material_as_ligand` is the B9 amylose/chitin pattern
+                    # — bound by the polymer matrix itself. M3 currently
+                    # routes through "affinity" isotherms; matrix-as-ligand
+                    # specialisation is wet-lab calibration follow-on.
+                    "material_as_ligand": "affinity",    # B9 — amylose-MBP, chitin-CBD
                 }
                 ligand_type = _mode_map.get(fm, "none")
                 _last_coupling_rp = rp  # carry for density area selection
@@ -455,6 +475,67 @@ def build_functional_media_contract(
                 f"HIC: q_max not mappable from ligand density alone. "
                 f"Requires salt-dependent adsorption isotherm. {_q_max_area_note}"
             )
+        elif ligand_type == "dye_pseudo_affinity":
+            # Q-015: B3 dye-pseudo-affinity (Cibacron Blue F3GA, Procion Red).
+            # Stoichiometry varies by target (1 albumin per dye; ~1 NAD-
+            # binding enzyme per dye; some oligomeric proteins bind 2+).
+            # Use 1.0 as a conservative ranking estimate.
+            binding_stoich = 1.0
+            q_max_est = functional_density * a_v_for_qmax * binding_stoich
+            confidence = "ranking_only"  # large target-dependent variance
+            q_max_notes = (
+                f"Dye-pseudo-affinity: q_max = density × a_v × stoich(~1.0). "
+                f"Target-dependent (NAD-binding enzymes ~1, albumin ~1, "
+                f"some oligomers >1). RANKING ONLY — calibrate with "
+                f"actual target. Dye leakage warning: monitor A610 in "
+                f"effluent. {_q_max_area_note}"
+            )
+        elif ligand_type == "mixed_mode_hcic":
+            # Q-015: B4 MEP HCIC pH-switchable IgG capture.
+            # Stoichiometry: ~1 IgG per MEP at saturating loading
+            # (Burton & Harding 1998); pH-dependent.
+            binding_stoich = 1.0
+            q_max_est = functional_density * a_v_for_qmax * binding_stoich
+            confidence = "ranking_only"
+            q_max_notes = (
+                f"Mixed-mode HCIC (MEP): q_max = density × stoich(1.0 IgG/ligand). "
+                f"pH-switchable: loads at pH 7 (uncharged pyridine, hydrophobic "
+                f"binding); elutes at pH 4 (cationic pyridinium repels cationic "
+                f"IgG). Process state: requires pH gradient (no salt needed). "
+                f"{_q_max_area_note}"
+            )
+        elif ligand_type == "thiophilic":
+            # Q-015: B4 thiophilic salt-promoted IgG capture.
+            # Stoichiometry: ~1 IgG per ligand pair (thiophilic binding
+            # involves cooperative interaction of multiple sulfone groups
+            # with the IgG Fc); use 1.0/(2 ligands) ≈ 0.5 effective stoich.
+            binding_stoich = 0.5
+            q_max_est = functional_density * a_v_for_qmax * binding_stoich
+            confidence = "ranking_only"
+            q_max_notes = (
+                f"Thiophilic (T-Sorb): q_max = density × stoich(~0.5 IgG/ligand). "
+                f"Salt-promoted electron-donor/acceptor binding (distinct from "
+                f"HIC). Loads at high salt (0.5–1 M K2SO4); elutes at low salt. "
+                f"Process state: requires salt gradient (descending). "
+                f"{_q_max_area_note}"
+            )
+        elif ligand_type == "boronate":
+            # Q-015: B10 boronate cis-diol affinity.
+            # Stoichiometry: ~1 cis-diol pair per boronate ligand at pH > pKa.
+            # For glycoproteins with multiple cis-diol sites, multiple
+            # boronates can bind one molecule, but for q_max accounting
+            # use 1:1 (one binding event per ligand site).
+            binding_stoich = 1.0
+            q_max_est = functional_density * a_v_for_qmax * binding_stoich
+            confidence = "ranking_only"
+            q_max_notes = (
+                f"Boronate cis-diol: q_max = density × stoich(1.0). "
+                f"pH-switchable: binds above boronate pKa (~8.5); elutes "
+                f"by sorbitol/fructose competitor or pH < pKa. Targets "
+                f"glycoproteins, glycated proteins (HbA1c), nucleotides. "
+                f"Process state: requires pH 8.5 + sorbitol/fructose elution. "
+                f"{_q_max_area_note}"
+            )
         else:
             q_max_notes = f"Ligand type '{ligand_type}' — q_max mapping not implemented."
             if ligand_type != "none":
@@ -466,7 +547,14 @@ def build_functional_media_contract(
             q_max_notes = "q_max not computed: no functional ligand density."
 
     # Determine confidence tier
-    _ranking_types = {"affinity", "biotin_affinity", "heparin_affinity"}
+    _ranking_types = {
+        "affinity", "biotin_affinity", "heparin_affinity",
+        # v9.2 specialised modes (Q-015) carry RANKING_ONLY confidence
+        # because target-dependent stoichiometry / pH-switchable binding
+        # / salt-dependent adsorption all introduce variance that simple
+        # ligand-density × stoich product does not capture.
+        "dye_pseudo_affinity", "mixed_mode_hcic", "thiophilic", "boronate",
+    }
     _conf_tier = "ranking_only" if ligand_type in _ranking_types else "semi_quantitative"
 
     # Compute q_max uncertainty bounds from activity_retention_uncertainty

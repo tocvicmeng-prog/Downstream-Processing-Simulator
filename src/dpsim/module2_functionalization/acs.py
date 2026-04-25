@@ -53,6 +53,20 @@ class ACSSiteType(Enum):
     HYDRAZIDE:       Hydrazide-terminated spacer for aldehyde/glycan capture.
     NTA:             Nitrilotriacetic acid chelator for IMAC media.
     IDA:             Iminodiacetic acid chelator for IMAC media.
+
+    v9.2 ACS expansion (12 new site types — see SA report § 6.1):
+    SULFATE_ESTER:   Sulfate-ester groups on κ-/ι-carrageenan.
+    THIOL:           Free -SH groups (cysteine residues, post-reduction supports).
+    PHENOL_TYRAMINE: Phenolic side group for HRP-radical coupling (HA/alginate-tyramine).
+    AZIDE:           Azide handle for CuAAC/SPAAC click chemistry.
+    ALKYNE:          Terminal alkyne handle for CuAAC.
+    AMINOOXY:        -ONH2 for oxime ligation with aldehydes/ketones.
+    CIS_DIOL:        Target chemistry for boronate-affinity ligands (vicinal diols).
+    TRIAZINE_REACTIVE: Cyanuric-chloride-derived activated support; couples to amines or hydroxyls.
+    GLYOXYL:         Aldehyde-bearing support after glycidol→periodate sequence; multipoint enzyme immobilization.
+    CYANATE_ESTER:   CNBr-activated agarose intermediate (cyanate ester / imidocarbonate).
+    IMIDAZOLYL_CARBONATE: CDI-activated support; carbamate-forming on amine ligand coupling.
+    SULFONATE_LEAVING: Tresyl/tosyl-activated hydroxyl support; sulfonate leaving group.
     """
     AMINE_PRIMARY = "amine_primary"
     HYDROXYL = "hydroxyl"
@@ -70,6 +84,19 @@ class ACSSiteType(Enum):
     HYDRAZIDE = "hydrazide"
     NTA = "nta"
     IDA = "ida"
+    # v9.2 additions — Tier-1 candidate integration (SA report § 6.1):
+    SULFATE_ESTER = "sulfate_ester"            # carrageenan sulfate groups
+    THIOL = "thiol"                             # free -SH (cysteine, post-reduction)
+    PHENOL_TYRAMINE = "phenol_tyramine"         # HRP-radical coupling target
+    AZIDE = "azide"                             # CuAAC/SPAAC click handle
+    ALKYNE = "alkyne"                           # CuAAC click handle
+    AMINOOXY = "aminooxy"                       # oxime-ligation handle
+    CIS_DIOL = "cis_diol"                       # boronate-affinity target
+    TRIAZINE_REACTIVE = "triazine_reactive"     # cyanuric-chloride activated
+    GLYOXYL = "glyoxyl"                         # multipoint enzyme immobilization
+    CYANATE_ESTER = "cyanate_ester"             # CNBr-activated
+    IMIDAZOLYL_CARBONATE = "imidazolyl_carbonate"  # CDI-activated
+    SULFONATE_LEAVING = "sulfonate_leaving"     # tresyl/tosyl-activated
 
 
 # ─── ACSProfile Dataclass ──────────────────────────────────────────────
@@ -293,6 +320,17 @@ def initialize_acs_from_m1(
 
     Returns:
         Dictionary mapping ACSSiteType to ACSProfile for AMINE_PRIMARY and HYDROXYL.
+
+        Note (v9.2): the function returns profiles only for natively present
+        groups (AMINE_PRIMARY on chitosan, HYDROXYL on agarose). All other
+        ACSSiteType members (CARBOXYL, EPOXIDE, ALDEHYDE, ..., and the v9.2
+        additions SULFATE_ESTER, THIOL, AZIDE, ALKYNE, AMINOOXY, CIS_DIOL,
+        TRIAZINE_REACTIVE, GLYOXYL, CYANATE_ESTER, IMIDAZOLYL_CARBONATE,
+        SULFONATE_LEAVING, PHENOL_TYRAMINE) are produced by activation or
+        coupling chemistry; they are added to the inventory by reaction-engine
+        steps, not by this initializer. Tier-2 materials with native sulfate
+        or thiol content (κ-carrageenan, cysteine-modified supports) will
+        extend ``_group_specs`` when those PolymerFamily entries land.
 
     Raises:
         ValueError: If surface model has not been computed (zero areas).

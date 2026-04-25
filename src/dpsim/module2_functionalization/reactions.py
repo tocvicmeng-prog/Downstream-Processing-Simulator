@@ -59,6 +59,67 @@ class CouplingResult:
 R_GAS = 8.314  # [J/(mol*K)]
 
 
+# ─── A5.2 — chemistry_class → kinetic-template mapping ─────────────────
+#
+# v9.2 reagent profiles use the closed `chemistry_class` vocabulary
+# (defined in reagent_profiles.py). This mapping dictates which kinetic
+# template (Template 1 / 2 / 3 above) each class consumes. Workflow
+# milestones M1–M9 may add specialised templates; this table is the
+# single dispatch point.
+
+CHEMISTRY_CLASS_TO_TEMPLATE: dict[str, str] = {
+    # v9.1 baseline classes
+    "epoxide_amine":         "second_order_irreversible",   # Template 1
+    "epoxide_amine_spacer":  "second_order_irreversible",   # Template 1
+    "epoxide_thiol":         "second_order_irreversible",   # Template 1
+    "epoxide_hydrazide":     "competitive_hydrolysis",      # Template 2
+    "vs_amine":              "second_order_irreversible",   # Template 1
+    "vs_amine_thiol":        "second_order_irreversible",   # Template 1
+    "vs_thiol":              "second_order_irreversible",   # Template 1
+    "aldehyde_amine":        "competitive_hydrolysis",      # Template 2 (Schiff base)
+    "hydrazide_aldehyde":    "competitive_hydrolysis",      # Template 2
+    "amine_covalent":        "second_order_irreversible",   # Template 1 (genipin/GA)
+    "reduction":             "second_order_irreversible",   # Template 1 (NaBH4)
+    "acetylation":           "second_order_irreversible",   # Template 1
+    "edc_nhs":               "competitive_hydrolysis",      # Template 2 (NHS-ester hydrolysis competition)
+    "nhs_amine":             "competitive_hydrolysis",      # Template 2
+    "maleimide_thiol":       "second_order_irreversible",   # Template 1
+    "metal_chelation":       "second_order_irreversible",   # Template 1 (IMAC charging)
+    "phosphorylation_alkaline": "second_order_irreversible",  # Template 1 (STMP)
+    "diffusion_out":         "second_order_irreversible",   # Template 1 (advisory diffusion model)
+
+    # v9.2 additions (SA report § 6.1)
+    "oxime":              "competitive_hydrolysis",      # Template 2 (oxime + water competition)
+    "hydrazone":          "competitive_hydrolysis",      # Template 2 (reversible at low pH)
+    "cuaac":              "second_order_irreversible",   # Template 1 (Cu-cat. click; effectively irreversible)
+    "spaac":              "second_order_irreversible",   # Template 1 (strain-promoted; irreversible)
+    "dye_triazine":       "competitive_hydrolysis",      # Template 2 (triazine hydrolyses competitively)
+    "cnbr_amine":         "competitive_hydrolysis",      # Template 2 (cyanate ester is hydrolytically labile)
+    "cdi_amine":          "competitive_hydrolysis",      # Template 2 (imidazolyl carbonate hydrolyses)
+    "glyoxyl_multipoint": "steric_binding",              # Template 3 (multipoint protein coupling)
+    "phenol_radical":     "second_order_irreversible",   # Template 1 (HRP/H2O2; effectively irreversible per cycle)
+}
+
+
+def kinetic_template_for(chemistry_class: str) -> str:
+    """Return the kinetic-template name for a chemistry_class string.
+
+    Raises ValueError if the class is unknown — keeps the closed
+    vocabulary contract enforced at dispatch time. Empty string maps to
+    "second_order_irreversible" as a safe default for legacy profiles
+    that have not yet declared a chemistry_class.
+    """
+    if not chemistry_class:
+        return "second_order_irreversible"
+    if chemistry_class not in CHEMISTRY_CLASS_TO_TEMPLATE:
+        raise ValueError(
+            f"No kinetic template registered for chemistry_class "
+            f"{chemistry_class!r}. Add to CHEMISTRY_CLASS_TO_TEMPLATE "
+            f"in reactions.py and document in SA screening report."
+        )
+    return CHEMISTRY_CLASS_TO_TEMPLATE[chemistry_class]
+
+
 # ─── pH Scaling Helper (v5.9.4) ─────────────────────────────────────────
 
 def ph_rate_scaling(ph: float, pKa: float, n_hill: float = 1.0) -> float:

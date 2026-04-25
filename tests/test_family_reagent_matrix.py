@@ -12,7 +12,7 @@ from dpsim.core.process_recipe import (
 )
 from dpsim.core.recipe_validation import validate_recipe_first_principles
 from dpsim.core.validation import ValidationSeverity
-from dpsim.datatypes import PolymerFamily
+from dpsim.datatypes import PolymerFamily, is_family_enabled_in_ui
 from dpsim.module2_functionalization.family_reagent_matrix import (
     FAMILY_REAGENT_MATRIX,
     check_family_reagent_compatibility,
@@ -30,7 +30,11 @@ class TestMatrixStructure:
     def test_matrix_nonempty(self):
         assert len(FAMILY_REAGENT_MATRIX) > 0
 
-    def test_each_canonical_reagent_covers_all_4_families(self):
+    def test_each_canonical_reagent_covers_all_ui_enabled_families(self):
+        # v9.2: matrix coverage required only for UI-enabled (Tier-1) families.
+        # Tier-2 placeholder families (HYALURONATE, KAPPA_CARRAGEENAN, …) are
+        # data-only enum members until their UI surface lands in v9.3; matrix
+        # entries for them are optional in v9.2.
         canonical_reagents = {
             "ech_activation",
             "dvs_activation",
@@ -39,13 +43,13 @@ class TestMatrixStructure:
             "stmp_secondary",
             "glutaraldehyde_secondary",
         }
-        all_families = set(PolymerFamily)
+        ui_enabled_families = {f for f in PolymerFamily if is_family_enabled_in_ui(f)}
         by_reagent: dict[str, set[PolymerFamily]] = {}
         for entry in FAMILY_REAGENT_MATRIX:
             by_reagent.setdefault(entry.reagent_key, set()).add(entry.polymer_family)
         for reagent in canonical_reagents:
             covered = by_reagent.get(reagent, set())
-            missing = all_families - covered
+            missing = ui_enabled_families - covered
             assert not missing, (
                 f"reagent {reagent!r} missing matrix entries for {missing}"
             )

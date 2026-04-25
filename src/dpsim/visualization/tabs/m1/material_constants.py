@@ -75,7 +75,11 @@ def render_material_constants(
         custom_eta_chit = None
         custom_eta_coup = None
         eta_coup_source = "Literature"
-        if family is PolymerFamily.AGAROSE_CHITOSAN:
+        # Streamlit-reload-safe comparison via .value per CLAUDE.md
+        # (Q-011): identity comparison silently breaks after the first
+        # rerun because `dpsim.datatypes` is reloaded and a new enum
+        # class is minted.
+        if family.value == PolymerFamily.AGAROSE_CHITOSAN.value:
             _ec = ALL_CONSTANTS["eta_intr_chit"]
             custom_eta_chit = const_input(
                 _mc, "[\u03b7] chitosan", "eta_chit",

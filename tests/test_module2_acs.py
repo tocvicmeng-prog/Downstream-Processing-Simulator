@@ -286,6 +286,96 @@ class TestACSProfileValidation:
         assert any("negative" in e for e in errors)
 
 
+# ─── v9.2 ACS expansion — parametrized conservation tests ──────────────
+
+# v9.2 site-type roster (must match ACSSiteType enum exactly).
+_V9_2_SITE_TYPES = [
+    # v9.1 baseline
+    ACSSiteType.AMINE_PRIMARY,
+    ACSSiteType.HYDROXYL,
+    ACSSiteType.CARBOXYL,
+    ACSSiteType.EPOXIDE,
+    ACSSiteType.ALDEHYDE,
+    ACSSiteType.VINYL_SULFONE,
+    ACSSiteType.AMINE_DISTAL,
+    ACSSiteType.MALEIMIDE,
+    ACSSiteType.CARBOXYL_DISTAL,
+    ACSSiteType.NHS_ESTER,
+    ACSSiteType.HYDRAZIDE,
+    ACSSiteType.NTA,
+    ACSSiteType.IDA,
+    # v9.2 additions (12)
+    ACSSiteType.SULFATE_ESTER,
+    ACSSiteType.THIOL,
+    ACSSiteType.PHENOL_TYRAMINE,
+    ACSSiteType.AZIDE,
+    ACSSiteType.ALKYNE,
+    ACSSiteType.AMINOOXY,
+    ACSSiteType.CIS_DIOL,
+    ACSSiteType.TRIAZINE_REACTIVE,
+    ACSSiteType.GLYOXYL,
+    ACSSiteType.CYANATE_ESTER,
+    ACSSiteType.IMIDAZOLYL_CARBONATE,
+    ACSSiteType.SULFONATE_LEAVING,
+]
+
+
+class TestV9_2_ACSExpansion:
+    """v9.2: ensure the new ACS site types satisfy the conservation invariants
+    used by the v9.1 schema, and that the enum roster has the expected size."""
+
+    def test_enum_size(self):
+        # v9.1 had 13 sites; v9.2 adds 12 → 25 total
+        assert len(ACSSiteType) == 25, (
+            f"Expected 25 ACS site types (13 v9.1 + 12 v9.2), got {len(ACSSiteType)}"
+        )
+
+    def test_v9_2_members_exist(self):
+        v9_2_names = {
+            "SULFATE_ESTER", "THIOL", "PHENOL_TYRAMINE", "AZIDE", "ALKYNE",
+            "AMINOOXY", "CIS_DIOL", "TRIAZINE_REACTIVE", "GLYOXYL",
+            "CYANATE_ESTER", "IMIDAZOLYL_CARBONATE", "SULFONATE_LEAVING",
+        }
+        existing = {m.name for m in ACSSiteType}
+        missing = v9_2_names - existing
+        assert not missing, f"Missing v9.2 ACS members: {missing}"
+
+    def test_no_value_collisions(self):
+        values = [m.value for m in ACSSiteType]
+        assert len(values) == len(set(values)), "ACS site-type values must be unique"
+
+    @pytest.mark.parametrize("site", _V9_2_SITE_TYPES)
+    def test_zero_profile_validates(self, site):
+        """Default-zero profile must satisfy conservation for every site type."""
+        profile = ACSProfile(site_type=site)
+        errors = profile.validate()
+        assert errors == [], f"Default profile for {site.value} failed validation: {errors}"
+
+    @pytest.mark.parametrize("site", _V9_2_SITE_TYPES)
+    def test_terminal_sum_invariant(self, site):
+        """terminal_sum <= accessible (within tolerance) for every site type."""
+        # Build a populated profile that distributes sites across all terminal states.
+        profile = ACSProfile(
+            site_type=site,
+            total_sites=1.0e-9,
+            accessible_sites=8.0e-10,
+            activated_sites=5.0e-10,
+            crosslinked_sites=2.0e-10,
+            hydrolyzed_sites=5.0e-11,
+            ligand_coupled_sites=1.5e-10,
+            ligand_functional_sites=1.0e-10,
+            blocked_sites=5.0e-11,
+        )
+        errors = profile.validate()
+        assert errors == [], f"{site.value} terminal-sum violated: {errors}"
+
+    @pytest.mark.parametrize("site", _V9_2_SITE_TYPES)
+    def test_round_trip_value(self, site):
+        """Every site type round-trips through .value (used by Streamlit reload safety)."""
+        recovered = ACSSiteType(site.value)
+        assert recovered.value == site.value
+
+
 class TestACSRemainingSites:
     """remaining = accessible - consumed - blocked."""
 

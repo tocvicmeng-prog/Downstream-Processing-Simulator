@@ -254,6 +254,35 @@ class PipelineOrchestrator:
                 applied_calibrations=applied_calibrations,
             )
 
+        # ── v9.2 Tier-1 + v9.3 Tier-2 platforms (Q-009 + v9.3) ─────────
+        # All UI-enabled non-legacy families route through the
+        # composite L2 dispatcher and the _run_v9_2_tier1 branch.
+        # Compare by .value per CLAUDE.md Streamlit reload-safety rule —
+        # never use `is` or identity.
+        _v9_2_tier1_values = {
+            # v9.2 Tier-1
+            PolymerFamily.AGAROSE.value,
+            PolymerFamily.CHITOSAN.value,
+            PolymerFamily.DEXTRAN.value,
+            PolymerFamily.AMYLOSE.value,
+            # v9.3 Tier-2 promotions
+            PolymerFamily.HYALURONATE.value,
+            PolymerFamily.KAPPA_CARRAGEENAN.value,
+            PolymerFamily.AGAROSE_DEXTRAN.value,
+            PolymerFamily.AGAROSE_ALGINATE.value,
+            PolymerFamily.ALGINATE_CHITOSAN.value,
+            PolymerFamily.CHITIN.value,
+        }
+        if props.polymer_family.value in _v9_2_tier1_values:
+            return self._run_v9_2_tier1(
+                params=params, props=props,
+                emul_result=emul_result, R_droplet=R_droplet,
+                timings=timings, run_dir=run_dir, run_id=run_id,
+                crosslinker_key=crosslinker_key,
+                l2_mode=l2_mode,
+                applied_calibrations=applied_calibrations,
+            )
+
         # ── Level 2a: Gelation Timing ──────────────────────────────────
         # Cahn-Hilliard scaling λ* ~ sqrt(R).
         logger.info("L2a: Gelation timing (R=%.2f um)", R_droplet * 1e6)
@@ -719,6 +748,163 @@ class PipelineOrchestrator:
             model_graph=_manifests,
             trust_level="medium",
             trust_warnings=[],
+            trust_blockers=[],
+            diagnostics=_diagnostics,
+        )
+        run_report.min_evidence_tier = run_report.compute_min_tier().value
+        full_result.run_report = run_report
+        return full_result
+
+    def _run_v9_2_tier1(self, *, params, props, emul_result, R_droplet,
+                        timings, run_dir, run_id, crosslinker_key,
+                        l2_mode, applied_calibrations):
+        """v9.2 Tier-1 + v9.3 Tier-2 platforms.
+
+        Resolves Q-009 (v9.2 close) and the v9.3 Tier-2 dispatch. Routes
+        AGAROSE / CHITOSAN / DEXTRAN / AMYLOSE (v9.2 Tier-1) and
+        HYALURONATE / KAPPA_CARRAGEENAN / AGAROSE_DEXTRAN /
+        AGAROSE_ALGINATE / ALGINATE_CHITOSAN / CHITIN (v9.3 Tier-2)
+        through the composite L2 dispatcher
+        (``level2_gelation.composite_dispatch.solve_gelation_by_family``).
+
+        L3 (covalent crosslinking) is stubbed: each family carries its
+        own gelation chemistry in L2's ModelManifest. Future v9.3+
+        wet-lab calibration (Q-013/Q-014) may unlock per-family L3
+        kinetic routes.
+
+        L4 (mechanical) reuses the AGAROSE_CHITOSAN modulus solver as a
+        SEMI_QUANTITATIVE placeholder for all new families; family-
+        specific moduli land in v9.4 alongside wet-lab calibration.
+
+        Mirrors the structure of ``_run_alginate`` / ``_run_cellulose`` /
+        ``_run_plga`` for FullResult / summary / RunReport assembly.
+        """
+        from ..level2_gelation.composite_dispatch import solve_gelation_by_family
+        from ..level3_crosslinking.solver import _build_zero_result as _zero_xlink
+
+        family_value = props.polymer_family.value
+
+        # ── L2: route through composite dispatcher ─────────────────────
+        logger.info(
+            "L2 (v9.2 Tier-1: %s): R=%.2f um, mode=%s",
+            family_value, R_droplet * 1e6, l2_mode,
+        )
+        t0 = time.perf_counter()
+        gel_result = solve_gelation_by_family(
+            params=params, props=props, R_droplet=R_droplet,
+            mode=l2_mode, timing=None,
+        )
+        timings["L2"] = time.perf_counter() - t0
+        tier_str = (
+            gel_result.model_manifest.evidence_tier.value
+            if gel_result.model_manifest is not None else "unknown"
+        )
+        logger.info(
+            "L2 done: pore=%.1f nm, porosity=%.2f, tier=%s, model=%s (%.1fs)",
+            gel_result.pore_size_mean * 1e9, gel_result.porosity,
+            tier_str, gel_result.model_tier, timings["L2"],
+        )
+
+        # ── L3: stubbed for v9.2 new families ──────────────────────────
+        # The chitosan-only / dextran-ECH / amylose chemistries are
+        # captured in L2; no separate covalent crosslinking layer is
+        # calibrated for v9.2. Use the canonical zero result so
+        # downstream accounting stays intact.
+        xlink_result = _zero_xlink(params, xl=None)
+
+        # ── L4: AGAROSE_CHITOSAN modulus solver as v9.2 placeholder ────
+        # The Manno 2014 phi-power-law modulus is dimensionally
+        # consistent for any hydrogel polymer fraction and serves as a
+        # reasonable SEMI_QUANTITATIVE placeholder until family-specific
+        # mechanical solvers land in v9.3.
+        logger.info("L4 (%s, v9.2 placeholder): hydrogel modulus", family_value)
+        t0 = time.perf_counter()
+        mech_result = solve_mechanical(
+            params, props, gel_result, xlink_result,
+            R_droplet=R_droplet,
+        )
+        timings["L4"] = time.perf_counter() - t0
+        logger.info(
+            "L4 done: G_DN=%.0f Pa, E*=%.0f Pa (%.4fs)",
+            mech_result.G_DN, mech_result.E_star, timings["L4"],
+        )
+
+        total = sum(timings.values())
+        logger.info(
+            "Pipeline complete (v9.2 Tier-1: %s): %.1fs total",
+            family_value, total,
+        )
+
+        full_result = FullResult(
+            parameters=params,
+            emulsification=emul_result,
+            gelation=gel_result,
+            crosslinking=xlink_result,
+            mechanical=mech_result,
+            gelation_timing=None,
+        )
+
+        summary = {
+            "run_id": run_id,
+            "timings": timings,
+            "total_time_s": total,
+            "polymer_family": family_value,
+            "v9_2_tier1": True,
+            "level1": {
+                "d32_um": emul_result.d32 * 1e6,
+                "d50_um": emul_result.d50 * 1e6,
+                "span": emul_result.span,
+                "converged": bool(emul_result.converged),
+            },
+            "level2": {
+                "pore_size_mean_nm": gel_result.pore_size_mean * 1e9,
+                "porosity": gel_result.porosity,
+                "alpha_final": gel_result.alpha_final,
+                "model_tier": gel_result.model_tier,
+                "evidence_tier": tier_str,
+            },
+            "level3": {
+                "note": (
+                    f"v9.2: L3 stubbed for {family_value!r}. "
+                    f"Gelation chemistry captured in L2 model_manifest. "
+                    f"v9.3 follow-on: per-family covalent crosslinking layer "
+                    f"if wet-lab calibration justifies."
+                ),
+            },
+            "level4": {
+                "G_DN_Pa": mech_result.G_DN,
+                "E_star_Pa": mech_result.E_star,
+                "note": (
+                    "v9.2 placeholder: AGAROSE_CHITOSAN modulus solver "
+                    "applied to the new family. Family-specific moduli "
+                    "land in v9.3."
+                ),
+            },
+        }
+        with open(run_dir / "summary.json", "w") as f:
+            json.dump(summary, f, indent=2)
+
+        _manifests = [
+            r.model_manifest
+            for r in (emul_result, gel_result, mech_result)
+            if getattr(r, "model_manifest", None) is not None
+        ]
+        _diagnostics: dict = {
+            "timings": timings, "total_time_s": total,
+            "polymer_family": family_value,
+            "v9_2_tier1": True,
+        }
+        if applied_calibrations:
+            _diagnostics["calibrations_applied"] = list(applied_calibrations)
+            _diagnostics["calibration_count"] = len(applied_calibrations)
+        run_report = RunReport(
+            model_graph=_manifests,
+            trust_level="medium",
+            trust_warnings=[
+                f"v9.2 Tier-1 family {family_value!r}: L3 stubbed; "
+                f"L4 uses AGAROSE_CHITOSAN solver as placeholder. "
+                f"Family-specific calibration is v9.3 follow-on.",
+            ],
             trust_blockers=[],
             diagnostics=_diagnostics,
         )

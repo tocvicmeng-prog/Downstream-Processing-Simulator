@@ -27,6 +27,104 @@ from typing import Optional
 from .acs import ACSSiteType
 
 
+# ─── v9.2 vocabulary constants (A4.1 + A5.1) ───────────────────────────
+#
+# `functional_mode` and `chemistry_class` are open strings on ReagentProfile
+# for forward compatibility, but every value must come from these closed
+# vocabularies. New values must be added here AND documented in the SA
+# screening report § 6.1 before any new ReagentProfile entry uses them.
+
+ALLOWED_FUNCTIONAL_MODES: frozenset[str] = frozenset({
+    # v9.1 baseline (full canonical set including specialised modes
+    # already in REAGENT_PROFILES at v9.1 close)
+    "crosslinker",
+    "activator",
+    "iex_ligand",
+    "affinity_ligand",
+    "hic_ligand",
+    "imac_chelator",
+    "quencher",
+    "spacer",
+    "washing",
+    "metal_charging",
+    "protein_pretreatment",
+    "biotin_affinity",
+    "gst_affinity",
+    "heparin_affinity",
+    "heterobifunctional_crosslinker",
+    # v9.2 additions (SA screening § 6.1)
+    "dye_pseudo_affinity",   # Cibacron Blue, Procion Red — triazine dye ligands
+    "mixed_mode_hcic",       # MEP HyperCel — pH-switchable hydrophobic↔cationic
+    "thiophilic",            # T-Sorb / T-Gel salt-promoted IgG capture
+    "peptide_affinity",      # HWRGWV-class peptide ligands
+    "boronate",              # aminophenylboronic-acid cis-diol affinity
+    "oligonucleotide",       # sequence-specific DNA/RNA affinity
+    "click_handle",          # CuAAC / SPAAC modular ligand-library handles
+    "material_as_ligand",    # amylose-MBP, chitin-CBD — polymer is the affinity matrix
+})
+
+ALLOWED_CHEMISTRY_CLASSES: frozenset[str] = frozenset({
+    # v9.1 baseline (full canonical set, including specialised classes
+    # used by existing REAGENT_PROFILES entries at v9.1 close)
+    "epoxide_amine",
+    "epoxide_amine_spacer",
+    "epoxide_thiol",
+    "epoxide_hydrazide",
+    "vs_amine",
+    "vs_amine_thiol",
+    "vs_thiol",
+    "aldehyde_amine",
+    "hydrazide_aldehyde",
+    "reduction",
+    "acetylation",
+    "amine_covalent",
+    "edc_nhs",
+    "nhs_amine",
+    "maleimide_thiol",
+    "metal_chelation",
+    "phosphorylation_alkaline",
+    "diffusion_out",
+    # v9.2 additions (SA screening § 6.1)
+    "oxime",                 # aldehyde + aminooxy → oxime (more stable than hydrazone)
+    "hydrazone",             # aldehyde + hydrazide → hydrazone (reversible at low pH)
+    "cuaac",                 # Cu-catalyzed azide-alkyne cycloaddition
+    "spaac",                 # strain-promoted azide-alkyne cycloaddition (copper-free)
+    "dye_triazine",          # cyanuric-chloride-based dye attachment
+    "cnbr_amine",            # CNBr-activated cyanate ester + amine ligand
+    "cdi_amine",             # CDI-activated imidazolyl carbonate + amine ligand
+    "glyoxyl_multipoint",    # multi-point Lys coupling via glyoxyl-agarose
+    "phenol_radical",        # HRP/H2O2 tyramine-radical coupling
+})
+
+
+def validate_functional_mode(mode: str) -> None:
+    """Raise ValueError if ``mode`` is not in ALLOWED_FUNCTIONAL_MODES.
+
+    Empty string is allowed (means "unspecified"); any other value must be
+    in the closed vocabulary.
+    """
+    if mode and mode not in ALLOWED_FUNCTIONAL_MODES:
+        raise ValueError(
+            f"Unknown functional_mode {mode!r}. "
+            f"Add to ALLOWED_FUNCTIONAL_MODES (reagent_profiles.py) "
+            f"and document in SA screening report before use."
+        )
+
+
+def validate_chemistry_class(cls: str) -> None:
+    """Raise ValueError if ``cls`` is not in ALLOWED_CHEMISTRY_CLASSES.
+
+    Empty string is allowed (means "unspecified"); any other value must be
+    in the closed vocabulary.
+    """
+    if cls and cls not in ALLOWED_CHEMISTRY_CLASSES:
+        raise ValueError(
+            f"Unknown chemistry_class {cls!r}. "
+            f"Add to ALLOWED_CHEMISTRY_CLASSES (reagent_profiles.py) "
+            f"and document in SA screening report before use."
+        )
+
+
 @dataclass
 class ReagentProfile:
     """Profile for a Module 2 functionalization reagent.
@@ -1824,6 +1922,1037 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         confidence_tier="semi_quantitative",
         calibration_source="Advisory diffusion-out screening model",
         notes="Advisory only; does not claim GMP pass/fail without validated residual assays",
+    ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # v9.2 Tier-1 reagent additions (M1–M9)
+    # ═══════════════════════════════════════════════════════════════════
+
+    # ── M1 (B1) — Classical affinity-resin completion ─────────────────
+
+    # B1.2 CNBr activation. Kohn & Wilchek 1981 Anal. Biochem. 115:375.
+    # k ~ 1e-3 m^3/(mol*s) at pH 11, 4 °C; E_a ~ 35 kJ/mol.
+    # CNBr is HIGHLY TOXIC (HCN release on hydrolysis) — hazard surfaced.
+    "cnbr_activation": ReagentProfile(
+        name="Cyanogen bromide (OH activation)",
+        cas="506-68-3",
+        reaction_type="activation",
+        target_acs=ACSSiteType.HYDROXYL,
+        product_acs=ACSSiteType.CYANATE_ESTER,
+        k_forward=1e-3,
+        E_a=35000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=2e-3,         # short activated-site half-life
+        ph_optimum=11.0,
+        temperature_default=277.15,    # 4 °C — low T to suppress hydrolysis
+        time_default=600.0,            # 10 min
+        functional_mode="activator",
+        chemistry_class="cnbr_amine",
+        ph_min=10.0, ph_max=12.0,
+        temperature_min=273.15, temperature_max=283.15,
+        confidence_tier="semi_quantitative",
+        calibration_source="Kohn & Wilchek (1981) Anal. Biochem. 115:375",
+        hazard_class="acute_toxic_carcinogen",
+        notes=(
+            "Classic Sepharose affinity activation. CNBr forms cyanate "
+            "ester / imidocarbonate intermediate that couples primary "
+            "amines via isourea linkage. EXTREME HAZARD: HCN release "
+            "on hydrolysis; perform in fume hood with constant pH "
+            "monitoring. Short activated-site half-life (~5 min at 4 °C, "
+            "pH 11) — couple ligand immediately after activation."
+        ),
+    ),
+
+    # B1.3 CDI activation. Hearn 1981 Methods Enzymol. 135:102.
+    # CDI gives a neutral imidazolyl-carbonate activated matrix; reacts
+    # with primary amines to form a carbamate (no charge).
+    # k ~ 5e-4 m^3/(mol*s) at pH 9, 25 °C; E_a ~ 50 kJ/mol.
+    "cdi_activation": ReagentProfile(
+        name="1,1′-Carbonyldiimidazole (OH activation)",
+        cas="530-62-1",
+        reaction_type="activation",
+        target_acs=ACSSiteType.HYDROXYL,
+        product_acs=ACSSiteType.IMIDAZOLYL_CARBONATE,
+        k_forward=5e-4,
+        E_a=50000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=3e-4,
+        ph_optimum=9.0,
+        temperature_default=298.15,
+        time_default=3600.0,
+        functional_mode="activator",
+        chemistry_class="cdi_amine",
+        ph_min=7.5, ph_max=10.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Hearn (1981) Methods Enzymol. 135:102",
+        hazard_class="moisture_sensitive",
+        notes=(
+            "Modern CNBr alternative. CDI activates hydroxyls in "
+            "anhydrous DMSO/dioxane to imidazolyl carbonate, which "
+            "couples primary amines giving a neutral carbamate (no "
+            "isourea charge). Lower hazard than CNBr. Reagent is "
+            "moisture-sensitive — use freshly opened CDI."
+        ),
+    ),
+
+    # B1.4 Hexyl HIC ligand. Fills the gap between butyl(C4) and octyl(C8).
+    # Hjertén 1973 J. Chromatogr. 87:325 (canonical alkyl-HIC reference).
+    "hexyl_coupling": ReagentProfile(
+        name="Hexylamine HIC ligand (C6 alkyl)",
+        cas="111-26-2",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.EPOXIDE,
+        product_acs=None,
+        k_forward=2e-4,
+        E_a=40000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-5,
+        ph_optimum=9.5,
+        temperature_default=298.15,
+        time_default=14400.0,        # 4 h
+        functional_mode="hic_ligand",
+        chemistry_class="epoxide_amine",
+        installed_ligand="hexyl_C6",
+        ph_min=8.0, ph_max=11.0,
+        binding_model_hint="salt_promoted",
+        confidence_tier="semi_quantitative",
+        calibration_source="Hjertén (1973) J. Chromatogr. 87:325",
+        notes=(
+            "Hexyl (C6) alkyl HIC ligand — interpolates HIC selectivity "
+            "between butyl (C4) and octyl (C8). Coupled to epoxide- or "
+            "DVS-activated agarose via hexylamine. Salt-promoted "
+            "hydrophobic binding; eluted by descending salt gradient."
+        ),
+    ),
+
+    # ── M2 (B2) — Oriented-glycoprotein immobilization workflow ───────
+
+    # B2.1 Sodium periodate (vicinal diol → aldehyde via Malaprade).
+    # Bobbitt 1956 Adv. Carbohydr. Chem. 11:1.
+    # Effective oxidation rate is pseudo-first-order in NaIO4 at typical
+    # 5–20 mM doses; k ~ 2e-3 /s at pH 5, 4 °C.
+    "periodate_oxidation": ReagentProfile(
+        name="Sodium periodate (vicinal diol → aldehyde)",
+        cas="7790-28-5",
+        reaction_type="activation",
+        target_acs=ACSSiteType.HYDROXYL,    # vicinal diol; consumed pair
+        product_acs=ACSSiteType.ALDEHYDE,
+        k_forward=2e-3,
+        E_a=40000.0,
+        stoichiometry=1.0,             # 1 NaIO4 per vicinal-diol cleavage → 2 CHO
+        hydrolysis_rate=0.0,
+        ph_optimum=5.0,
+        temperature_default=277.15,    # 4 °C — slow chain scission
+        time_default=3600.0,
+        functional_mode="activator",
+        chemistry_class="aldehyde_amine",   # downstream coupling is via aldehyde
+        ph_min=3.5, ph_max=7.0,
+        temperature_min=273.15, temperature_max=298.15,
+        confidence_tier="semi_quantitative",
+        calibration_source="Bobbitt (1956) Adv. Carbohydr. Chem. 11:1",
+        hazard_class="strong_oxidizer",
+        notes=(
+            "Malaprade oxidation: cleaves vicinal diols (2 OH on adjacent "
+            "carbons) to a pair of aldehydes. Foundational for oriented "
+            "glycoprotein immobilization (B2 workflow): oxidize glycan "
+            "→ couple via hydrazide/aminooxy. Aldehyde density tracks "
+            "oxidation degree linearly until ~30–50% conversion, beyond "
+            "which chain scission dominates and the polymer mechanical "
+            "integrity degrades."
+        ),
+    ),
+
+    # B2.2 Adipic acid dihydrazide (ADH). Forms hydrazone with aldehydes.
+    # Liu & Wilcox 1976 Biochim. Biophys. Acta 426:373.
+    "adh_hydrazone": ReagentProfile(
+        name="Adipic acid dihydrazide (ADH)",
+        cas="1071-93-8",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.ALDEHYDE,
+        product_acs=ACSSiteType.HYDRAZIDE,    # distal hydrazide remains for next step
+        k_forward=5e-3,
+        E_a=35000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=5e-4,         # hydrazone hydrolyses at low pH
+        ph_optimum=5.5,
+        temperature_default=298.15,
+        time_default=14400.0,         # 4 h
+        functional_mode="spacer",
+        chemistry_class="hydrazone",
+        installed_ligand="hydrazide_distal",
+        ph_min=4.5, ph_max=7.5,
+        confidence_tier="semi_quantitative",
+        calibration_source="Liu & Wilcox (1976) Biochim. Biophys. Acta 426:373",
+        notes=(
+            "Bifunctional hydrazide: one end forms hydrazone with "
+            "support aldehyde (e.g. periodate-oxidized agarose), the "
+            "other end remains free for downstream glycoprotein/aldehyde "
+            "coupling. Hydrazone is reversible at pH < 5 — for permanent "
+            "linkage, follow with NaBH3CN reduction to alkylhydrazide."
+        ),
+    ),
+
+    # B2.3 Aminooxy-PEG linker. Forms oxime (more stable than hydrazone).
+    # Kalia & Raines 2008 Angew. Chem. Int. Ed. 47:7523.
+    "aminooxy_peg_linker": ReagentProfile(
+        name="Aminooxy-PEG linker (oxime ligation)",
+        cas="N/A (PEG oligomer)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.ALDEHYDE,
+        product_acs=ACSSiteType.AMINOOXY,
+        k_forward=8e-3,
+        E_a=30000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=2e-5,         # oxime is very stable; minimal hydrolysis
+        ph_optimum=4.5,                # acidic catalysis accelerates oxime ligation
+        temperature_default=298.15,
+        time_default=7200.0,
+        functional_mode="spacer",
+        chemistry_class="oxime",
+        installed_ligand="aminooxy_distal",
+        ligand_mw=2000.0,              # PEG2k variant typical
+        ph_min=3.5, ph_max=7.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Kalia & Raines (2008) Angew. Chem. Int. Ed. 47:7523",
+        notes=(
+            "Bioorthogonal oxime ligation. Aminooxy reacts with "
+            "aldehyde/ketone forming oxime — more hydrolytically "
+            "stable than hydrazone (Liu 1976) by ~100×. PEG spacer "
+            "minimises matrix-protein steric interactions. Optimal "
+            "pH 4.5 with acetate or aniline catalysis. Aminooxy is "
+            "naturally absent in proteins → bioorthogonal in crude lysate."
+        ),
+    ),
+
+    # ── M3 (B3) — Dye pseudo-affinity ─────────────────────────────────
+
+    # B3.1 Cyanuric chloride (triazine activation).
+    # Korpela & Mäntsälä 1968 Anal. Biochem. 23:381.
+    "cyanuric_chloride_activation": ReagentProfile(
+        name="Cyanuric chloride (triazine activation)",
+        cas="108-77-0",
+        reaction_type="activation",
+        target_acs=ACSSiteType.HYDROXYL,
+        product_acs=ACSSiteType.TRIAZINE_REACTIVE,
+        k_forward=3e-3,                # very fast at first chloride
+        E_a=30000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=5e-4,
+        ph_optimum=9.0,
+        temperature_default=277.15,    # 4 °C — slow di/trisubstitution
+        time_default=1800.0,
+        functional_mode="activator",
+        chemistry_class="dye_triazine",
+        ph_min=8.0, ph_max=10.5,
+        temperature_min=273.15, temperature_max=288.15,
+        confidence_tier="semi_quantitative",
+        calibration_source="Korpela & Mäntsälä (1968) Anal. Biochem. 23:381",
+        hazard_class="reactive_corrosive",
+        notes=(
+            "2,4,6-Trichloro-1,3,5-triazine activation of polysaccharide "
+            "OH gives a dichlorotriazine support. The remaining 2 chlorines "
+            "are then sequentially substituted by dye/amine ligands. "
+            "Reactivity drops with each substitution — first Cl reacts at "
+            "0–5 °C, second at 25 °C, third at 60–80 °C."
+        ),
+    ),
+
+    # B3.2 Cibacron Blue F3GA — industrial pseudo-affinity dye.
+    # Atkinson et al. 1981 Biochem. Soc. Trans. 9:290.
+    "cibacron_blue_f3ga_coupling": ReagentProfile(
+        name="Cibacron Blue F3GA (Reactive Blue 2)",
+        cas="12236-82-7",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.TRIAZINE_REACTIVE,
+        product_acs=None,
+        k_forward=1e-3,
+        E_a=40000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-5,
+        ph_optimum=10.0,
+        temperature_default=313.15,    # 40 °C — drives second-Cl substitution
+        time_default=14400.0,
+        functional_mode="dye_pseudo_affinity",
+        chemistry_class="dye_triazine",
+        installed_ligand="cibacron_blue_f3ga",
+        ligand_mw=773.0,
+        ph_min=9.0, ph_max=11.0,
+        binding_model_hint="affinity",
+        confidence_tier="semi_quantitative",
+        calibration_source="Atkinson et al. (1981) Biochem. Soc. Trans. 9:290",
+        notes=(
+            "Industrial pseudo-affinity dye for nucleotide-binding "
+            "proteins, albumin, and many enzymes. Mechanism is mixed: "
+            "anthraquinone hydrophobic stacking + sulfonate ionic "
+            "interactions + sequence-specific recognition by NAD-binding "
+            "clefts. Couples to triazine-activated agarose via the "
+            "remaining chlorine. Industrial standard (Blue Sepharose). "
+            "WARNING: dye leakage under harsh elution; monitor effluent "
+            "absorbance at 610 nm."
+        ),
+    ),
+
+    # B3.3 Triazine-dye leakage warning profile (advisory).
+    # Lowe & Pearson 1984 Methods Enzymol. 104:97.
+    "triazine_dye_leakage_advisory": ReagentProfile(
+        name="Triazine dye leakage (advisory monitor)",
+        cas="N/A",
+        reaction_type="washing",
+        target_acs=ACSSiteType.TRIAZINE_REACTIVE,
+        product_acs=None,
+        k_forward=1e-7,
+        E_a=80000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-7,           # very slow at neutral pH
+        ph_optimum=7.0,
+        temperature_default=298.15,
+        time_default=3600.0,
+        functional_mode="washing",
+        chemistry_class="diffusion_out",
+        regulatory_limit_ppm=1.0,
+        profile_role="native",
+        m3_support_level="not_mapped",
+        confidence_tier="ranking_only",
+        calibration_source="Lowe & Pearson (1984) Methods Enzymol. 104:97",
+        notes=(
+            "Advisory profile: monitors residual triazine-dye leakage "
+            "during elution / regeneration. Triazine-dye supports "
+            "(Cibacron Blue, Procion Red) leak measurable dye on harsh "
+            "regeneration with NaOH or chaotrope; measure A610 in flow-"
+            "through. Does NOT make a GMP claim; advisory only."
+        ),
+    ),
+
+    # ── M4 (B4) — Mixed-mode antibody capture ─────────────────────────
+
+    # B4.1 Thiophilic ligand (DVS + 2-mercaptoethanol).
+    # Porath et al. 1985 FEBS Lett. 185:306.
+    "thiophilic_2me_coupling": ReagentProfile(
+        name="2-Mercaptoethanol thiophilic ligand (T-Sorb / T-Gel)",
+        cas="60-24-2",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.VINYL_SULFONE,
+        product_acs=None,
+        k_forward=8e-4,
+        E_a=35000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-6,
+        ph_optimum=9.0,
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="thiophilic",
+        chemistry_class="vs_thiol",
+        installed_ligand="thiophilic_2me",
+        ligand_mw=78.13,
+        ph_min=7.0, ph_max=10.0,
+        binding_model_hint="salt_promoted",
+        confidence_tier="semi_quantitative",
+        calibration_source="Porath et al. (1985) FEBS Lett. 185:306",
+        notes=(
+            "Salt-promoted thiophilic IgG capture (T-Sorb, T-Gel). "
+            "Couples mercaptoethanol thiol to DVS-activated agarose via "
+            "Michael addition. Binding mechanism is electron-donor/"
+            "acceptor at the sulfone-aromatic interface — distinct from "
+            "hydrophobic burial in HIC. Loaded at high salt (0.5–1 M "
+            "K2SO4 or Na2SO4); eluted at low salt."
+        ),
+    ),
+
+    # B4.2 MEP HCIC (4-mercaptoethylpyridine).
+    # Burton & Harding 1998 J. Chromatogr. A 814:71.
+    "mep_hcic_coupling": ReagentProfile(
+        name="4-Mercaptoethylpyridine (MEP HCIC)",
+        cas="2127-04-2",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.VINYL_SULFONE,
+        product_acs=None,
+        k_forward=6e-4,
+        E_a=38000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-6,
+        ph_optimum=9.5,                # coupling at high pH (pyridine deprotonated)
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="mixed_mode_hcic",
+        chemistry_class="vs_thiol",
+        installed_ligand="mep_4mep",
+        ligand_mw=139.22,
+        ph_min=8.0, ph_max=11.0,
+        pKa_nucleophile=4.5,           # pyridine pKa ≈ 4.5 — drives elution switch
+        binding_model_hint="mixed_mode",
+        confidence_tier="semi_quantitative",
+        calibration_source="Burton & Harding (1998) J. Chromatogr. A 814:71",
+        notes=(
+            "Hydrophobic Charge-Induction Chromatography (HCIC). At "
+            "loading pH (7.0) the pyridine is uncharged → IgG binds "
+            "hydrophobically without salt addition. At elution pH (4) "
+            "the pyridinium becomes cationic and electrostatically "
+            "repels the now-cationic IgG, eluting it. Industrial "
+            "antibody-capture mixed-mode (Pall MEP HyperCel / Cytiva "
+            "MEP). pKa_nucleophile=4.5 drives the M3 pH-switchable "
+            "binding model."
+        ),
+    ),
+
+    # ── M5 (B5) — Bis-epoxide hardening (Q-001 resolution: single profile) ──
+
+    # B5.1 Bis-epoxide family — single parameterized profile per Q-001.
+    # Spacer length is a parameter. PEGDGE / EGDGE / BDDE are different
+    # spacer-length variants of the same chemistry class (epoxide-amine /
+    # epoxide-hydroxyl alkaline crosslinking).
+    # Hahn et al. 2006 Biomaterials 27:1104.
+    "bis_epoxide_crosslinking": ReagentProfile(
+        name="Bis-epoxide family (PEGDGE/EGDGE/BDDE)",
+        cas="2425-79-8 (BDDE) / 1675-54-3 (EGDGE) / variable (PEGDGE)",
+        reaction_type="crosslinking",
+        target_acs=ACSSiteType.HYDROXYL,
+        product_acs=None,
+        k_forward=1e-5,
+        E_a=55000.0,
+        stoichiometry=0.5,             # 1 bis-epoxide bridges 2 OH
+        hydrolysis_rate=2e-5,           # alkaline hydrolysis competition
+        ph_optimum=12.0,
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="crosslinker",
+        chemistry_class="epoxide_amine",
+        spacer_length_angstrom=12.0,    # default = BDDE (1,4-butanediol diglycidyl ether ≈ 12 Å)
+        ph_min=10.0, ph_max=13.0,
+        hazard_class="skin_sensitizer",
+        confidence_tier="semi_quantitative",
+        calibration_source="Hahn et al. (2006) Biomaterials 27:1104",
+        notes=(
+            "Bis-epoxide family — single parameterized profile per Q-001. "
+            "Spacer length set via spacer_length_angstrom: BDDE≈12 Å, "
+            "EGDGE≈8 Å, PEGDGE-200≈30 Å, PEGDGE-600≈80 Å. Workhorse for "
+            "polysaccharide hardening (BDDE for HA dermal fillers, "
+            "PEGDGE for agarose). Alkaline activation drives epoxide "
+            "ring-opening; alkaline hydrolysis is a competing reaction."
+        ),
+    ),
+
+    # ── M6 (B7) — Click chemistry (CuAAC + SPAAC) ─────────────────────
+
+    # B7.1 CuAAC handle. Kolb et al. 2001 Angew. Chem. Int. Ed. 40:2004.
+    # Cu(I) catalysed; effective k ~ 10 m^3/(mol*s) for typical alkyne+
+    # azide concentrations. ICH Q3D limit on residual Cu in biotherapeutics
+    # ≈ 30 µg/day → flag for downstream removal.
+    "cuaac_click_coupling": ReagentProfile(
+        name="CuAAC click handle (Cu-catalysed azide-alkyne)",
+        cas="N/A (chemistry class)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.AZIDE,
+        product_acs=None,
+        k_forward=10.0,                # very fast with Cu(I) catalyst
+        E_a=20000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=0.0,            # triazole is essentially inert
+        ph_optimum=7.4,
+        temperature_default=298.15,
+        time_default=3600.0,
+        functional_mode="click_handle",
+        chemistry_class="cuaac",
+        installed_ligand="triazole",
+        regulatory_limit_ppm=30.0,      # ICH Q3D residual Cu
+        ph_min=4.0, ph_max=9.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Kolb et al. (2001) Angew. Chem. Int. Ed. 40:2004",
+        hazard_class="cu_residual_ich_q3d",
+        notes=(
+            "Cu(I)-catalysed azide-alkyne cycloaddition. Forms 1,4-"
+            "disubstituted 1,2,3-triazole — essentially irreversible. "
+            "Very fast under saturating CuSO4 + ascorbate. CRITICAL for "
+            "biotherapeutic resins: residual Cu must meet ICH Q3D oral "
+            "exposure limits (PDE 30 µg/day → typical ~10 ppm bound Cu "
+            "after EDTA wash). For Cu-sensitive applications, use SPAAC "
+            "(see spaac_click_coupling)."
+        ),
+    ),
+
+    # B7.2 SPAAC handle (strain-promoted; copper-free).
+    # Agard et al. 2004 J. Am. Chem. Soc. 126:15046.
+    "spaac_click_coupling": ReagentProfile(
+        name="SPAAC click handle (strain-promoted; Cu-free)",
+        cas="N/A (chemistry class)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.AZIDE,
+        product_acs=None,
+        k_forward=0.5,                 # ~20× slower than CuAAC; no catalyst needed
+        E_a=25000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=0.0,
+        ph_optimum=7.4,
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="click_handle",
+        chemistry_class="spaac",
+        installed_ligand="triazole_spaac",
+        ph_min=5.0, ph_max=9.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Agard et al. (2004) J. Am. Chem. Soc. 126:15046",
+        notes=(
+            "Strain-promoted azide-alkyne cycloaddition (SPAAC). "
+            "Uses cyclooctyne (DBCO/BCN) + azide; no Cu catalyst needed. "
+            "Slower than CuAAC (~0.5 vs 10 m^3/mol/s) but biotherapeutic-"
+            "compatible without Cu-removal step. Preferred for live-cell "
+            "or Cu-sensitive protein conjugation."
+        ),
+    ),
+
+    # ── M7 (B8) — Multipoint enzyme immobilization ────────────────────
+
+    # B8.1 Glyoxyl-agarose (chained: glycidol → diol → periodate → glyoxyl).
+    # Mateo et al. 2007 Biotechnol. Bioeng. 96:5.
+    "glyoxyl_chained_activation": ReagentProfile(
+        name="Glyoxyl-agarose (multipoint enzyme support)",
+        cas="N/A (composite chemistry)",
+        reaction_type="activation",
+        target_acs=ACSSiteType.HYDROXYL,
+        product_acs=ACSSiteType.GLYOXYL,
+        k_forward=1e-3,                # rate-limiting periodate step
+        E_a=45000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-4,
+        ph_optimum=10.0,                # multipoint Lys coupling at high pH
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="activator",
+        chemistry_class="glyoxyl_multipoint",
+        ph_min=9.5, ph_max=11.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Mateo et al. (2007) Biotechnol. Bioeng. 96:5",
+        notes=(
+            "Two-step activation: glycidol coats agarose -OH with "
+            "glyceryl ether (giving 1,2-diol termini); periodate then "
+            "cleaves to glyoxyl (-CHO). Used for MULTIPOINT covalent "
+            "enzyme immobilization (lipase, penicillin-G acylase, CALB). "
+            "Multiple Lys residues anchor simultaneously at pH 10; "
+            "subsequent NaBH4 reduction makes anchors permanent. "
+            "Yields T_50 uplifts of 10–20 °C vs. single-point coupling."
+        ),
+    ),
+
+    # B8.2 Multipoint stability uplift profile (advisory; consumed by M3).
+    # Mateo et al. 2007 Biotechnol. Bioeng. 96:5; Pessela et al. 2003.
+    "multipoint_stability_uplift": ReagentProfile(
+        name="Multipoint Lys-anchor stability model",
+        cas="N/A (model)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.GLYOXYL,
+        product_acs=None,
+        k_forward=5e-4,
+        E_a=40000.0,
+        stoichiometry=1.0,             # per anchor
+        hydrolysis_rate=1e-7,
+        ph_optimum=10.0,
+        temperature_default=298.15,
+        time_default=86400.0,           # 24 h for full multipoint coupling
+        functional_mode="affinity_ligand",
+        chemistry_class="glyoxyl_multipoint",
+        installed_ligand="multipoint_anchored_enzyme",
+        is_macromolecule=True,
+        ligand_mw=33000.0,             # CALB-class model enzyme
+        activity_retention=0.85,        # multipoint preserves 85% under stable conditions
+        activity_retention_uncertainty=0.10,
+        binding_model_hint="near_irreversible",
+        confidence_tier="ranking_only",
+        calibration_source="Mateo et al. (2007) Biotechnol. Bioeng. 96:5",
+        notes=(
+            "Multipoint Lys-anchored enzyme: T_50 uplift = 5 + 5×n_anchors "
+            "°C (qualitative trend; calibration is wet-lab). M3 thermal-"
+            "deactivation rate constant should be reduced by exp(-n_anchor "
+            "× E_anchor / RT). For CALB-class lipase: n_anchors typically "
+            "3–5 at pH 10, 24 h."
+        ),
+    ),
+
+    # ── M8 (B9) — Material-as-ligand: amylose-MBP ─────────────────────
+
+    # B9.2 Amylose resin profile — material itself is the affinity matrix.
+    # Kellermann & Ferenci 1982 Methods Enzymol. 90:459 (amylose+MBP).
+    "amylose_mbp_affinity": ReagentProfile(
+        name="Amylose resin (MBP-tag affinity)",
+        cas="9005-82-7",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.HYDROXYL,    # hydroxyl-rich amylose backbone IS the matrix
+        product_acs=None,
+        k_forward=1e-2,                # fast binding; MBP-amylose Kd ~ 1 µM
+        E_a=20000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=0.0,
+        ph_optimum=7.4,
+        temperature_default=277.15,    # 4 °C standard for MBP work
+        time_default=1800.0,
+        functional_mode="material_as_ligand",
+        chemistry_class="amine_covalent",   # placeholder; binding is non-covalent
+        installed_ligand="amylose_matrix_for_mbp",
+        is_macromolecule=True,
+        ligand_mw=42500.0,             # MBP partner protein
+        binding_model_hint="affinity",
+        confidence_tier="semi_quantitative",
+        calibration_source="Kellermann & Ferenci (1982) Methods Enzymol. 90:459",
+        notes=(
+            "Material-as-ligand pattern (B9): the polysaccharide matrix "
+            "(crosslinked amylose) IS the affinity ligand. MBP-tagged "
+            "fusion proteins bind reversibly; eluted with 10 mM maltose. "
+            "Kd ~ 1 µM. Very high specificity for MBP. Note: matrix-"
+            "associated bacterial contaminants are reported (Riggs 2000) "
+            "— pre-equilibrate with column wash to mitigate."
+        ),
+    ),
+
+    # ── M9 (B10) — Boronate affinity ──────────────────────────────────
+
+    # B10.1 + B10.2 Aminophenylboronic acid (APBA) — boronate cis-diol affinity.
+    # Mallia et al. 1989 J. Chromatogr. 480:201.
+    "apba_boronate_coupling": ReagentProfile(
+        name="m-Aminophenylboronic acid (boronate affinity)",
+        cas="206658-89-1",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.EPOXIDE,
+        product_acs=None,
+        k_forward=3e-4,
+        E_a=40000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-5,
+        ph_optimum=9.0,                # coupling step
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="boronate",
+        chemistry_class="epoxide_amine",
+        installed_ligand="apba_boronate",
+        ligand_mw=136.94,
+        pKa_nucleophile=8.5,            # boronate pKa — drives cis-diol binding switch
+        binding_model_hint="affinity",
+        ph_min=7.5, ph_max=10.5,
+        confidence_tier="semi_quantitative",
+        calibration_source="Mallia et al. (1989) J. Chromatogr. 480:201",
+        notes=(
+            "Boronate affinity ligand. At pH > pKa_boronate (~8.5) the "
+            "tetrahedral boronate reversibly esterifies cis-diols on "
+            "glycoproteins, glycated proteins (HbA1c), and nucleotides. "
+            "Loaded at pH 8.5; eluted by sorbitol or fructose competitor "
+            "or by lowering pH. Industrial use: HbA1c capture, "
+            "glycoprotein enrichment. M3 binding model uses pKa_nucleophile "
+            "for the pH-switchable speciation."
+        ),
+    ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # v9.3 Tier-2 reagent additions (SA screening report § 6.2)
+    # ═══════════════════════════════════════════════════════════════════
+
+    # ── L2 Procion Red HE-3B (Reactive Red 120) — companion to Cibacron Blue
+    # Lowe & Pearson 1984 Methods Enzymol. 104:97.
+    "procion_red_he3b_coupling": ReagentProfile(
+        name="Procion Red HE-3B (Reactive Red 120)",
+        cas="61951-82-4",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.TRIAZINE_REACTIVE,
+        product_acs=None,
+        k_forward=8e-4,
+        E_a=42000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-5,
+        ph_optimum=10.0,
+        temperature_default=313.15,    # 40 °C — drives 2nd-Cl substitution
+        time_default=14400.0,
+        functional_mode="dye_pseudo_affinity",
+        chemistry_class="dye_triazine",
+        installed_ligand="procion_red_he3b",
+        ligand_mw=1338.0,
+        ph_min=9.0, ph_max=11.0,
+        binding_model_hint="affinity",
+        confidence_tier="semi_quantitative",
+        calibration_source="Lowe & Pearson (1984) Methods Enzymol. 104:97",
+        notes=(
+            "Triazine dye companion to Cibacron Blue. Specificity "
+            "lean toward dehydrogenase / hydrogenase / oxidoreductase "
+            "families (vs. NAD-binding clefts for Cibacron Blue). "
+            "Dye leakage warning under harsh regeneration; literature "
+            "explicitly raises concern about leached material under "
+            "drastic regeneration."
+        ),
+    ),
+
+    # ── L4 p-Aminobenzamidine — trypsin-like serine protease affinity.
+    # Hofstee 1973 Biochim. Biophys. Acta 327:484.
+    "p_aminobenzamidine_coupling": ReagentProfile(
+        name="p-Aminobenzamidine (protease affinity)",
+        cas="2498-50-2",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.EPOXIDE,
+        product_acs=None,
+        k_forward=4e-4,
+        E_a=38000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-6,
+        ph_optimum=9.0,
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="affinity_ligand",
+        chemistry_class="epoxide_amine",
+        installed_ligand="p_aminobenzamidine",
+        ligand_mw=135.17,
+        binding_model_hint="affinity",
+        ph_min=7.0, ph_max=10.5,
+        confidence_tier="semi_quantitative",
+        calibration_source="Hofstee (1973) Biochim. Biophys. Acta 327:484",
+        notes=(
+            "Affinity ligand for trypsin-like serine proteases. Binds "
+            "the S1 specificity pocket. Eluted by competitive arginine "
+            "or benzamidine. Narrow target spectrum but high specificity "
+            "(thrombin, plasmin, urokinase, trypsin, factor Xa)."
+        ),
+    ),
+
+    # ── L6 Chitin-binding domain (CBD) / intein system — material-as-ligand.
+    # Chong et al. 1997 Gene 192:271 (NEB IMPACT reference).
+    "chitin_cbd_intein": ReagentProfile(
+        name="Chitin / CBD-intein affinity (NEB IMPACT)",
+        cas="N/A (system)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.HYDROXYL,    # chitin matrix is the affinity ligand itself
+        product_acs=None,
+        k_forward=5e-3,
+        E_a=20000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=0.0,
+        ph_optimum=8.0,
+        temperature_default=277.15,    # 4 °C standard for IMPACT
+        time_default=3600.0,
+        functional_mode="material_as_ligand",
+        chemistry_class="amine_covalent",   # placeholder; binding is non-covalent
+        installed_ligand="chitin_matrix_for_cbd",
+        is_macromolecule=True,
+        ligand_mw=4500.0,             # CBD partner protein
+        binding_model_hint="affinity",
+        confidence_tier="semi_quantitative",
+        calibration_source="Chong et al. (1997) Gene 192:271 (NEB IMPACT)",
+        notes=(
+            "Material-as-ligand pattern (B9 companion to amylose-MBP). "
+            "Crosslinked chitin matrix IS the affinity ligand for CBD-"
+            "tagged fusion proteins. Cleavage is on-column: thiol "
+            "(DTT/MESNA) or pH/temperature-induced intein cleavage "
+            "releases the untagged target. NEB IMPACT system."
+        ),
+    ),
+
+    # ── L8a Jacalin lectin — O-linked glycoprotein affinity.
+    # Sastry et al. 1986 J. Biol. Chem. 261:11726.
+    "jacalin_coupling": ReagentProfile(
+        name="Jacalin (O-linked glycoprotein lectin)",
+        cas="9061-50-9",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.EPOXIDE,
+        product_acs=None,
+        k_forward=5e-4,
+        E_a=35000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-6,
+        ph_optimum=8.5,
+        temperature_default=277.15,    # 4 °C — preserve lectin activity
+        time_default=14400.0,
+        functional_mode="affinity_ligand",
+        chemistry_class="epoxide_amine",
+        installed_ligand="jacalin",
+        is_macromolecule=True,
+        ligand_mw=66000.0,
+        activity_retention=0.70,        # lectin coupling typically loses 30 % activity
+        activity_retention_uncertainty=0.10,
+        binding_model_hint="affinity",
+        ph_min=7.0, ph_max=9.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Sastry et al. (1986) J. Biol. Chem. 261:11726",
+        notes=(
+            "Lectin from jackfruit; binds O-linked Galβ1-3GalNAc (Tn "
+            "antigen). Used for IgA1 enrichment, mucin-class glycoprotein "
+            "fractionation. Eluted by 0.1 M melibiose or galactose."
+        ),
+    ),
+
+    # ── L8b Lentil lectin (LCA) — high-mannose / glycopeptide affinity.
+    # Howard & Sage 1969 Biochim. Biophys. Acta 200:536.
+    "lentil_lectin_coupling": ReagentProfile(
+        name="Lentil lectin / LCA (high-mannose lectin)",
+        cas="9013-32-3",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.EPOXIDE,
+        product_acs=None,
+        k_forward=5e-4,
+        E_a=35000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-6,
+        ph_optimum=8.5,
+        temperature_default=277.15,
+        time_default=14400.0,
+        functional_mode="affinity_ligand",
+        chemistry_class="epoxide_amine",
+        installed_ligand="lentil_lectin",
+        is_macromolecule=True,
+        ligand_mw=49000.0,
+        activity_retention=0.70,
+        activity_retention_uncertainty=0.10,
+        binding_model_hint="affinity",
+        ph_min=7.0, ph_max=9.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Howard & Sage (1969) Biochim. Biophys. Acta 200:536",
+        notes=(
+            "Lectin from Lens culinaris. Binds α-mannose, α-glucose, "
+            "and high-mannose / hybrid N-glycans. Requires Mn²⁺/Ca²⁺ "
+            "cofactors. Eluted by 0.5 M α-methyl-mannoside."
+        ),
+    ),
+
+    # ── L12 Sequence-specific oligonucleotide / DNA affinity.
+    # Gadgil et al. 2001 Methods 23:113.
+    "oligonucleotide_dna_coupling": ReagentProfile(
+        name="Sequence-specific DNA affinity ligand",
+        cas="N/A (oligo sequence)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.CYANATE_ESTER,
+        product_acs=None,
+        k_forward=2e-3,
+        E_a=25000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=0.0,
+        ph_optimum=8.3,
+        temperature_default=277.15,
+        time_default=14400.0,
+        functional_mode="oligonucleotide",
+        chemistry_class="cnbr_amine",
+        installed_ligand="dna_oligo_sequence_specific",
+        is_macromolecule=True,
+        ligand_mw=20000.0,             # ~30 bp dsDNA placeholder
+        binding_model_hint="affinity",
+        ph_min=7.0, ph_max=9.5,
+        confidence_tier="semi_quantitative",
+        calibration_source="Gadgil et al. (2001) Methods 23:113",
+        notes=(
+            "Sequence-specific DNA affinity. Aminated dsDNA oligo "
+            "coupled to CNBr-Sepharose; binds transcription factors / "
+            "DNA-binding enzymes / nucleic-acid-binding proteins. Salt "
+            "elution; competing oligo-DNA elution. Nuclease-stability "
+            "warning for crude lysate work."
+        ),
+    ),
+
+    # ── L13 Peptide-affinity ligand (HWRGWV class) — Protein-A alternative.
+    # Yang et al. 2009 J. Chromatogr. A 1216:910.
+    "peptide_affinity_hwrgwv": ReagentProfile(
+        name="HWRGWV peptide ligand (Protein-A mimetic)",
+        cas="N/A (peptide sequence)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.EPOXIDE,
+        product_acs=None,
+        k_forward=8e-4,
+        E_a=30000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-6,
+        ph_optimum=8.5,
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="peptide_affinity",
+        chemistry_class="epoxide_amine",
+        installed_ligand="peptide_hwrgwv",
+        ligand_mw=856.0,                # HWRGWV + spacer ≈ 856 Da
+        binding_model_hint="affinity",
+        ph_min=7.0, ph_max=10.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Yang et al. (2009) J. Chromatogr. A 1216:910",
+        notes=(
+            "Hexapeptide affinity ligand for IgG Fc — Protein-A "
+            "alternative. Cheaper, lower-leachable, easier sterilisation. "
+            "Coupled via N-terminal amine to epoxide-activated agarose. "
+            "Eluted at low pH (acetate, pH 3-4)."
+        ),
+    ),
+
+    # ── C9 HRP / H2O2 / tyramine — enzymatic phenol-radical crosslinking.
+    # Sakai et al. 2009 Biomaterials 30:3371.
+    "hrp_h2o2_tyramine": ReagentProfile(
+        name="HRP / H2O2 / tyramine (enzymatic phenol radical)",
+        cas="N/A (enzymatic system)",
+        reaction_type="crosslinking",
+        target_acs=ACSSiteType.PHENOL_TYRAMINE,
+        product_acs=None,
+        k_forward=5e-2,                # very fast under saturating H2O2
+        E_a=30000.0,
+        stoichiometry=0.5,             # 2 phenols → 1 dityramine
+        hydrolysis_rate=0.0,
+        ph_optimum=7.4,                # physiological — mild
+        temperature_default=310.15,    # 37 °C
+        time_default=600.0,             # 10 min — very fast crosslink
+        functional_mode="crosslinker",
+        chemistry_class="phenol_radical",
+        ph_min=6.0, ph_max=8.5,
+        confidence_tier="semi_quantitative",
+        calibration_source="Sakai et al. (2009) Biomaterials 30:3371",
+        hazard_class="oxidant_h2o2",
+        notes=(
+            "Enzymatic phenol-radical coupling. HRP + H2O2 oxidises "
+            "tyramine-functionalized polysaccharides (HA-tyramine, "
+            "alginate-tyramine, dextran-tyramine) to dityramine "
+            "crosslinks. Mild conditions (pH 7.4, 37 °C) compatible "
+            "with bioactive ligand co-immobilization. Requires "
+            "tyramine-functionalized polymer as starting material."
+        ),
+    ),
+
+    # ── K2 Oligoglycine spacer (Gly, GlyGly, Gly4) — hydrophilic spacer.
+    # Hilbrig & Freitag 2003 Biotechnol. Adv. 21:561.
+    "oligoglycine_spacer": ReagentProfile(
+        name="Oligoglycine spacer arm (Gly1-4)",
+        cas="556-50-3 (Gly), 556-50-3 (Gly2), 16194-48-2 (Gly4)",
+        reaction_type="spacer",
+        target_acs=ACSSiteType.EPOXIDE,
+        product_acs=ACSSiteType.AMINE_DISTAL,
+        k_forward=1e-3,
+        E_a=35000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-6,
+        ph_optimum=9.0,
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="spacer",
+        chemistry_class="epoxide_amine_spacer",
+        installed_ligand="oligoglycine_distal_amine",
+        spacer_length_angstrom=12.0,    # default = Gly4 ≈ 12 Å
+        spacer_activity_multiplier=1.10,
+        ph_min=8.0, ph_max=11.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Hilbrig & Freitag (2003) Biotechnol. Adv. 21:561",
+        notes=(
+            "Hydrophilic oligoglycine spacer; minimises matrix-protein "
+            "steric and hydrophobic background. Useful in conjunction "
+            "with peptide ligands (HWRGWV) where spacer must not "
+            "contribute its own binding. Spacer length: Gly1 ≈ 3 Å, "
+            "Gly2 ≈ 6 Å, Gly4 ≈ 12 Å (set via spacer_length_angstrom)."
+        ),
+    ),
+
+    # ── K3 Cystamine disulfide spacer — reducible / cleavable.
+    # Egelhoff & Spudich 1991 Methods Enzymol. 196:319.
+    "cystamine_disulfide_spacer": ReagentProfile(
+        name="Cystamine disulfide spacer (reducible)",
+        cas="51-85-4 (cystamine 2HCl)",
+        reaction_type="spacer",
+        target_acs=ACSSiteType.EPOXIDE,
+        product_acs=ACSSiteType.AMINE_DISTAL,
+        k_forward=8e-4,
+        E_a=35000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-6,
+        ph_optimum=9.0,
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="spacer",
+        chemistry_class="epoxide_amine_spacer",
+        installed_ligand="cystamine_disulfide_distal",
+        spacer_length_angstrom=10.0,
+        spacer_activity_multiplier=1.05,
+        ph_min=8.0, ph_max=11.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Egelhoff & Spudich (1991) Methods Enzymol. 196:319",
+        notes=(
+            "Reducible / cleavable spacer. Cystamine disulfide releases "
+            "with 10 mM DTT or TCEP, giving a free thiol on the support "
+            "and an analytical capture-and-release workflow. Lower "
+            "priority for permanent process resins (the disulfide "
+            "limits stability under reducing buffers in process)."
+        ),
+    ),
+
+    # ── K6 Succinic / glutaric anhydride — distal-amine → distal-carboxyl.
+    # Hjertén & Mosbach 1962 Anal. Biochem. 3:109.
+    "succinic_anhydride_carboxylation": ReagentProfile(
+        name="Succinic anhydride (amine → carboxyl)",
+        cas="108-30-5",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.AMINE_DISTAL,
+        product_acs=ACSSiteType.CARBOXYL_DISTAL,
+        k_forward=2e-3,
+        E_a=30000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-4,
+        ph_optimum=8.5,
+        temperature_default=277.15,    # 4 °C — slow hydrolysis
+        time_default=3600.0,
+        functional_mode="spacer",
+        chemistry_class="acetylation",  # N-acylation
+        installed_ligand="succinyl_distal_carboxyl",
+        ph_min=7.5, ph_max=9.5,
+        confidence_tier="semi_quantitative",
+        calibration_source="Hjertén & Mosbach (1962) Anal. Biochem. 3:109",
+        hazard_class="moisture_sensitive",
+        notes=(
+            "N-acylation with succinic anhydride converts a distal "
+            "primary amine into a distal carboxyl (terminal -COOH). "
+            "Inverts the coupling polarity: after introducing an "
+            "amine spacer, succinylate to expose -COOH for EDC/NHS "
+            "coupling. Adds nonspecific ion-exchange background."
+        ),
+    ),
+
+    # ── AC3 Tresyl chloride activation — sulfonate leaving group.
+    # Nilsson & Mosbach 1981 Methods Enzymol. 104:56.
+    "tresyl_chloride_activation": ReagentProfile(
+        name="Tresyl chloride (OH → sulfonate leaving)",
+        cas="1648-55-7",
+        reaction_type="activation",
+        target_acs=ACSSiteType.HYDROXYL,
+        product_acs=ACSSiteType.SULFONATE_LEAVING,
+        k_forward=2e-3,
+        E_a=35000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=8e-4,
+        ph_optimum=8.0,
+        temperature_default=277.15,    # low T to suppress hydrolysis
+        time_default=600.0,
+        functional_mode="activator",
+        chemistry_class="amine_covalent",
+        ph_min=7.0, ph_max=9.0,
+        temperature_min=273.15, temperature_max=283.15,
+        confidence_tier="semi_quantitative",
+        calibration_source="Nilsson & Mosbach (1981) Methods Enzymol. 104:56",
+        hazard_class="reactive_corrosive",
+        notes=(
+            "2,2,2-Trifluoroethanesulfonyl chloride activation of "
+            "hydroxyls. Couples primary amines (and thiols) directly "
+            "via SN2 displacement of the sulfonate. Less common than "
+            "CDI but produces a neutral support similar to CNBr without "
+            "the cyanate-ester decomposition pathway."
+        ),
+    ),
+
+    # ── AC6 Pyridyl disulfide activation — reversible thiol capture.
+    # Brocklehurst et al. 1973 Biochem. J. 133:573.
+    "pyridyl_disulfide_activation": ReagentProfile(
+        name="Pyridyl disulfide activation (reversible thiol)",
+        cas="2127-03-9 (DTNB family)",
+        reaction_type="activation",
+        target_acs=ACSSiteType.AMINE_DISTAL,
+        product_acs=ACSSiteType.THIOL,
+        k_forward=1e-3,
+        E_a=30000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-7,
+        ph_optimum=7.5,
+        temperature_default=298.15,
+        time_default=3600.0,
+        functional_mode="activator",
+        chemistry_class="reduction",
+        ph_min=6.5, ph_max=8.5,
+        confidence_tier="semi_quantitative",
+        calibration_source="Brocklehurst et al. (1973) Biochem. J. 133:573",
+        notes=(
+            "Activated thiol-Sepharose. Pyridyl disulfide on distal "
+            "amine spacer captures protein thiols via disulfide exchange "
+            "(releases pyridine-2-thione, A343 detectable). Captured "
+            "protein released by 10 mM DTT or 5 mM TCEP. Useful for "
+            "analytical capture-and-release; pairs with K3 cystamine "
+            "spacer."
+        ),
     ),
 }
 
