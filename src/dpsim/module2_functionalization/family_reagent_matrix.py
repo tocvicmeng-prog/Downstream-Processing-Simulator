@@ -585,6 +585,112 @@ FAMILY_REAGENT_MATRIX: tuple[FamilyReagentEntry, ...] = (
         "STMP can target chitin -OH; rarely needed since chitin matrix "
         "is the affinity ligand directly.",
     ),
+
+    # ─── v9.4 Tier-3 family promotions ────────────────────────────────
+    # PECTIN — galacturonic-acid -COOH + ring -OH.
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "ech_activation", "qualitative_only",
+        "ECH targets pectin ring -OH; canonical pectin chemistry is "
+        "Ca²⁺ ionic gelation + EDC/NHS on the carboxyls.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "dvs_activation", "qualitative_only",
+        "DVS targets pectin -OH; uncommon in practice.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "edc_nhs_activation", "compatible",
+        "EDC/NHS targets pectin galacturonic-acid -COOH; standard "
+        "chemistry for pectin-protein conjugates.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "genipin_secondary", "incompatible",
+        "Pectin has no -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "glutaraldehyde_secondary", "incompatible",
+        "Pectin has no -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "stmp_secondary", "qualitative_only",
+        "STMP can target pectin -OH; uncommon.",
+    ),
+    # GELLAN — anionic glucan; carboxylate-rich.
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "ech_activation", "qualitative_only",
+        "Gellan -OH reacts with ECH; primary chemistry is K⁺ ionic "
+        "gelation; ECH is secondary hardening.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "dvs_activation", "qualitative_only",
+        "Possible but uncommon.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "edc_nhs_activation", "compatible",
+        "EDC/NHS targets gellan -COOH (glucuronic acid in repeat unit); "
+        "secondary chemistry after K⁺ gelation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "genipin_secondary", "incompatible",
+        "Gellan has no -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "glutaraldehyde_secondary", "incompatible",
+        "Gellan has no -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "stmp_secondary", "qualitative_only",
+        "STMP can target gellan -OH; less common than K⁺ gelation.",
+    ),
+    # PULLULAN — neutral α-glucan.
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "ech_activation", "compatible",
+        "ECH crosslinks pullulan -OH; standard chemistry.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "dvs_activation", "compatible",
+        "DVS targets pullulan -OH.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "edc_nhs_activation", "incompatible",
+        "Pullulan has no -COOH.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "genipin_secondary", "incompatible",
+        "Pullulan has no -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "glutaraldehyde_secondary", "incompatible",
+        "Pullulan has no -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "stmp_secondary", "compatible",
+        "STMP phosphate-crosslinks pullulan -OH; canonical alongside ECH.",
+    ),
+    # STARCH — neutral α-glucan; gelatinization/retrogradation flagged.
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "ech_activation", "compatible",
+        "ECH crosslinks starch -OH; well-established for porous starch beads.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "dvs_activation", "qualitative_only",
+        "DVS targets starch -OH; less common than ECH or STMP.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "edc_nhs_activation", "incompatible",
+        "Native starch has no -COOH (oxidized starch can carry -COOH).",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "genipin_secondary", "incompatible",
+        "Starch has no -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "glutaraldehyde_secondary", "incompatible",
+        "Starch has no -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "stmp_secondary", "compatible",
+        "STMP phosphate-crosslinks starch -OH; standard food-grade modification.",
+    ),
 )
 
 

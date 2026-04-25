@@ -272,6 +272,11 @@ class PipelineOrchestrator:
             PolymerFamily.AGAROSE_ALGINATE.value,
             PolymerFamily.ALGINATE_CHITOSAN.value,
             PolymerFamily.CHITIN.value,
+            # v9.4 Tier-3 promotions
+            PolymerFamily.PECTIN.value,
+            PolymerFamily.GELLAN.value,
+            PolymerFamily.PULLULAN.value,
+            PolymerFamily.STARCH.value,
         }
         if props.polymer_family.value in _v9_2_tier1_values:
             return self._run_v9_2_tier1(

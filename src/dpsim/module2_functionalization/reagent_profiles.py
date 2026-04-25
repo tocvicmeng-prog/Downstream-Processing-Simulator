@@ -2954,5 +2954,146 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
             "spacer."
         ),
     ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # v9.4 Tier-3 reagent additions (SA screening report § 6.3)
+    # All Tier-3 entries carry research-mode / non-biotherapeutic flags
+    # or lower-priority warnings, per the SA Tier-3 prescription.
+    # ═══════════════════════════════════════════════════════════════════
+
+    # ── C6 Aluminum chloride trivalent gelant — NON-BIOTHERAPEUTIC.
+    # Picker-Freyer & Schmidt 2004 Pharm. Dev. Technol. 9:35.
+    "alcl3_trivalent_gelant": ReagentProfile(
+        name="Aluminum chloride (trivalent ionic gelant; research-mode)",
+        cas="7446-70-0",
+        reaction_type="crosslinking",
+        target_acs=ACSSiteType.CARBOXYL,
+        product_acs=None,
+        k_forward=2e-3,                # very fast — trivalent ion
+        E_a=20000.0,
+        stoichiometry=3.0,             # 1 Al³⁺ binds 3 carboxylates
+        hydrolysis_rate=0.0,
+        ph_optimum=4.5,                # narrow window — Al(OH)3 precipitates above
+        temperature_default=298.15,
+        time_default=600.0,
+        functional_mode="crosslinker",
+        chemistry_class="metal_chelation",
+        regulatory_limit_ppm=0.0,       # 0 = explicit "do not use for biotherapeutic"
+        ph_min=3.5, ph_max=5.5,
+        confidence_tier="ranking_only",
+        calibration_source="Picker-Freyer & Schmidt (2004) Pharm. Dev. Technol. 9:35",
+        hazard_class="non_biotherapeutic_residual_aluminum",
+        notes=(
+            "TRIVALENT IONIC GELANT — NOT FOR BIOTHERAPEUTIC RESINS. "
+            "Residual aluminum is regulated by FDA/EP; Al³⁺ induces "
+            "proteinopathy concerns. Use only for research / non-"
+            "biotherapeutic applications. Gels gellan and other anionic "
+            "polysaccharides via stronger triple-bridging than Ca²⁺. "
+            "Narrow pH window (3.5-5.5); above this, Al(OH)3 precipitates. "
+            "Will be rejected at G3 audit gate for biotherapeutic targets."
+        ),
+    ),
+
+    # ── C8 Borax / borate — reversible cis-diol crosslinking.
+    # Pezron et al. 1988 Macromolecules 21:1126.
+    "borax_reversible_crosslinking": ReagentProfile(
+        name="Borax (reversible cis-diol crosslinker; research/temp porogen)",
+        cas="1303-96-4",
+        reaction_type="crosslinking",
+        target_acs=ACSSiteType.CIS_DIOL,
+        product_acs=None,
+        k_forward=5e-2,                # very fast
+        E_a=15000.0,
+        stoichiometry=0.5,             # 1 borate bridges 2 cis-diols
+        hydrolysis_rate=1e-2,           # very high — equilibrium-limited
+        ph_optimum=9.5,
+        temperature_default=298.15,
+        time_default=300.0,             # 5 min — equilibrium reached fast
+        functional_mode="crosslinker",
+        chemistry_class="reduction",   # placeholder — reversible borate-diol
+        ph_min=8.5, ph_max=11.0,
+        confidence_tier="ranking_only",
+        calibration_source="Pezron et al. (1988) Macromolecules 21:1126",
+        hazard_class="reversible_not_for_pressure_chromatography",
+        notes=(
+            "REVERSIBLE crosslinker — UNSUITABLE for pressure "
+            "chromatography. Borate-cis-diol equilibrium is pH-dependent "
+            "(forms at pH > 8.5; dissociates at acidic pH or with "
+            "competing diols/sugars). Useful as TEMPORARY POROGEN or "
+            "model network during synthesis, but the network MUST be "
+            "subsequently hardened with a covalent crosslinker (BDDE, "
+            "ECH, etc.) before any flow-through application."
+        ),
+    ),
+
+    # ── C10 Glyoxal — small dialdehyde (lower priority vs glutaraldehyde).
+    # Lee et al. 2011 Carbohydr. Polym. 84:571.
+    "glyoxal_dialdehyde": ReagentProfile(
+        name="Glyoxal (small dialdehyde; lower priority)",
+        cas="107-22-2",
+        reaction_type="crosslinking",
+        target_acs=ACSSiteType.AMINE_PRIMARY,
+        product_acs=None,
+        # Glutaraldehyde k≈1e-5; glyoxal is ~3-5× slower because of its
+        # short tether (–CHO–CHO has no methylene spacer) — Schiff-base
+        # equilibria sit further left without the longer linker.
+        k_forward=3e-6,
+        E_a=42000.0,
+        stoichiometry=0.5,             # 1 glyoxal bridges 2 amines
+        hydrolysis_rate=5e-4,           # higher than glutaraldehyde
+        ph_optimum=7.0,
+        temperature_default=298.15,
+        time_default=7200.0,
+        functional_mode="crosslinker",
+        chemistry_class="aldehyde_amine",
+        ph_min=6.0, ph_max=8.5,
+        confidence_tier="ranking_only",
+        calibration_source="Lee et al. (2011) Carbohydr. Polym. 84:571",
+        hazard_class="reactive_short_tether_unstable",
+        notes=(
+            "Lower-priority alternative to glutaraldehyde. Very short "
+            "tether (–CHO–CHO) gives less stable Schiff-base bridges; "
+            "residual aldehyde control is harder. Recommended ONLY when "
+            "followed by reduction (NaBH4 / NaBH3CN) to lock the network. "
+            "For most chitosan-amine crosslinking, glutaraldehyde or "
+            "genipin is preferred."
+        ),
+    ),
+
+    # ── L7 Calmodulin — Ca²⁺-dependent CBP/TAP-tag affinity.
+    # Stofko-Hahn et al. 1992 FEBS Lett. 302:274.
+    "calmodulin_cbp_tap_coupling": ReagentProfile(
+        name="Calmodulin (CBP/TAP-tag, Ca²⁺-dependent)",
+        cas="9070-71-1",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.EPOXIDE,
+        product_acs=None,
+        k_forward=4e-4,
+        E_a=35000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-7,
+        ph_optimum=8.5,
+        temperature_default=277.15,
+        time_default=14400.0,
+        functional_mode="affinity_ligand",
+        chemistry_class="epoxide_amine",
+        installed_ligand="calmodulin",
+        is_macromolecule=True,
+        ligand_mw=16700.0,
+        activity_retention=0.65,        # Ca²⁺-dependent activity loss on coupling
+        activity_retention_uncertainty=0.15,
+        binding_model_hint="affinity",
+        ph_min=7.0, ph_max=10.0,
+        confidence_tier="ranking_only",
+        calibration_source="Stofko-Hahn et al. (1992) FEBS Lett. 302:274",
+        notes=(
+            "Calmodulin (CaM) ligand for CBP-tagged or TAP-tagged "
+            "fusion proteins. Ca²⁺-dependent: binds in presence of "
+            "≥ 0.1 mM Ca²⁺; eluted by EGTA/EDTA chelation. Mostly "
+            "research / proteomics use (TAP tag); limited industrial "
+            "bioprocess relevance. M2/M3 must surface CIP sensitivity — "
+            "harsh-base regeneration denatures CaM."
+        ),
+    ),
 }
 

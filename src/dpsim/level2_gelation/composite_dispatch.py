@@ -223,6 +223,52 @@ def solve_gelation_by_family(
             model_manifest=new_manifest,
         )
 
+    # ── v9.4 Tier-3 promoted families ────────────────────────────────
+    if fam_value == PolymerFamily.PECTIN.value:
+        from .tier3_families import solve_pectin_gelation
+        return solve_pectin_gelation(
+            params=params, props=props, R_droplet=R_droplet,
+            mode=mode, timing=timing,
+        )
+
+    if fam_value == PolymerFamily.GELLAN.value:
+        from .tier3_families import solve_gellan_gelation
+        return solve_gellan_gelation(
+            params=params, props=props, R_droplet=R_droplet,
+            mode=mode, timing=timing,
+        )
+
+    if fam_value == PolymerFamily.PULLULAN.value:
+        from .tier3_families import solve_pullulan_gelation
+        return solve_pullulan_gelation(
+            params=params, props=props, R_droplet=R_droplet,
+            mode=mode, timing=timing,
+        )
+
+    if fam_value == PolymerFamily.STARCH.value:
+        from .tier3_families import solve_starch_gelation
+        return solve_starch_gelation(
+            params=params, props=props, R_droplet=R_droplet,
+            mode=mode, timing=timing,
+        )
+
+    # ── v9.4 Tier-3 multi-variant composites — data-only placeholders ─
+    # PECTIN_CHITOSAN, GELLAN_ALGINATE, PULLULAN_DEXTRAN are documented
+    # in PolymerFamily but their full solvers are deferred to v9.5.
+    tier_3_composite_placeholders = {
+        PolymerFamily.PECTIN_CHITOSAN.value,
+        PolymerFamily.GELLAN_ALGINATE.value,
+        PolymerFamily.PULLULAN_DEXTRAN.value,
+    }
+    if fam_value in tier_3_composite_placeholders:
+        raise NotImplementedError(
+            f"PolymerFamily {fam_value!r} is a v9.4 Tier-3 multi-variant "
+            f"composite placeholder. L2 solver lands in v9.5 if "
+            f"bioprocess-relevance evidence justifies. Use the constituent "
+            f"single-polymer Tier-3 families (PECTIN, GELLAN, PULLULAN) "
+            f"for v9.4 work."
+        )
+
     raise ValueError(
         f"Unknown polymer_family.value = {fam_value!r}. "
         f"Known UI-enabled families: AGAROSE_CHITOSAN, AGAROSE, CHITOSAN, "

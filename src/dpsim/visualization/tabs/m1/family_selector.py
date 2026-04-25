@@ -92,6 +92,22 @@ _FAMILY_DISPLAY: list[tuple[str, PolymerFamily, str]] = [
      "Material-as-ligand companion to amylose-MBP: crosslinked chitin "
      "matrix as the affinity ligand for CBD-tagged fusions. NEB IMPACT "
      "system; on-column thiol-induced cleavage (v9.3 SEMI_QUANTITATIVE)."),
+    # v9.4 Tier-3 additions (research-mode / lower-priority families)
+    ("Pectin (LM, Ca²⁺ gel)", PolymerFamily.PECTIN,
+     "Galacturonic-acid carboxylate Ca²⁺ ionic gelation; analogous to "
+     "alginate but DE-dependent. Limited bioprocess relevance "
+     "(v9.4 QUALITATIVE_TREND, research-mode)."),
+    ("Gellan (low-acyl, K⁺/Ca²⁺)", PolymerFamily.GELLAN,
+     "Helix-aggregation gelation; cation-dependent (K⁺ standard, Ca²⁺ "
+     "stronger). Food / drug-delivery dominant; limited bioprocess "
+     "relevance (v9.4 QUALITATIVE_TREND)."),
+    ("Pullulan (neutral α-glucan)", PolymerFamily.PULLULAN,
+     "α-(1→4),(1→6)-glucan analogous to dextran; STMP / ECH crosslinked. "
+     "Drug-delivery dominant (v9.4 QUALITATIVE_TREND)."),
+    ("Starch (porous, research-mode)", PolymerFamily.STARCH,
+     "Crosslinked porous starch bead; gelatinization, retrogradation, "
+     "and amylase-degradation flags. Research-mode only "
+     "(v9.4 QUALITATIVE_TREND)."),
 ]
 
 
@@ -105,31 +121,31 @@ def _enabled_rows() -> list[tuple[str, PolymerFamily, str]]:
     return [row for row in _FAMILY_DISPLAY if is_family_enabled_in_ui(row[1])]
 
 
-# v9.3 update: Q-012 Tier-2 preview rows have all been promoted to
-# selectable Tier-1 status (v9.3 SEMI_QUANTITATIVE). The preview list
-# now records v9.4 Tier-3 families that remain data-only / deferred
-# pending future cycles. These are documented but not enabled in the
-# enum — they exist purely as informational entries here so users can
-# see what's on the v9.4 roadmap.
+# v9.4 update: Tier-3 single-polymer families (PECTIN, GELLAN, PULLULAN,
+# STARCH) have been promoted to selectable status. The preview list now
+# records v9.5+ deferred items: Tier-3 multi-variant composites
+# (pectin-chitosan, gellan-alginate, pullulan-dextran), the rejected
+# Tier-4 reagent (POCl3), and notable crosslinker flags that contributors
+# should be aware of (Al³⁺ non-biotherapeutic, borax reversibility).
 _TIER2_PREVIEW_ROWS: list[tuple[str, str]] = [
-    ("Pectin (calcium pectinate, pectin-chitosan PEC)",
-     "v9.4 Tier-3: galacturonic-acid carboxylate ionic gelation; "
-     "drug-delivery / food provenance, limited bioprocess relevance."),
-    ("Gellan gum (low-acyl, gellan-alginate)",
-     "v9.4 Tier-3: K⁺/Ca²⁺/H⁺ helix-aggregation gelation; food / "
-     "drug-delivery provenance."),
-    ("Pullulan / pullulan-dextran",
-     "v9.4 Tier-3: neutral α-glucan; STMP-crosslinked; mostly drug-"
-     "delivery applications."),
-    ("Crosslinked porous starch",
-     "v9.4 Tier-3: STMP / ECH / POCl3 routes; food/industrial provenance, "
-     "stability and degradation issues for chromatography."),
-    ("Trivalent ion gelants (Al³⁺) — non-biotherapeutic flag",
-     "v9.4 Tier-3: gellan ionotropic gelation; residual aluminum is "
-     "regulated by FDA/EP. NOT default for biotherapeutic resins."),
+    ("Pectin-chitosan polyelectrolyte complex (PEC)",
+     "v9.5 deferred: pectin + chitosan PEC; drug-delivery dominant. "
+     "Constituent pectin available as v9.4 Tier-3."),
+    ("Gellan-alginate composite",
+     "v9.5 deferred: gellan + alginate co-gelation; food provenance. "
+     "Constituents available as Tier-1/Tier-3."),
+    ("Pullulan-dextran composite",
+     "v9.5 deferred: pullulan + dextran composite microbeads; mostly "
+     "drug-delivery applications."),
+    ("POCl3 (phosphoryl chloride) — Tier-4 REJECTED",
+     "Hazard-rejected: violent reaction with water (HCl release); "
+     "food-grade starch context only. Documented as ADR; not implemented."),
+    ("Trivalent Al³⁺ gelant — non-biotherapeutic flag",
+     "v9.4 Tier-3 implemented behind biotherapeutic_safe=False gate; "
+     "documented here for awareness."),
     ("Reversible borate-cis-diol crosslinking (borax)",
-     "v9.4 Tier-3: temporary porogen / model network; reversible under "
-     "elution conditions, not suitable for pressure chromatography."),
+     "v9.4 Tier-3 implemented as research / temporary porogen; "
+     "documented here for the reversibility warning."),
 ]
 
 
@@ -170,20 +186,20 @@ def render_family_selector(*, key: str = "m1v9_polymer_family") -> FamilyContext
     family = enums[idx]
     st.caption(f"**{sel_name}** — {helps[idx]}")
 
-    # v9.3 update: Tier-2 families have all been promoted (selectable
-    # above). The preview now lists v9.4 Tier-3 families that remain
-    # deferred pending future cycles.
-    with st.expander("v9.4 preview: Tier-3 polymer families (deferred)",
+    # v9.4 update: Tier-3 single-polymer families have been promoted
+    # (selectable above). The preview now records v9.5+ deferred
+    # items: multi-variant composites and rejected Tier-4 chemistries.
+    with st.expander("v9.5+ preview: deferred / rejected items",
                       expanded=False):
         st.caption(
-            "These polymer families are documented in the SA screening "
-            "report but deferred to v9.4 because of low bioprocess "
-            "relevance (drug-delivery / food provenance), or "
-            "biotherapeutic-incompatibility flags. Listed here for "
-            "roadmap visibility."
+            "Items documented in the SA screening report but not "
+            "implemented in v9.4. Multi-variant composites are deferred "
+            "pending bioprocess-relevance evidence; POCl3 is hazard-"
+            "rejected (Tier-4). Listed here for roadmap visibility and "
+            "contributor awareness."
         )
-        for tier3_name, tier3_help in _TIER2_PREVIEW_ROWS:
-            st.markdown(f"- **{tier3_name}** — {tier3_help}")
+        for row_name, row_help in _TIER2_PREVIEW_ROWS:
+            st.markdown(f"- **{row_name}** — {row_help}")
 
     return FamilyContext(family=family, display_name=sel_name)
 

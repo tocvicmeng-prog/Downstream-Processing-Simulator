@@ -59,6 +59,16 @@ class PolymerFamily(Enum):
     AMYLOSE = "amylose"
     CHITIN = "chitin"
 
+    # v9.4 Tier-3 additions (SA screening report § 6.3)
+    PECTIN = "pectin"                       # galacturonic-acid Ca²⁺ ionic gelation
+    GELLAN = "gellan"                       # K⁺/Ca²⁺ helix-aggregation
+    PULLULAN = "pullulan"                   # neutral α-glucan; STMP / ECH crosslinked
+    STARCH = "starch"                       # neutral α-glucan; degradation/brittleness flagged
+    # v9.4 Tier-3 multi-variant composites (less common but documented in SA report)
+    PECTIN_CHITOSAN = "pectin_chitosan"     # pectin-chitosan PEC
+    GELLAN_ALGINATE = "gellan_alginate"     # gellan-alginate composite
+    PULLULAN_DEXTRAN = "pullulan_dextran"   # pullulan-dextran composite
+
 
 # ─── PolymerFamily metadata (v9.2 family-flag system) ───────────────────
 #
@@ -95,6 +105,16 @@ _TIER1_UI_FAMILIES: frozenset[str] = frozenset({
     PolymerFamily.AGAROSE_ALGINATE.value,
     PolymerFamily.ALGINATE_CHITOSAN.value,
     PolymerFamily.CHITIN.value,
+    # v9.4 Tier-3 promotions (SA screening § 6.3) — niche / lower
+    # bioprocess relevance, but UI-enabled with QUALITATIVE_TREND or
+    # SEMI_QUANTITATIVE evidence and explicit "research-mode only"
+    # warnings where appropriate. The simpler composites (pectin-
+    # chitosan, gellan-alginate, pullulan-dextran) remain data-only
+    # placeholders for v9.5+ pending bioprocess-relevance evidence.
+    PolymerFamily.PECTIN.value,
+    PolymerFamily.GELLAN.value,
+    PolymerFamily.PULLULAN.value,
+    PolymerFamily.STARCH.value,
 })
 
 # Families where the polymer IS the affinity matrix (B9 pattern).

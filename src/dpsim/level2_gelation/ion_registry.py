@@ -245,6 +245,101 @@ ION_GELANT_REGISTRY: dict[tuple[PolymerFamily, str], IonGelantProfile] = {
             "score 3/10."
         ),
     ),
+
+    # ─── v9.4 Tier-3 ionic-gelation entries ───────────────────────────
+
+    # PECTIN + Ca²⁺ — galacturonic-acid carboxylate ionic gelation.
+    # Strength depends on degree of esterification (DE): low-methoxy
+    # pectin (LM, DE < 50%) gels strongly with Ca²⁺; high-methoxy (HM,
+    # DE > 50%) requires acid + sugar (sugar-acid gel).
+    # Voragen et al. 2009 Struct. Chem. 20:263.
+    (PolymerFamily.PECTIN, "Ca2+ (LM pectin)"): IonGelantProfile(
+        polymer_family=PolymerFamily.PECTIN,
+        ion="Ca2+",
+        mode="external_bath",
+        C_ion_bath=50.0,                # 50 mM CaCl2 typical for LM pectin
+        C_ion_source=0.0,
+        k_release=0.0,
+        junction_zone_energy=-4.0,
+        stoichiometry=2.0,
+        biotherapeutic_safe=True,
+        T_default=298.15,
+        t_default=1800.0,
+        suitability=5,                  # niche bioprocess relevance
+        notes=(
+            "Low-methoxy pectin (DE < 50%) gels strongly with Ca²⁺ via "
+            "egg-box-analogous junction zones in galacturonic-acid "
+            "blocks. Voragen 2009. Bioprocess relevance is limited "
+            "(food / drug-delivery dominates); suitability 5/10."
+        ),
+    ),
+
+    # GELLAN + K⁺ — low-acyl gellan helix-aggregation.
+    # Morris et al. 2012 Carbohydr. Polym. 89:1054.
+    (PolymerFamily.GELLAN, "K+ (low-acyl)"): IonGelantProfile(
+        polymer_family=PolymerFamily.GELLAN,
+        ion="K+",
+        mode="external_bath",
+        C_ion_bath=100.0,                # 100 mM KCl typical
+        C_ion_source=0.0,
+        k_release=0.0,
+        junction_zone_energy=-3.5,
+        stoichiometry=1.0,
+        biotherapeutic_safe=True,
+        T_default=298.15,
+        t_default=900.0,
+        suitability=4,                  # food/drug-delivery dominant
+        notes=(
+            "Low-acyl gellan helix-aggregation with K⁺ (and Na⁺ to a "
+            "lesser extent). Morris 2012. Compositionally similar to "
+            "κ-carrageenan + K⁺ but with weaker junction-zone energy. "
+            "Food / drug-delivery provenance; suitability 4/10."
+        ),
+    ),
+
+    # GELLAN + Ca²⁺ — divalent ion variant.
+    (PolymerFamily.GELLAN, "Ca2+ (low-acyl)"): IonGelantProfile(
+        polymer_family=PolymerFamily.GELLAN,
+        ion="Ca2+",
+        mode="external_bath",
+        C_ion_bath=20.0,
+        C_ion_source=0.0,
+        k_release=0.0,
+        junction_zone_energy=-4.5,     # stronger than K⁺
+        stoichiometry=2.0,
+        biotherapeutic_safe=True,
+        T_default=298.15,
+        t_default=600.0,
+        suitability=5,
+        notes=(
+            "Low-acyl gellan + Ca²⁺ — stronger junction zones than K⁺ "
+            "but more brittle gel. Morris 2012."
+        ),
+    ),
+
+    # GELLAN + Al³⁺ — research-mode trivalent ion gelant.
+    # Suitability is intentionally low; biotherapeutic_safe=False.
+    (PolymerFamily.GELLAN, "Al3+ (research, non-biotherapeutic)"): IonGelantProfile(
+        polymer_family=PolymerFamily.GELLAN,
+        ion="Al3+",
+        mode="external_bath",
+        C_ion_bath=10.0,
+        C_ion_source=0.0,
+        k_release=0.0,
+        junction_zone_energy=-7.0,     # strongest — trivalent
+        stoichiometry=3.0,
+        biotherapeutic_safe=False,      # CRITICAL — Al³⁺ residue regulated by FDA/EP
+        T_default=298.15,
+        t_default=300.0,
+        suitability=2,                  # very low — non-biotherapeutic
+        notes=(
+            "TRIVALENT GELANT — NOT FOR BIOTHERAPEUTIC RESINS. Strongest "
+            "ionic crosslinking (3 carboxylates per Al³⁺) but residual "
+            "aluminum is regulated by FDA/EP. Use only for research / "
+            "non-biotherapeutic applications. The is_biotherapeutic_safe "
+            "gate will block this from default workflows."
+        ),
+    ),
 }
 
 
@@ -294,6 +389,36 @@ FREESTANDING_ION_GELANTS: dict[str, FreestandingIonGelant] = {
             "internal-release alginate gelation. See registry entry "
             "(ALGINATE, 'Ca2+ (CaSO4 internal)') for the bound profile. "
             "Source: Drury & Mooney 2003."
+        ),
+    ),
+    # ─── v9.4 Tier-3 freestanding gelants ────────────────────────────
+    "alcl3": FreestandingIonGelant(
+        ion="Al3+",
+        cas="7446-70-0",
+        biotherapeutic_safe=False,      # CRITICAL — FDA/EP regulated
+        typical_C_bath_mM=10.0,
+        notes=(
+            "TRIVALENT IONIC GELANT — NOT FOR BIOTHERAPEUTIC RESINS. "
+            "Residual aluminum is regulated by FDA/EP and induces "
+            "proteinopathy concerns. Use only for research / non-"
+            "biotherapeutic applications. is_biotherapeutic_safe_ion "
+            "returns False so the default-workflow gate blocks it."
+        ),
+    ),
+    "borax": FreestandingIonGelant(
+        ion="B(OH)4-",
+        cas="1303-96-4",
+        biotherapeutic_safe=True,        # borate is biotherapeutic-safe
+        typical_C_bath_mM=50.0,
+        notes=(
+            "Borax / borate-cis-diol REVERSIBLE crosslinker. Forms borate "
+            "ester with cis-diols at pH > 8.5; dissociates at low pH or "
+            "with competing diols/sugars. NOT suitable as a final "
+            "chromatography crosslinker because the network dissociates "
+            "under normal elution conditions. Useful as TEMPORARY POROGEN "
+            "or model network during synthesis, then hardened with "
+            "covalent crosslinker (BDDE/ECH). See "
+            "borax_reversible_crosslinking ReagentProfile."
         ),
     ),
 }
