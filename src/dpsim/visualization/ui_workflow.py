@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from dpsim.core.process_recipe import LifecycleStage, ProcessRecipe, ProcessStep, ProcessStepKind
+from dpsim.core.process_recipe import LifecycleStage, ProcessRecipe, ProcessStepKind
 from dpsim.core.quantities import Quantity
 from dpsim.core.validation import ValidationReport
 from dpsim.datatypes import ModelManifest

@@ -3,13 +3,22 @@
 v6.0: Renders the complete M2 Surface Functionalization tab including inputs,
 run button, and results display. All widget keys preserved exactly (m2_* prefix).
 Widget key pattern includes step_type AND reagent_key (Codex R3-F4 fix).
+
+v0.3.0 (B3): reagent dropdowns are filtered by the recipe's polymer_family —
+``incompatible`` entries (per the family × reagent matrix) are dropped, and
+``qualitative_only`` entries get a "⚠ qualitative-only" suffix. M2 result
+panels render evidence-tier badges next to the per-step expanders.
 """
 
 from __future__ import annotations
 
 import streamlit as st
 
+from dpsim.datatypes import ModelEvidenceTier, PolymerFamily
 from dpsim.lifecycle import resolve_lifecycle_inputs
+from dpsim.module2_functionalization.family_reagent_matrix import (
+    check_family_reagent_compatibility,
+)
 from dpsim.properties.database import PropertyDatabase
 from dpsim.trust import assess_trust
 from dpsim.visualization.ui_recipe import (
@@ -17,6 +26,67 @@ from dpsim.visualization.ui_recipe import (
     save_process_recipe_state,
     sync_m2_steps_to_recipe,
 )
+
+
+_M2_TIER_COLORS = {
+    ModelEvidenceTier.VALIDATED_QUANTITATIVE: ":green[VALIDATED]",
+    ModelEvidenceTier.CALIBRATED_LOCAL: ":green[CALIBRATED]",
+    ModelEvidenceTier.SEMI_QUANTITATIVE: ":orange[SEMI-QUANTITATIVE]",
+    ModelEvidenceTier.QUALITATIVE_TREND: ":red[QUALITATIVE TREND]",
+    ModelEvidenceTier.UNSUPPORTED: ":red[UNSUPPORTED]",
+}
+
+
+def _m2_evidence_tier_badge(result_obj) -> str:
+    """Return a tier badge string for an M2 step result; empty if no manifest."""
+    manifest = getattr(result_obj, "model_manifest", None)
+    if manifest is None:
+        return ""
+    tier = getattr(manifest, "evidence_tier", None)
+    if tier is None:
+        return ""
+    badge = _M2_TIER_COLORS.get(tier, str(getattr(tier, "value", tier)))
+    return f"Evidence: {badge} | Model: `{getattr(manifest, 'model_name', '')}`"
+
+
+def _active_polymer_family() -> PolymerFamily:
+    """Resolve the active polymer family from the session-state recipe."""
+    recipe = st.session_state.get("process_recipe")
+    if recipe is not None:
+        raw = (recipe.material_batch.polymer_family or "").strip().lower()
+        try:
+            return PolymerFamily(raw)
+        except ValueError:
+            pass
+    return PolymerFamily.AGAROSE_CHITOSAN
+
+
+def _family_filter_reagents(
+    options: dict[str, str],
+    family: PolymerFamily,
+) -> dict[str, str]:
+    """Filter / annotate a reagent-options dict against the family-reagent matrix.
+
+    Compatibility values:
+      - compatible           → keep label unchanged
+      - qualitative_only     → suffix label with "⚠ qualitative-only"
+      - incompatible         → drop entry
+      - None (no opinion)    → keep label unchanged
+    """
+    filtered: dict[str, str] = {}
+    for label, key in options.items():
+        entry = check_family_reagent_compatibility(family, key)
+        if entry is None or entry.compatibility == "compatible":
+            filtered[label] = key
+        elif entry.compatibility == "qualitative_only":
+            filtered[f"{label} ⚠ qualitative-only"] = key
+        # incompatible → drop
+    if not filtered:
+        # Don't lock the user out entirely; surface the original options with
+        # an advisory caption so they can still make a choice (the G4
+        # guardrail will block on run if the choice is incompatible).
+        return options
+    return filtered
 
 
 def render_tab_m2(tab_container, _smgr) -> None:
@@ -129,11 +199,29 @@ def render_tab_m2(tab_container, _smgr) -> None:
                         "NaBH4 (Aldehyde Quench)": "nabh4_quench",
                         "Acetic Anhydride (Amine Quench)": "acetic_anhydride_quench",
                     }
+                # v0.3.0 (B3): filter reagent options by active polymer family
+                # using the family × reagent matrix. Incompatible entries are
+                # dropped; qualitative_only entries get a label suffix.
+                _active_family = _active_polymer_family()
+                _reagent_options_filtered = _family_filter_reagents(
+                    _reagent_options, _active_family
+                )
                 # Key includes step_type to reset selection when chemistry changes
                 _reagent_sel_key = f"m2_reagent_{i}_{step_type.replace(' ', '_').lower()}"
-                _reagent_label = st.selectbox("Reagent", list(_reagent_options.keys()), key=_reagent_sel_key)
+                _reagent_label = st.selectbox(
+                    "Reagent",
+                    list(_reagent_options_filtered.keys()),
+                    key=_reagent_sel_key,
+                )
                 # Defensive: if Streamlit returns a stale label from session state, fall back to first option
-                _reagent_key = _reagent_options.get(_reagent_label, list(_reagent_options.values())[0])
+                _reagent_key = _reagent_options_filtered.get(
+                    _reagent_label, list(_reagent_options_filtered.values())[0]
+                )
+                if _active_family != PolymerFamily.AGAROSE_CHITOSAN:
+                    st.caption(
+                        f"Reagent options filtered for polymer_family="
+                        f"`{_active_family.value}`."
+                    )
 
                 _profile = _REAGENT_PROFILES.get(_reagent_key)
                 if _profile is None:
@@ -310,6 +398,10 @@ def render_tab_m2(tab_container, _smgr) -> None:
                     f"Step {_i + 1}: {_mr.step.reagent_key} \u2014 "
                     f"conversion {_mr.conversion:.1%}{_consumed_str}"
                 )
+                # v0.3.0 (B3): per-step evidence-tier badge.
+                _step_badge = _m2_evidence_tier_badge(_mr)
+                if _step_badge:
+                    st.caption(_step_badge)
 
             st.divider()
 

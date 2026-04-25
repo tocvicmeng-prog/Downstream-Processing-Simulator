@@ -38,9 +38,11 @@ def _evidence_badge(result_obj) -> str:
     model_name = manifest.model_name
     return f"Evidence: {badge} | Model: `{model_name}`"
 from dpsim.properties.database import PropertyDatabase
-from dpsim.pipeline.orchestrator import PipelineOrchestrator
 from dpsim.trust import assess_trust
-from dpsim.lifecycle import resolve_lifecycle_inputs
+# v0.3.0 (B5): M1 runs route through the lifecycle layer's recipe-driven
+# helper rather than importing PipelineOrchestrator directly. This satisfies
+# the architect-coherence-audit D1 finding (dual-API surface in tab_m1).
+from dpsim.lifecycle import resolve_lifecycle_inputs, run_m1_from_recipe
 from dpsim.visualization.plots import (
     plot_droplet_size_distribution,
     plot_phase_field,
@@ -248,10 +250,12 @@ def _render_non_ac_family(*, tab_container, family, is_stirred_default, model_mo
     with st.spinner(f"Running L1→L2→L4 pipeline for {family.value}..."):
         t_start = time.time()
         db = PropertyDatabase()
-        orch = PipelineOrchestrator(db=db)
         try:
-            result = orch.run_single(
-                params, l2_mode="empirical",
+            result = run_m1_from_recipe(
+                _recipe,
+                base_params=params,
+                db=db,
+                l2_mode="empirical",
                 props_overrides=props_overrides,
                 crosslinker_key="genipin",  # ignored for non-A+C families
                 uv_intensity=0.0,
@@ -608,14 +612,18 @@ def render_tab_m1(
             with st.spinner("Running L1\u2192L2\u2192L3\u2192L4 pipeline..."):
                 t_start = time.time()
                 db = PropertyDatabase()
-                orch = PipelineOrchestrator(db=db)
                 progress = st.progress(0, text="Level 1: Emulsification (PBE solver)...")
 
                 try:
-                    result = orch.run_single(params, l2_mode=l2_mode,
-                                             props_overrides=_custom_props_overrides,
-                                             crosslinker_key=_xl_sel_key,
-                                             uv_intensity=uv_intensity)
+                    result = run_m1_from_recipe(
+                        _recipe,
+                        base_params=params,
+                        db=db,
+                        l2_mode=l2_mode,
+                        props_overrides=_custom_props_overrides,
+                        crosslinker_key=_xl_sel_key,
+                        uv_intensity=uv_intensity,
+                    )
                 except Exception as ex:
                     st.error(f"Simulation failed: {ex}")
                     st.exception(ex)

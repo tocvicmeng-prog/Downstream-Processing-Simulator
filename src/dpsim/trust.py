@@ -1,10 +1,24 @@
-"""Trust gates -- assess reliability of simulation predictions."""
+"""Trust gates -- assess reliability of simulation predictions.
+
+v0.3.0 (B2): the gate is now family-aware. Checks that depend on agarose +
+chitosan surface chemistry (NH2 ratio, agarose calibration range, chitosan
+side reactions, IPN eta_coupling) only fire when ``props.polymer_family ==
+AGAROSE_CHITOSAN``. Non-A+C families receive an advisory warning that the
+trust gate is calibrated primarily against the A+C platform until per-family
+trust gates land in v0.4.0+.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .datatypes import FullResult, SimulationParameters, MaterialProperties, ModelMode
+from .datatypes import (
+    FullResult,
+    MaterialProperties,
+    ModelMode,
+    PolymerFamily,
+    SimulationParameters,
+)
 
 
 @dataclass
@@ -50,10 +64,22 @@ def assess_trust(result: FullResult, params: SimulationParameters,
     warnings = []
     blockers = []
 
+    # v0.3.0 (B2): family-aware gating. Compare by .value (per CLAUDE.md
+    # quirk note: enum identity breaks across importlib.reload boundaries).
+    family_value = getattr(getattr(props, "polymer_family", None), "value", "agarose_chitosan")
+    is_ac = family_value == PolymerFamily.AGAROSE_CHITOSAN.value
+
     e = result.emulsification
     g = result.gelation
     x = result.crosslinking
     m = result.mechanical
+
+    if not is_ac:
+        warnings.append(
+            f"Trust gate is calibrated primarily against the agarose+chitosan platform; "
+            f"polymer_family={family_value!r} runs are screened with universal physics "
+            "checks only. Family-specific trust gates land in v0.4.0+."
+        )
 
     # 1. Droplet size outside model validity
     if e.d32 < 0.5e-6:
@@ -93,25 +119,26 @@ def assess_trust(result: FullResult, params: SimulationParameters,
             "Check cooling rate and T_gel."
         )
 
-    # 6. Crosslinking stoichiometry-limited
-    if x.p_final < 0.01:
+    # 6. Crosslinking stoichiometry-limited (A+C secondary network specific)
+    if is_ac and x.p_final < 0.01:
         warnings.append(
             f"Crosslinking fraction={x.p_final:.1%} -- very low, increase crosslinker concentration"
         )
 
-    # 7. Crosslinker is limiting reagent
-    from .level3_crosslinking.solver import recommended_crosslinker_concentration
-    NH2_total = params.formulation.c_chitosan * 1000 * props.DDA / props.M_GlcN
-    if NH2_total > 0 and params.formulation.c_genipin / NH2_total < 0.05:
-        c_min = recommended_crosslinker_concentration(
-            params.formulation.c_chitosan, props.DDA, props.M_GlcN,
-            target_p=0.10,  # target_p=0.10 -> ratio=0.05 threshold
-        )
-        warnings.append(
-            f"Crosslinker/NH2 ratio = {params.formulation.c_genipin/NH2_total:.3f} -- "
-            f"crosslinker-limited. Increase to at least {c_min:.1f} mol/m\u00b3 for ratio \u2265 0.05. "
-            "Increasing crosslinking time will not help."
-        )
+    # 7. Crosslinker is limiting reagent \u2014 A+C only (chitosan -NH2 stoichiometry)
+    if is_ac:
+        from .level3_crosslinking.solver import recommended_crosslinker_concentration
+        NH2_total = params.formulation.c_chitosan * 1000 * props.DDA / props.M_GlcN
+        if NH2_total > 0 and params.formulation.c_genipin / NH2_total < 0.05:
+            c_min = recommended_crosslinker_concentration(
+                params.formulation.c_chitosan, props.DDA, props.M_GlcN,
+                target_p=0.10,
+            )
+            warnings.append(
+                f"Crosslinker/NH2 ratio = {params.formulation.c_genipin/NH2_total:.3f} -- "
+                f"crosslinker-limited. Increase to at least {c_min:.1f} mol/m\u00b3 for ratio \u2265 0.05. "
+                "Increasing crosslinking time will not help."
+            )
 
     # 8. Mechanical properties unreasonable
     if m.G_DN < 100:
@@ -132,12 +159,13 @@ def assess_trust(result: FullResult, params: SimulationParameters,
                 "Consider enabling C3 viscous correction."
             )
 
-    # 10. Empirical pore model outside calibration range
-    c_agar_pct = params.formulation.c_agarose / 10.0
-    if c_agar_pct < 1.0 or c_agar_pct > 8.0:
-        warnings.append(
-            f"Agarose={c_agar_pct:.1f}% -- outside empirical pore model calibration range (1-8%)"
-        )
+    # 10. Empirical pore model outside calibration range — A+C only (agarose%)
+    if is_ac:
+        c_agar_pct = params.formulation.c_agarose / 10.0
+        if c_agar_pct < 1.0 or c_agar_pct > 8.0:
+            warnings.append(
+                f"Agarose={c_agar_pct:.1f}% -- outside empirical pore model calibration range (1-8%)"
+            )
 
     # Fix 7: Crosslinker chemistry-specific warnings
     from .reagent_library import CROSSLINKERS
@@ -159,8 +187,8 @@ def assess_trust(result: FullResult, params: SimulationParameters,
             warnings.append("Citric acid heat cure (80-120C) may partially melt agarose gel. "
                             "Ester bonds are hydrolytically unstable at pH>10.")
 
-    # 11. Hydroxyl crosslinker simplification (chitosan-NH2 side reactions)
-    if crosslinker_key in ('ech', 'dvs', 'citric_acid') and params.formulation.c_chitosan > 0:
+    # 11. Hydroxyl crosslinker simplification (chitosan-NH2 side reactions) — A+C only
+    if is_ac and crosslinker_key in ('ech', 'dvs', 'citric_acid') and params.formulation.c_chitosan > 0:
         warnings.append(
             "Hydroxyl crosslinker model is simplified — assumes agarose-OH only targeting. "
             "Real chemistry also reacts with chitosan-NH2. Results may underestimate crosslink density."
@@ -192,19 +220,18 @@ def assess_trust(result: FullResult, params: SimulationParameters,
             "Switch to ch_2d for mechanistic consistency."
         )
 
-    # 14. Non-specific eta_coupling (same default for all crosslinker types)
-    # Suppressed when per-chemistry eta has been wired through L3 -> L4 via
-    # CrosslinkerProfile.eta_coupling_recommended -> NetworkTypeMetadata.eta_coupling_recommended.
-    _network_meta = getattr(x, 'network_metadata', None)
-    _per_chem_eta_active = (
-        _network_meta is not None
-        and hasattr(_network_meta, 'eta_coupling_recommended')
-    )
-    if not _per_chem_eta_active and props.eta_coupling == -0.15:
-        warnings.append(
-            "IPN coupling coefficient (eta=-0.15) is the same default for all crosslinker types. "
-            "Per-chemistry eta values would improve accuracy."
+    # 14. Non-specific eta_coupling — A+C only (IPN coupling coefficient)
+    if is_ac:
+        _network_meta = getattr(x, 'network_metadata', None)
+        _per_chem_eta_active = (
+            _network_meta is not None
+            and hasattr(_network_meta, 'eta_coupling_recommended')
         )
+        if not _per_chem_eta_active and props.eta_coupling == -0.15:
+            warnings.append(
+                "IPN coupling coefficient (eta=-0.15) is the same default for all crosslinker types. "
+                "Per-chemistry eta values would improve accuracy."
+            )
 
     trustworthy = len(blockers) == 0
 

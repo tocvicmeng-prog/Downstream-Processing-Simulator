@@ -3,6 +3,9 @@
 v6.0: Renders the complete M3 Performance Characterization tab including
 inputs, run button, and results display. All widget keys preserved exactly
 (m3_* prefix). Chromatography and catalysis modes supported.
+
+v0.2.0 (A6): gradient elution call site now inherits FMC tier; M3 result
+subpanels render evidence-tier badges next to their headers.
 """
 
 from __future__ import annotations
@@ -10,6 +13,7 @@ from __future__ import annotations
 import numpy as np
 import streamlit as st
 
+from dpsim.datatypes import ModelEvidenceTier
 from dpsim.lifecycle import resolve_lifecycle_inputs
 from dpsim.visualization.ui_recipe import (
     ensure_process_recipe_state,
@@ -17,6 +21,34 @@ from dpsim.visualization.ui_recipe import (
     save_process_recipe_state,
     sync_m3_ui_to_recipe,
 )
+
+
+_M3_TIER_COLORS = {
+    ModelEvidenceTier.VALIDATED_QUANTITATIVE: ":green[VALIDATED]",
+    ModelEvidenceTier.CALIBRATED_LOCAL: ":green[CALIBRATED]",
+    ModelEvidenceTier.SEMI_QUANTITATIVE: ":orange[SEMI-QUANTITATIVE]",
+    ModelEvidenceTier.QUALITATIVE_TREND: ":red[QUALITATIVE TREND]",
+    ModelEvidenceTier.UNSUPPORTED: ":red[UNSUPPORTED]",
+}
+
+
+def _m3_evidence_tier_badge(result_obj) -> str:
+    """Return a Streamlit-flavoured tier badge for an M3 result object.
+
+    Mirrors the helper in tab_m1; duplicated here to avoid cross-tab imports
+    until v0.3.0 (B3) consolidates evidence-badge UX across tabs.
+    """
+    manifest = getattr(result_obj, "model_manifest", None)
+    if manifest is None:
+        return ""
+    tier = getattr(manifest, "evidence_tier", None)
+    if tier is None:
+        return ""
+    badge = _M3_TIER_COLORS.get(tier, str(getattr(tier, "value", tier)))
+    model_name = getattr(manifest, "model_name", "")
+    cal_ref = getattr(manifest, "calibration_ref", "")
+    suffix = f" | calibration: `{cal_ref}`" if cal_ref else ""
+    return f"Evidence: {badge} | Model: `{model_name}`{suffix}"
 
 
 def render_tab_m3(tab_container) -> None:
@@ -280,6 +312,10 @@ def render_tab_m3(tab_container) -> None:
                                     q_max=np.array([q_max]),
                                     K_L=np.array([K_L_m3]),
                                 )
+                                # v0.2.0 (A6): pass FMC so the gradient-elution
+                                # manifest tier inherits from M2 calibration
+                                # state instead of being floored at
+                                # SEMI_QUANTITATIVE.
                                 ge = run_gradient_elution(
                                     column,
                                     C_feed=np.array([C_feed_mol]),
@@ -288,6 +324,7 @@ def render_tab_m3(tab_container) -> None:
                                     total_time=_recipe_total_time,
                                     isotherm=comp_iso,
                                     feed_duration=_recipe_feed_duration,
+                                    fmc=_fmc_ui,
                                 )
                                 st.session_state["m3_result_ge"] = ge
                         except Exception as _m3_ex:
@@ -349,6 +386,9 @@ def render_tab_m3(tab_container) -> None:
                     from dpsim.visualization.ui_validators import validate_m3_result as _val_m3_res
                     _bt = st.session_state["m3_result_bt"]
                     st.subheader("Breakthrough Chromatography")
+                    _bt_badge = _m3_evidence_tier_badge(_bt)
+                    if _bt_badge:
+                        st.caption(_bt_badge)
 
                     _mb_pct = abs(_bt.mass_balance_error) * 100.0
                     if _mb_pct > 5.0:
@@ -408,6 +448,9 @@ def render_tab_m3(tab_container) -> None:
                 with _m3_subs[_m3_idx]:
                     _ge = st.session_state["m3_result_ge"]
                     st.subheader("Gradient Elution Chromatography")
+                    _ge_badge = _m3_evidence_tier_badge(_ge)
+                    if _ge_badge:
+                        st.caption(_ge_badge)
 
                     _grad_affects = getattr(_ge, "gradient_affects_binding", False)
                     if _grad_affects:
@@ -440,13 +483,34 @@ def render_tab_m3(tab_container) -> None:
                 with _m3_subs[_m3_idx]:
                     _method = st.session_state["m3_result_method"]
                     st.subheader("Protein A Method Operation")
+                    _method_badge = _m3_evidence_tier_badge(_method)
+                    if _method_badge:
+                        st.caption(_method_badge)
                     _pa = _method.protein_a
                     _op = _method.operability
                     _eff = _method.column_efficiency
                     _imp = _method.impurity_clearance
+                    # v0.3.0 (B6): cycle-life as bucketed ranking when no
+                    # calibration is loaded, so users do not read a precise
+                    # number off a screening correlation that is UNSUPPORTED
+                    # without resin-cycling assays.
+                    from dpsim.module3_performance.method import (
+                        cycle_lifetime_label,
+                        is_method_calibrated,
+                    )
+                    _calibrated = is_method_calibrated(_fmc_ui)
                     _pm1, _pm2, _pm3, _pm4 = st.columns(4)
                     _pm1.metric("Elution recovery", f"{_pa.predicted_elution_recovery_fraction:.1%}")
-                    _pm2.metric("Cycle lifetime", f"{_pa.cycle_lifetime_to_70pct_capacity:.0f}")
+                    if _calibrated:
+                        _pm2.metric(
+                            "Cycle lifetime",
+                            f"{_pa.cycle_lifetime_to_70pct_capacity:.0f}",
+                        )
+                    else:
+                        _pm2.metric(
+                            "Cycle lifetime",
+                            cycle_lifetime_label(_pa, is_calibrated=False),
+                        )
                     _pm3.metric("Asymmetry", f"{_eff.asymmetry_factor:.2f}")
                     _pm4.metric("Impurity risk", _imp.risk)
                     st.caption(

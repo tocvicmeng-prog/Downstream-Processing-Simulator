@@ -5,8 +5,8 @@
 > in QA mode.
 
 ## Product Context
-- **What this is:** Multi-scale simulator for double-network polysaccharide microsphere fabrication (Emulsification → Gelation → Crosslinking → Mechanical Properties). Produced by Holocyte Pty Ltd / GMExpression.
-- **Who it's for:** Chemistry / materials-science researchers, downstream-processing technicians, junior researchers, IP auditors, chief economists reviewing cost of goods.
+- **What this is:** Multi-scale simulator for the polysaccharide microsphere → functionalized affinity media → packed-bed chromatography lifecycle (M1 fabrication → M2 functionalization → M3 affinity chromatography performance). Forked from the upstream EmulSim microsphere-fabrication codebase and re-scoped around downstream processing; produced by Holocyte Pty Ltd / GMExpression.
+- **Who it's for:** Downstream-processing scientists and technicians, chemistry / materials-science researchers, IP auditors, chief economists reviewing cost of goods, and junior researchers learning packed-bed chromatography from first principles.
 - **Space:** Scientific instrument / simulation software. Adjacent category: Igor Pro, Origin, MATLAB, COMSOL, Bloomberg Terminal (for data density expectations).
 - **Project type:** Streamlit-based desktop/web scientific instrument. NOT a marketing site. NOT a general-purpose SaaS dashboard.
 

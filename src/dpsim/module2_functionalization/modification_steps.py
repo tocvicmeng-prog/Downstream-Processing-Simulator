@@ -145,6 +145,27 @@ class ModificationResult:
     # structured avoids downstream tools parsing human-readable notes.
     reaction_diagnostics: dict[str, float | str] | None = None
 
+    # v0.6.1 (F2) — typed Quantity accessors. Underlying float fields above
+    # remain authoritative for arithmetic; these expose unit-tagged handles.
+
+    @property
+    def conversion_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.conversion), "1",
+            source="M2.solve_modification_step",
+            note="Fraction of target ACS consumed in this step (dimensionless).",
+        )
+
+    @property
+    def delta_G_DN_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.delta_G_DN), "Pa",
+            source="M2.solve_modification_step",
+            note="Change in double-network shear modulus from this step.",
+        )
+
 
 # ─── Core solver ────────────────────────────────────────────────────────
 

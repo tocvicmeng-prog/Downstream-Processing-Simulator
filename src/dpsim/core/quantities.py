@@ -9,6 +9,10 @@ This is not a full unit algebra package. It covers the high-frequency unit
 families needed by M1/M2/M3 recipes and records provenance so future code can
 replace it with Pint or another formal unit system without changing the public
 concept.
+
+v0.6.1 (F1) — ``unwrap_to_unit`` is the documented helper for entry points
+that want to accept either a ``Quantity`` or a bare ``float``. Use it to
+normalize a Quantity-or-float input to a plain float in the expected unit.
 """
 
 from __future__ import annotations
@@ -171,3 +175,34 @@ class Quantity:
         if self.source:
             base += f" ({self.source})"
         return base
+
+
+def unwrap_to_unit(value, expected_unit: str) -> float:
+    """Coerce a ``Quantity | float | int`` argument into a float in ``expected_unit``.
+
+    v0.6.1 (F1) — entry points (``run_breakthrough``, ``run_chromatography_method``,
+    etc.) call this helper at the start of their bodies so callers can pass
+    either a typed ``Quantity`` (auto-converted to the expected unit) or a
+    bare ``float`` (assumed already in the expected unit).
+
+    Args:
+        value: Either a ``Quantity``, ``float``, or ``int``.
+        expected_unit: The unit the solver internals expect (e.g. "mol/m3",
+            "m3/s", "s", "Pa"). Must be a unit recognised by ``Quantity.as_unit``
+            for the Quantity-input branch.
+
+    Returns:
+        A plain ``float`` in ``expected_unit``.
+
+    Raises:
+        ValueError: When a ``Quantity`` is passed and its unit cannot be
+            converted to ``expected_unit``.
+        TypeError: When ``value`` is neither numeric nor a ``Quantity``.
+    """
+    if isinstance(value, Quantity):
+        return float(value.as_unit(expected_unit).value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    raise TypeError(
+        f"unwrap_to_unit: expected Quantity or float, got {type(value).__name__}"
+    )

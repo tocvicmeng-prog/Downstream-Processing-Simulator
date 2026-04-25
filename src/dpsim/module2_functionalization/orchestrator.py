@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .acs import ACSSiteType, ACSProfile, initialize_acs_from_m1
 from .modification_steps import (
@@ -152,13 +152,68 @@ class FunctionalMediaContract:
     residual_reagent_warnings: list[str] = field(default_factory=list)
 
     # ── Trust ──
-    confidence_tier: str = "semi_quantitative"
     warnings: list[str] = field(default_factory=list)
-    # v6.1 (Node 4): structured evidence record. confidence_tier above is kept
-    # as the legacy string field that downstream UI/tests already read; the
-    # manifest carries the typed enum, valid_domain, and diagnostics used by
-    # RunReport and the trust-aware optimizer (consensus plan Sprint 5).
+    # v0.5.0 (D2): the legacy ``confidence_tier: str`` side-channel was removed
+    # from the public FMC surface. The typed-enum chain
+    # (``model_manifest.evidence_tier``) is now the single source of truth for
+    # FMC evidence tier. Downstream consumers should read
+    # ``fmc.model_manifest.evidence_tier`` (and use ``.value`` only for
+    # human-readable display).
     model_manifest: Optional[ModelManifest] = None
+
+    # v0.6.1 (F2) — typed Quantity accessors. Underlying float fields above
+    # remain authoritative for arithmetic; these expose unit-tagged handles.
+    # Consumers that want unit-safe reads / unit conversions should use the
+    # _q accessors; bare-float reads continue to work for arithmetic and
+    # legacy callers.
+
+    @property
+    def bead_d50_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.bead_d50), "m", source="M1.M2.contract")
+
+    @property
+    def porosity_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.porosity), "1", source="M1.M2.contract")
+
+    @property
+    def pore_size_mean_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.pore_size_mean), "m", source="M1.M2.contract")
+
+    @property
+    def functional_ligand_density_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.functional_ligand_density), "mol/m2",
+            source="M2.functional_media_contract",
+        )
+
+    @property
+    def estimated_q_max_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.estimated_q_max), "mol/m3",
+            source="M2.functional_media_contract",
+        )
+
+    @property
+    def activity_retention_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.activity_retention), "1",
+            source="M2.functional_media_contract",
+            note="Coupled-protein activity retention fraction.",
+        )
+
+    @property
+    def ligand_leaching_fraction_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.ligand_leaching_fraction), "1",
+            source="M2.functional_media_contract",
+        )
 
     def validate_units(self) -> list[str]:
         """Node 10 (F11): boundary-level unit/range sanity checks for M2->M3.
@@ -481,7 +536,6 @@ def build_functional_media_contract(
         process_state_requirements=_proc_req,
         residual_reagent_concentrations=residuals,
         residual_reagent_warnings=residual_warnings,
-        confidence_tier=_conf_tier,
         warnings=warnings,
         model_manifest=fmc_manifest,
     )
@@ -595,6 +649,10 @@ class ModificationOrchestrator:
         self,
         contract: M1ExportContract,
         steps: list[ModificationStep],
+        *,
+        graph: Any = None,
+        upstream_node_id: str = "M1",
+        node_id_prefix: str = "M2",
     ) -> FunctionalMicrosphere:
         """Execute all modification steps sequentially, tracking ACS.
 
@@ -608,6 +666,13 @@ class ModificationOrchestrator:
         Args:
             contract: M1ExportContract from Module 1.
             steps: Ordered list of modification steps to execute.
+            graph: Optional ``ResultGraph``. When supplied (v0.4.0 / C4),
+                each modification step registers its own ``ResultNode``
+                so sub-step provenance is preserved instead of collapsed
+                into the single M2 node the lifecycle creates.
+            upstream_node_id: Id of the node that this M2 sequence depends
+                on (default "M1"). Only consulted when ``graph`` is given.
+            node_id_prefix: Prefix for sub-step node ids (default "M2").
 
         Returns:
             FunctionalMicrosphere with updated ACS and modification history.
@@ -663,6 +728,24 @@ class ModificationOrchestrator:
                 step=step,
                 result=result,
             )
+
+            # v0.4.0 (C4): optional sub-step provenance into a ResultGraph.
+            if graph is not None and hasattr(graph, "register_result"):
+                _step_node_id = f"{node_id_prefix}.{i + 1:02d}.{step.reagent_key}"
+                _previous = (
+                    upstream_node_id
+                    if i == 0
+                    else f"{node_id_prefix}.{i:02d}.{steps[i - 1].reagent_key}"
+                )
+                _depends = [_previous] if _previous in graph.nodes else []
+                graph.register_result(
+                    result,
+                    node_id=_step_node_id,
+                    stage=node_id_prefix,
+                    label=f"{step.step_type.value} — {step.reagent_key}",
+                    depends_on=_depends,
+                    relation="m2_step_sequence",
+                )
 
             logger.info(
                 "Step %d: conversion=%.4f, delta_G=%.1f Pa",

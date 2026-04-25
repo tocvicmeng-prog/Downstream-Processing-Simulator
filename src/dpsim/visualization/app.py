@@ -81,18 +81,18 @@ st.html(
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
     :root {
-        --es-bg: #0F172A;
-        --es-surface: #1E293B;
-        --es-surface-2: #334155;
-        --es-border: rgba(71, 85, 105, 0.5);
-        --es-text: #F8FAFC;
-        --es-text-muted: #94A3B8;
-        --es-accent: #2DD4BF;
-        --es-accent-hover: #5EEAD4;
-        --es-success: #22C55E;
-        --es-warning: #F59E0B;
-        --es-error: #EF4444;
-        --es-info: #38BDF8;
+        --dps-bg: #0F172A;
+        --dps-surface: #1E293B;
+        --dps-surface-2: #334155;
+        --dps-border: rgba(71, 85, 105, 0.5);
+        --dps-text: #F8FAFC;
+        --dps-text-muted: #94A3B8;
+        --dps-accent: #2DD4BF;
+        --dps-accent-hover: #5EEAD4;
+        --dps-success: #22C55E;
+        --dps-warning: #F59E0B;
+        --dps-error: #EF4444;
+        --dps-info: #38BDF8;
     }
 
     /* Hide auto-page nav (v9.0 M8) */
@@ -191,30 +191,30 @@ st.html(
     /* ═══ Buttons — 4px radius, teal accent, tool-like ═════════════════ */
     .stButton > button {
         border-radius: 4px !important;
-        border: 1px solid var(--es-border) !important;
+        border: 1px solid var(--dps-border) !important;
         font-weight: 500 !important;
         transition: background-color 150ms ease-out,
                     border-color 150ms ease-out !important;
     }
     .stButton > button[kind="primary"] {
-        background-color: var(--es-accent) !important;
-        color: var(--es-bg) !important;
-        border-color: var(--es-accent) !important;
+        background-color: var(--dps-accent) !important;
+        color: var(--dps-bg) !important;
+        border-color: var(--dps-accent) !important;
     }
     .stButton > button[kind="primary"]:hover {
-        background-color: var(--es-accent-hover) !important;
-        border-color: var(--es-accent-hover) !important;
+        background-color: var(--dps-accent-hover) !important;
+        border-color: var(--dps-accent-hover) !important;
     }
 
     /* ═══ Inputs — 4px radius, teal focus ring ═════════════════════════ */
     .stTextInput input, .stNumberInput input, .stSelectbox > div > div,
     .stTextArea textarea {
         border-radius: 4px !important;
-        border: 1px solid var(--es-border) !important;
+        border: 1px solid var(--dps-border) !important;
     }
     .stTextInput input:focus, .stNumberInput input:focus,
     .stTextArea textarea:focus {
-        border-color: var(--es-accent) !important;
+        border-color: var(--dps-accent) !important;
         box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.25) !important;
     }
 
@@ -224,10 +224,10 @@ st.html(
 
     /* ═══ Metric cards — give them some room to breathe ═══════════════ */
     [data-testid="stMetric"] {
-        background: var(--es-surface);
+        background: var(--dps-surface);
         padding: 0.75rem 1rem !important;
         border-radius: 4px;
-        border: 1px solid var(--es-border);
+        border: 1px solid var(--dps-border);
     }
     [data-testid="stMetricValue"] {
         font-size: 1.5rem !important;
@@ -238,23 +238,23 @@ st.html(
         font-size: 0.75rem !important;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--es-text-muted) !important;
+        color: var(--dps-text-muted) !important;
     }
 
     /* ═══ Sidebar polish ══════════════════════════════════════════════ */
     [data-testid="stSidebar"] {
-        background-color: var(--es-surface) !important;
-        border-right: 1px solid var(--es-border);
+        background-color: var(--dps-surface) !important;
+        border-right: 1px solid var(--dps-border);
     }
     [data-testid="stSidebar"] h2 { font-size: 0.875rem !important;
                                    text-transform: uppercase;
                                    letter-spacing: 0.06em;
-                                   color: var(--es-text-muted) !important; }
+                                   color: var(--dps-text-muted) !important; }
 
     /* ═══ Data tables — tabular-nums, subtle header ════════════════════ */
     [data-testid="stDataFrame"] th {
-        background-color: var(--es-surface-2) !important;
-        color: var(--es-text) !important;
+        background-color: var(--dps-surface-2) !important;
+        color: var(--dps-text) !important;
         font-weight: 600 !important;
         font-size: 0.75rem !important;
         text-transform: uppercase;
@@ -263,7 +263,7 @@ st.html(
 
     /* ═══ Expanders — tighter, tool-like ══════════════════════════════ */
     [data-testid="stExpander"] details {
-        border: 1px solid var(--es-border);
+        border: 1px solid var(--dps-border);
         border-radius: 4px;
     }
     [data-testid="stExpander"] summary { padding: 0.5rem 0.75rem !important; }
@@ -271,7 +271,7 @@ st.html(
     /* ═══ Radio / checkbox — tighten spacing, teal accent on active ═══ */
     .stRadio > div { gap: 0.25rem !important; }
     input[type="radio"]:checked, input[type="checkbox"]:checked {
-        accent-color: var(--es-accent) !important;
+        accent-color: var(--dps-accent) !important;
     }
 
     /* ═══ Tabs — align to the instrument aesthetic ═════════════════════ */
@@ -280,8 +280,8 @@ st.html(
         padding: 0.5rem 1rem !important;
     }
     [data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-        color: var(--es-accent) !important;
-        border-bottom: 2px solid var(--es-accent) !important;
+        color: var(--dps-accent) !important;
+        border-bottom: 2px solid var(--dps-accent) !important;
     }
     </style>
     """

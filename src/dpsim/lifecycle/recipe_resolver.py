@@ -75,6 +75,12 @@ _ALIAS_BY_STAGE_KIND_KEY = {
         "M1.prepare_phase.oil_temperature",
     (LifecycleStage.M1_FABRICATION, ProcessStepKind.PREPARE_PHASE, "span80"):
         "M1.prepare_phase.span80",
+    (LifecycleStage.M1_FABRICATION, ProcessStepKind.PREPARE_PHASE, "c_agarose"):
+        "M1.prepare_phase.c_agarose",
+    (LifecycleStage.M1_FABRICATION, ProcessStepKind.PREPARE_PHASE, "c_chitosan"):
+        "M1.prepare_phase.c_chitosan",
+    (LifecycleStage.M1_FABRICATION, ProcessStepKind.PREPARE_PHASE, "c_genipin"):
+        "M1.prepare_phase.c_genipin",
     (LifecycleStage.M1_FABRICATION, ProcessStepKind.EMULSIFY, "rpm"):
         "M1.emulsify.rpm",
     (LifecycleStage.M1_FABRICATION, ProcessStepKind.EMULSIFY, "time"):
@@ -158,6 +164,9 @@ _M2_QUENCH_KINDS = {
 _EXPECTED_UNITS = {
     "oil_temperature": "K",
     "span80": "%",
+    "c_agarose": "kg/m3",
+    "c_chitosan": "kg/m3",
+    "c_genipin": "mol/m3",
     "rpm": "rpm",
     "time": "s",
     "cooling_rate": "K/s",
@@ -754,6 +763,33 @@ def _apply_m1_recipe_parameters(
     params.formulation.c_span80_vol_pct = span80_pct
     params.formulation.c_span80 = params.formulation.c_span80_from_vol_pct
 
+    # v0.3.0 (B4): polymer concentrations promoted into the typed recipe.
+    # Recipe is now the single source of truth for c_agarose, c_chitosan, c_genipin.
+    params.formulation.c_agarose = _resolve_value(
+        provider,
+        "M1.prepare_phase.c_agarose",
+        "kg/m3",
+        validation,
+        "M1",
+        params.formulation.c_agarose,
+    )
+    params.formulation.c_chitosan = _resolve_value(
+        provider,
+        "M1.prepare_phase.c_chitosan",
+        "kg/m3",
+        validation,
+        "M1",
+        params.formulation.c_chitosan,
+    )
+    params.formulation.c_genipin = _resolve_value(
+        provider,
+        "M1.prepare_phase.c_genipin",
+        "mol/m3",
+        validation,
+        "M1",
+        params.formulation.c_genipin,
+    )
+
 
 def _validate_m1_washing_parameters(
     params: SimulationParameters,
@@ -1088,7 +1124,7 @@ def _resolve_value(
         return float(default)
     try:
         return float(resolved.quantity.as_unit(target_unit).value)
-    except ValueError as exc:
+    except ValueError:
         validation.add(
             ValidationSeverity.BLOCKER,
             "UNIT_CONSISTENCY",

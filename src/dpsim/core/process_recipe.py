@@ -162,6 +162,14 @@ def default_affinity_media_recipe() -> ProcessRecipe:
                 parameters={
                     "oil_temperature": Quantity(90.0, "degC", source="screening_default"),
                     "span80": Quantity(1.5, "%", source="screening_default"),
+                    # v0.3.0 (B4): polymer concentrations promoted into the recipe
+                    # so the recipe layer is the single source of truth for
+                    # M1 formulation. The A+C defaults below match the legacy
+                    # SimulationParameters defaults (4.2% agarose, 1.8% chitosan,
+                    # 2 mM genipin) for backward compatibility with smoke runs.
+                    "c_agarose": Quantity(42.0, "kg/m3", source="screening_default"),
+                    "c_chitosan": Quantity(18.0, "kg/m3", source="screening_default"),
+                    "c_genipin": Quantity(2.0, "mol/m3", source="screening_default"),
                 },
                 qc_required=["Record phase clarity and viscosity before emulsification."],
             ),

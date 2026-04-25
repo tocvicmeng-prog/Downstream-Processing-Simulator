@@ -1,60 +1,35 @@
 """Downstream Processing Simulator.
 
-The package is a fork of the DPSim scientific stack, reorganized around a
-clean-slate process lifecycle: M1 fabrication, M2 functionalization, and M3
-affinity chromatography performance. The legacy L1-L4 fabrication solvers are
-kept available while new process-recipe and result-graph abstractions are added
-for future development.
+The package is a fork of the upstream microsphere simulation stack,
+re-scoped around a clean-slate process lifecycle: M1 fabrication,
+M2 functionalization, and M3 affinity chromatography.
+
+v0.5.0 (D1): the legacy top-level convenience exports
+(``SimulationParameters``, ``FullResult``, ``run_pipeline``,
+``PipelineOrchestrator``) have been removed from this module's public
+API. They are still defined in their respective implementation modules
+and remain available under their canonical paths:
+
+  - ``from dpsim.datatypes import SimulationParameters, FullResult``
+  - ``from dpsim.pipeline.orchestrator import PipelineOrchestrator``
+
+Application code should use the lifecycle-layer entry points instead:
+
+  - ``from dpsim.lifecycle import run_default_lifecycle, run_m1_from_recipe``
+  - ``from dpsim.module3_performance.method_simulation import run_method_simulation``
+  - ``from dpsim.core.process_recipe import default_affinity_media_recipe``
+  - ``from dpsim.core.performance_recipe import performance_recipe_from_resolved``
 """
 
-__version__ = "0.1.0"
+__version__ = "0.5.0"
 
-from .datatypes import (
-    SimulationParameters,
-    MaterialProperties,
-    BeadSizeDistributionPayload,
-    M1WashingResult,
-    EmulsificationResult,
-    GelationTimingResult,
-    GelationResult,
-    CrosslinkingResult,
-    MechanicalResult,
-    FullResult,
+from .lifecycle.orchestrator import (
+    DownstreamProcessOrchestrator,
+    run_default_lifecycle,
 )
-from .pipeline.orchestrator import PipelineOrchestrator
-from .properties.database import PropertyDatabase
-from .lifecycle.orchestrator import DownstreamProcessOrchestrator, run_default_lifecycle
 
 __all__ = [
-    "SimulationParameters",
-    "MaterialProperties",
-    "BeadSizeDistributionPayload",
-    "M1WashingResult",
-    "EmulsificationResult",
-    "GelationTimingResult",
-    "GelationResult",
-    "CrosslinkingResult",
-    "MechanicalResult",
-    "FullResult",
-    "PipelineOrchestrator",
-    "PropertyDatabase",
     "DownstreamProcessOrchestrator",
     "run_default_lifecycle",
-    "run_pipeline",
     "__version__",
 ]
-
-
-def run_pipeline(params: SimulationParameters | None = None, **kwargs) -> FullResult:
-    """Run the full L1-L4 simulation pipeline.
-
-    Convenience function for quick usage:
-        from dpsim import run_pipeline
-        result = run_pipeline()  # uses defaults
-        result = run_pipeline(params)  # custom params
-    """
-    if params is None:
-        params = SimulationParameters()
-    orch = PipelineOrchestrator()
-    return orch.run_single(params, **kwargs)
-

@@ -1,4 +1,12 @@
-"""Result graph for M1 -> M2 -> M3 lifecycle runs."""
+"""Result graph for M1 -> M2 -> M3 lifecycle runs.
+
+v0.4.0 (C4): the ``register_result_in_graph`` helper lets any solver
+register its result as a ``ResultNode`` without going through the lifecycle
+orchestrator. This closes the architect-coherence-audit D3 finding that
+``ResultGraph`` was populated only by the lifecycle. With this helper,
+sub-step provenance (e.g. activation → wash → coupling in M2) can be
+preserved when callers opt in.
+"""
 
 from __future__ import annotations
 
@@ -61,6 +69,56 @@ class ResultGraph:
         order = list(ModelEvidenceTier)
         worst = max(order.index(m.evidence_tier) for m in manifests)
         return order[worst]
+
+    def register_result(
+        self,
+        result: Any,
+        *,
+        node_id: str,
+        stage: str,
+        label: str,
+        diagnostics: dict[str, Any] | None = None,
+        wet_lab_caveats: list[str] | None = None,
+        depends_on: list[str] | None = None,
+        relation: str = "produced",
+    ) -> ResultNode:
+        """Register a typed result dataclass as a ResultNode.
+
+        v0.4.0 (C4): convenience method for solvers to register their own
+        results in a graph without the caller hand-building ``ResultNode``.
+        Reads ``result.model_manifest`` (when present) into the node and
+        adds dependency edges for each ``depends_on`` upstream node id.
+
+        Args:
+            result: Typed result with a ``model_manifest`` attribute (any
+                of ``BreakthroughResult``, ``ChromatographyMethodResult``,
+                ``MethodSimulationResult``, ``ModificationStepResult``, etc.).
+            node_id: Stable id for the new node.
+            stage: Stage label ("M1", "M2", "M3", "M2.activation", etc.).
+            label: Human-readable label for the node.
+            diagnostics: Optional diagnostics dict.
+            wet_lab_caveats: Optional caveats list.
+            depends_on: Optional list of upstream node ids; one edge is
+                added from each (must already be in the graph).
+            relation: Relation label for the edges.
+
+        Returns:
+            The created ``ResultNode``.
+        """
+        manifest = getattr(result, "model_manifest", None)
+        node = ResultNode(
+            node_id=node_id,
+            stage=stage,
+            label=label,
+            payload=result,
+            manifest=manifest,
+            diagnostics=dict(diagnostics or {}),
+            wet_lab_caveats=list(wet_lab_caveats or []),
+        )
+        self.add_node(node)
+        for upstream in depends_on or []:
+            self.add_edge(upstream, node_id, relation)
+        return node
 
     def as_summary(self) -> dict[str, Any]:
         """JSON-serializable graph summary for dossiers and handovers."""

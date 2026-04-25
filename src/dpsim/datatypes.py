@@ -990,6 +990,39 @@ class EmulsificationResult:
     n_extensions: int = 0               # [-] number of adaptive extensions performed
     model_manifest: Optional[ModelManifest] = None  # v6.1: evidence provenance
 
+    # v0.6.2 (F4) — typed Quantity accessors. Float fields above remain
+    # authoritative for arithmetic; these expose unit-tagged handles.
+
+    @property
+    def d32_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.d32), "m", source="M1.L1.PBE",
+                        note="Sauter mean diameter.")
+
+    @property
+    def d50_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.d50), "m", source="M1.L1.PBE",
+                        note="Median (50th percentile) diameter.")
+
+    @property
+    def d10_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.d10), "m", source="M1.L1.PBE")
+
+    @property
+    def d90_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.d90), "m", source="M1.L1.PBE")
+
+    @property
+    def span_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.span), "1", source="M1.L1.PBE",
+            note="(d90 - d10) / d50 — distribution width (dimensionless).",
+        )
+
 
 def _default_dsd_calibration_hooks() -> list[str]:
     """Wet-lab measurements that can replace or calibrate the simulated DSD."""
@@ -1316,6 +1349,26 @@ class GelationResult:
     model_tier: str = "unknown"       # "empirical_calibrated" or "mechanistic" — identifies L2 model type
     model_manifest: Optional[ModelManifest] = None  # v6.1: evidence provenance
 
+    # v0.6.2 (F4) — typed Quantity accessors.
+
+    @property
+    def pore_size_mean_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.pore_size_mean), "m", source="M1.L2.gelation")
+
+    @property
+    def porosity_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.porosity), "1", source="M1.L2.gelation")
+
+    @property
+    def alpha_final_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.alpha_final), "1", source="M1.L2.gelation",
+            note="Final gelation conversion fraction.",
+        )
+
 
 @dataclass
 class NetworkTypeMetadata:
@@ -1354,6 +1407,32 @@ class CrosslinkingResult:
     G_chit_phosphoramide: float = 0.0     # [Pa] contribution from chitosan-NH2 phosphoramides
     p_final_nh2: float = 0.0              # [-] NH2 conversion fraction (STMP dual-track)
 
+    # v0.6.2 (F4) — typed Quantity accessors.
+
+    @property
+    def p_final_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.p_final), "1", source="M1.L3.crosslinking",
+            note="Crosslinking conversion fraction (dimensionless).",
+        )
+
+    @property
+    def G_chitosan_final_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.G_chitosan_final), "Pa", source="M1.L3.crosslinking",
+            note="Chitosan-network shear modulus from crosslinking kinetics.",
+        )
+
+    @property
+    def xi_final_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.xi_final), "m", source="M1.L3.crosslinking",
+            note="Final mesh size of the crosslinked network.",
+        )
+
 
 @dataclass
 class MechanicalResult:
@@ -1373,6 +1452,52 @@ class MechanicalResult:
     G_DN_upper: float = 0.0             # [Pa] Single-phase composite reference (HS bounds, not applicable to IPN)
     model_manifest: Optional[ModelManifest] = None  # v6.1: evidence provenance
     network_type: str = "unknown"       # v6.1: "true_IPN", "semi_IPN", "independent_network", "ionic_reinforced", "unknown"
+
+    # v0.6.2 (F4) — typed Quantity accessors.
+
+    @property
+    def G_DN_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.G_DN), "Pa", source="M1.L4.mechanical",
+            note="Double-network shear modulus.",
+        )
+
+    @property
+    def E_star_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.E_star), "Pa", source="M1.L4.mechanical",
+            note="Effective Young's modulus.",
+        )
+
+    @property
+    def G_agarose_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.G_agarose), "Pa", source="M1.L4.mechanical",
+            note="Agarose-network shear modulus.",
+        )
+
+    @property
+    def G_chitosan_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.G_chitosan), "Pa", source="M1.L4.mechanical",
+            note="Chitosan-network shear modulus (post-mechanical-coupling).",
+        )
+
+    @property
+    def pore_size_mean_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.pore_size_mean), "m", source="M1.L4.mechanical",
+        )
+
+    @property
+    def xi_mesh_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.xi_mesh), "m", source="M1.L4.mechanical")
 
 
 @dataclass

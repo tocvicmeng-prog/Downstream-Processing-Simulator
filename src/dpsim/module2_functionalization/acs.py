@@ -133,6 +133,56 @@ class ACSProfile:
     accessibility_model: str = "empirical_pore"
     uncertainty_fraction: float = 0.1
 
+    # v0.6.1 (F2) — typed Quantity accessors. Underlying float fields above
+    # remain authoritative for arithmetic; these expose unit-tagged handles
+    # so consumers (e.g. UI ACS-inventory tables) can render with documented
+    # units without parsing the dataclass docstring.
+
+    @property
+    def total_sites_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.total_sites), "mol",
+            source="M2.ACS",
+            note="Total reactive sites per particle (bulk, includes buried).",
+        )
+
+    @property
+    def accessible_sites_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.accessible_sites), "mol",
+            source="M2.ACS",
+            note="Sites reachable by reagent (surface + accessible pore volume).",
+        )
+
+    @property
+    def remaining_sites_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.remaining_sites), "mol",
+            source="M2.ACS",
+            note="Accessible sites still available for further chemistry.",
+        )
+
+    @property
+    def total_density_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.total_density), "mol/m2",
+            source="M2.ACS",
+            note="Total site density on reagent-accessible area.",
+        )
+
+    @property
+    def accessible_density_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.accessible_density), "mol/m2",
+            source="M2.ACS",
+            note="Accessible site density on reagent-accessible area.",
+        )
+
     @property
     def _terminal_sum(self) -> float:
         """Sum of all terminal-state site counts [mol/particle]."""

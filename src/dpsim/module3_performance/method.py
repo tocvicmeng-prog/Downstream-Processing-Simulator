@@ -111,6 +111,36 @@ class ColumnOperabilityReport:
 
         return [*self.blockers, *self.warnings]
 
+    # v0.6.0 (E1) — typed Quantity accessors.
+
+    @property
+    def pressure_drop_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.pressure_drop_Pa), "Pa", source="M3.operability")
+
+    @property
+    def bed_compression_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.bed_compression_fraction), "1",
+            source="M3.operability",
+            note="Bed-compression fraction (0 = no compression, 1 = full collapse).",
+        )
+
+    @property
+    def residence_time_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.residence_time_s), "s", source="M3.operability")
+
+    @property
+    def interstitial_velocity_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.interstitial_velocity_m_s), "m/s",
+            source="M3.operability",
+            note="Interstitial liquid velocity (superficial / bed_porosity).",
+        )
+
 
 @dataclass
 class ProteinAPerformanceReport:
@@ -132,6 +162,47 @@ class ProteinAPerformanceReport:
     leaching_risk: str
     predicted_elution_recovery_fraction: float
     warnings: list[str] = field(default_factory=list)
+
+    # v0.6.0 (E1) — typed Quantity accessors. The float fields above remain
+    # authoritative for arithmetic; these expose unit-tagged handles.
+
+    @property
+    def q_max_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.q_max_mol_m3), "mol/m3", source="M3.protein_a")
+
+    @property
+    def predicted_recovery_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.predicted_elution_recovery_fraction), "1",
+            source="M3.protein_a",
+            note="Predicted IgG fraction recovered in the elution pool.",
+        )
+
+    @property
+    def activity_retention_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.activity_retention), "1",
+            source="M3.protein_a",
+            note="Coupled-protein activity retention (functional / total density).",
+        )
+
+    @property
+    def cycle_lifetime_q(self):
+        """Bucketed cycle-lifetime estimate (illustrative until calibrated; v0.3.0 / B6)."""
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.cycle_lifetime_to_70pct_capacity), "1",
+            source="M3.protein_a",
+            note=(
+                "Illustrative cycle count to 70% capacity loss. UNSUPPORTED as a "
+                "quantitative claim without resin-specific cycling data — see "
+                "module3_performance.method.cycle_lifetime_label for the "
+                "ranking-tier display when uncalibrated."
+            ),
+        )
     assumptions: list[str] = field(default_factory=list)
     wet_lab_caveats: list[str] = field(default_factory=list)
 
@@ -156,6 +227,43 @@ class LoadedStateElutionResult:
         "Loaded-state elution uses the load-step bound profile as initial "
         "condition and switches the inlet to protein-free elution buffer."
     )
+
+    # v0.6.0 (E1) — typed Quantity accessors. Underlying float fields above
+    # remain authoritative for arithmetic; these accessors give downstream
+    # consumers a typed-unit handle.
+
+    @property
+    def recovery_fraction_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.recovery_fraction),
+            "1",
+            source="M3.run_loaded_state_elution",
+            note="Eluted / initially-bound mass fraction.",
+        )
+
+    @property
+    def peak_time_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.peak_time_s), "s", source="M3.run_loaded_state_elution")
+
+    @property
+    def peak_width_half_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.peak_width_half_s), "s",
+            source="M3.run_loaded_state_elution",
+            note="Full width at half maximum (FWHM).",
+        )
+
+    @property
+    def mass_balance_error_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.mass_balance_error), "1",
+            source="M3.run_loaded_state_elution",
+            note="Relative mass-balance error (dimensionless fraction).",
+        )
 
 
 @dataclass
@@ -285,13 +393,22 @@ def run_chromatography_method(
     *,
     fmc=None,
     process_state: dict | None = None,
-    max_pressure_Pa: float = 3.0e5,
-    pump_pressure_limit_Pa: float = 3.0e5,
+    max_pressure_Pa=3.0e5,
+    pump_pressure_limit_Pa=3.0e5,
     n_z: int = 50,
     D_molecular: float = 7.0e-11,
     k_ads: float = 100.0,
 ) -> ChromatographyMethodResult:
-    """Run a complete method-level M3 Protein A operation simulation."""
+    """Run a complete method-level M3 Protein A operation simulation.
+
+    v0.6.1 (F1): ``max_pressure_Pa`` and ``pump_pressure_limit_Pa`` accept
+    either a ``float`` (assumed Pa) or a ``Quantity`` (auto-converted to Pa).
+    """
+    # v0.6.1 (F1) — Quantity-or-float entry-point coercion.
+    from dpsim.core.quantities import unwrap_to_unit
+
+    max_pressure_Pa = unwrap_to_unit(max_pressure_Pa, "Pa")
+    pump_pressure_limit_Pa = unwrap_to_unit(pump_pressure_limit_Pa, "Pa")
 
     steps = list(method_steps or default_protein_a_method_steps())
     if not steps:
@@ -419,6 +536,24 @@ def run_chromatography_method(
         "Protein A elution recovery, alkaline degradation, and leaching are screening correlations until calibrated against resin-lot cycling data.",
         "Column efficiency and impurity clearance are screening estimates until tracer, HETP/asymmetry, HCP, DNA, aggregate, and leaching assays are supplied.",
     ]
+    # v0.4.0 (C7): Protein A defaults are A+C-tuned. Non-A+C polymer families
+    # use the same isotherm shape illustratively; the manifest tier is capped
+    # at QUALITATIVE_TREND when no calibration is loaded so downstream
+    # consumers do not read an A+C cycle-life / capacity number off a
+    # cellulose / alginate / PLGA recipe.
+    _family_warning = _protein_a_family_warning(process_state, fmc=fmc)
+    if _family_warning:
+        assumptions = [*assumptions, _family_warning]
+        manifest = _cap_manifest_for_non_ac_family(manifest, _family_warning)
+
+    # v0.4.0 (C2): ModelMode-conditional manifest gating.
+    # empirical_engineering mode without calibration caps tier at
+    # QUALITATIVE_TREND; mechanistic_research mode tags result EXPLORATORY.
+    manifest = _apply_mode_guard(
+        manifest,
+        process_state,
+        has_calibration=is_method_calibrated(fmc),
+    )
     wet_lab_caveats = [
         "Confirm packed-bed pressure-flow behavior, bed height, asymmetry, and plate count before trusting operability margins.",
         "Measure DBC, elution recovery, ligand leaching, and alkaline cleaning capacity loss on the target IgG and buffer set.",
@@ -1262,6 +1397,239 @@ def _maldistribution_risk(
     return score, risk
 
 
+# ─── v0.4.0 (C2) — ModelMode-conditional output gating ─────────────────────
+
+
+def _read_model_mode(process_state) -> str:
+    """Pull the active ModelMode value from process_state (string form).
+
+    Returns "" when no mode is provided. Compare-by-value per CLAUDE.md
+    cp1252/enum-reload note.
+    """
+    if isinstance(process_state, dict):
+        raw = process_state.get("model_mode", "")
+    elif process_state is not None:
+        raw = getattr(process_state, "model_mode", "")
+    else:
+        raw = ""
+    if raw is None:
+        return ""
+    return str(getattr(raw, "value", raw)).strip().lower()
+
+
+def _apply_mode_guard(
+    manifest: ModelManifest,
+    process_state,
+    *,
+    has_calibration: bool,
+):
+    """Apply ModelMode-conditional manifest gating per architect Deficit 2.
+
+    Modes (matched by string value to avoid enum-reload identity issues):
+      - "hybrid_coupled" (default): no change.
+      - "empirical_engineering" without calibration → cap manifest tier at
+        QUALITATIVE_TREND. The scientific-advisor's reading: empirical
+        engineering mode is for design-space screening only; without a
+        calibrated FMC it cannot defend a numeric DBC / pressure / cycle-life.
+      - "mechanistic_research" → tag the result as EXPLORATORY regardless of
+        calibration tier. The user is exploring mechanisms, not making a
+        process claim. Marker is added via manifest.diagnostics
+        ("exploratory_only" = True) and an assumption; the tier itself is
+        only downgraded to QUALITATIVE_TREND if it was stronger than that.
+    """
+    from dataclasses import replace as _replace
+
+    from dpsim.datatypes import ModelEvidenceTier as _Tier
+
+    mode = _read_model_mode(process_state)
+    if not mode or mode == "hybrid_coupled":
+        return manifest
+
+    order = list(_Tier)
+    new_assumptions = list(manifest.assumptions)
+    new_diagnostics = dict(manifest.diagnostics)
+    new_tier = manifest.evidence_tier
+
+    if mode == "empirical_engineering" and not has_calibration:
+        if order.index(manifest.evidence_tier) < order.index(_Tier.QUALITATIVE_TREND):
+            new_tier = _Tier.QUALITATIVE_TREND
+        new_assumptions.append(
+            "ModelMode=empirical_engineering with no calibration — manifest "
+            "tier capped at QUALITATIVE_TREND. Empirical mode supports "
+            "design-space ranking only; load a CalibrationStore for numeric "
+            "DBC / pressure / cycle-life claims."
+        )
+        new_diagnostics["mode_guard_empirical_uncalibrated"] = True
+    elif mode == "mechanistic_research":
+        new_diagnostics["exploratory_only"] = True
+        new_diagnostics["mode_guard_mechanistic"] = True
+        # Mechanistic mode tags the result as exploratory but does NOT
+        # downgrade the tier. The exploratory diagnostic is the actionable
+        # signal for downstream consumers; the tier still reflects the
+        # underlying calibration state.
+        new_assumptions.append(
+            "ModelMode=mechanistic_research — result is EXPLORATORY ONLY. "
+            "Mechanistic-mode runs explore physical mechanisms; they are not "
+            "process claims regardless of calibration state."
+        )
+
+    return _replace(
+        manifest,
+        evidence_tier=new_tier,
+        assumptions=new_assumptions,
+        diagnostics=new_diagnostics,
+    )
+
+
+# ─── v0.4.0 (C7) — family-aware Protein A scope-of-claim guard ──────────────
+
+
+def _protein_a_family_warning(process_state, *, fmc=None) -> str:
+    """Return a scope-of-claim warning when Protein A is run on non-A+C families.
+
+    Reads the polymer family from ``process_state["polymer_family"]`` first,
+    then falls back to the FMC's polymer_family attribute when present.
+    Empty / agarose_chitosan returns "" (no warning). Other recognised
+    families return a tier-downgrade warning string.
+    """
+    raw = ""
+    if isinstance(process_state, dict):
+        raw = str(process_state.get("polymer_family", "") or "").strip().lower()
+    elif process_state is not None:
+        raw = str(getattr(process_state, "polymer_family", "") or "").strip().lower()
+    if not raw and fmc is not None:
+        raw = str(getattr(fmc, "polymer_family", "") or "").strip().lower()
+    if not raw or raw == "agarose_chitosan":
+        return ""
+    return (
+        f"Protein A method runs against polymer_family={raw!r}. The default "
+        "ProteinAIsotherm parameters (q_max, K_a_max, pH_transition, steepness) "
+        "are tuned for agarose+chitosan substrate. Cycle-life, leaching, and "
+        "DBC numbers are illustrative only until calibrated against a "
+        "family-specific binding/cycling assay (architect-coherence-audit D6 / "
+        "scientific-advisor §4)."
+    )
+
+
+def _cap_manifest_for_non_ac_family(
+    manifest: ModelManifest,
+    family_warning: str,
+):
+    """Cap a manifest tier at QUALITATIVE_TREND when family is non-A+C and uncalibrated.
+
+    The cap is conditional on the FMC not being calibrated (i.e. tier is
+    SEMI_QUANTITATIVE or weaker). When the upstream FMC carries a
+    family-specific calibration (CALIBRATED_LOCAL+), the family-aware tier
+    inherits from that calibration and is NOT capped — the calibrated tier
+    is the user's claim that the family numbers are decision-grade.
+    """
+    from dataclasses import replace as _replace
+
+    from dpsim.datatypes import ModelEvidenceTier as _Tier
+
+    current = manifest.evidence_tier
+    if current in {_Tier.CALIBRATED_LOCAL, _Tier.VALIDATED_QUANTITATIVE}:
+        return manifest  # Calibrated for this family → trust the calibration.
+    order = list(_Tier)
+    capped = max(
+        order.index(current),
+        order.index(_Tier.QUALITATIVE_TREND),
+    )
+    new_tier = order[capped]
+    new_assumptions = list(manifest.assumptions) + [
+        f"M3 manifest tier capped at {new_tier.value} due to non-A+C family.",
+    ]
+    new_diagnostics = {
+        **manifest.diagnostics,
+        "non_ac_family_cap_applied": True,
+        "non_ac_family_warning": family_warning,
+    }
+    return _replace(
+        manifest,
+        evidence_tier=new_tier,
+        assumptions=new_assumptions,
+        diagnostics=new_diagnostics,
+    )
+
+
+# ─── v0.3.0 (B6) — claim-strength downgrades for uncalibrated outputs ────────
+#
+# Per scientific-advisor §3 (M3-S3, M2-S1, evidence-tier scope-of-claim audit):
+# cycle-life, impurity log-reduction, and leaching numeric outputs are
+# UNSUPPORTED as quantitative claims without resin-specific cycling /
+# clearance / leaching assays. The helpers below convert the raw floats
+# into bucketed ranking labels when no calibration is available, so UI
+# and CLI surfaces do not present false precision.
+
+
+def is_method_calibrated(fmc) -> bool:
+    """Return True iff the FMC carries a CALIBRATED_LOCAL+ manifest tier.
+
+    Uses the typed ``ModelEvidenceTier`` enum on ``fmc.model_manifest``;
+    ignores the legacy string ``confidence_tier`` side-channel (architect-
+    coherence audit D3 deficit, deferred to v0.4.0 module C3).
+    """
+    from dpsim.datatypes import ModelEvidenceTier as _Tier
+
+    manifest = getattr(fmc, "model_manifest", None)
+    tier = getattr(manifest, "evidence_tier", None)
+    if tier is None:
+        return False
+    return tier in {_Tier.CALIBRATED_LOCAL, _Tier.VALIDATED_QUANTITATIVE}
+
+
+def cycle_lifetime_label(
+    report: ProteinAPerformanceReport,
+    *,
+    is_calibrated: bool = False,
+) -> str:
+    """Cycle-lifetime as a bucketed ranking when uncalibrated; precise otherwise."""
+    cycles = float(report.cycle_lifetime_to_70pct_capacity)
+    if is_calibrated:
+        return f"{cycles:.0f} cycles"
+    if cycles < 30:
+        bucket = "<30 cycles (low)"
+    elif cycles < 100:
+        bucket = "30-100 cycles (moderate)"
+    elif cycles < 300:
+        bucket = "100-300 cycles (good)"
+    else:
+        bucket = ">300 cycles (excellent)"
+    return f"{bucket}, illustrative — calibration required"
+
+
+def log10_reduction_label(
+    species: ImpuritySpeciesReport,
+    *,
+    is_calibrated: bool = False,
+) -> str:
+    """Impurity log10 reduction as a bucketed ranking when uncalibrated."""
+    log10r = float(species.log10_reduction)
+    if is_calibrated:
+        return f"{log10r:.1f} LRV"
+    if log10r < 1.0:
+        bucket = "<1 LRV (poor)"
+    elif log10r < 2.0:
+        bucket = "1-2 LRV (moderate)"
+    elif log10r < 4.0:
+        bucket = "2-4 LRV (good)"
+    else:
+        bucket = ">4 LRV (excellent)"
+    return f"{bucket}, illustrative — calibration required"
+
+
+def leaching_label(
+    report: ProteinAPerformanceReport,
+    *,
+    is_calibrated: bool = False,
+) -> str:
+    """Ligand leaching as a categorical risk label when uncalibrated."""
+    frac = float(report.ligand_leaching_fraction_per_cycle)
+    if is_calibrated:
+        return f"{frac:.2%} per cycle ({report.leaching_risk})"
+    return f"{report.leaching_risk} risk, illustrative — calibration required"
+
+
 __all__ = [
     "BufferCondition",
     "ChromatographyMethodResult",
@@ -1274,11 +1642,15 @@ __all__ = [
     "ImpuritySpeciesReport",
     "LoadedStateElutionResult",
     "ProteinAPerformanceReport",
+    "cycle_lifetime_label",
     "default_protein_a_method_steps",
     "evaluate_column_efficiency",
     "evaluate_column_operability",
     "evaluate_impurity_clearance",
     "evaluate_protein_a_performance",
+    "is_method_calibrated",
+    "leaching_label",
+    "log10_reduction_label",
     "run_loaded_state_elution",
     "run_chromatography_method",
 ]

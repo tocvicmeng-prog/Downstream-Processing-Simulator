@@ -16,9 +16,15 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Any
 
 from dpsim.core.parameters import ResolvedParameter
+from dpsim.core.performance_recipe import (
+    PerformanceRecipe,
+    performance_recipe_from_resolved,
+)
 from dpsim.core.process_recipe import ProcessRecipe, default_affinity_media_recipe
+from dpsim.core.recipe_validation import validate_recipe_first_principles
 from dpsim.core.result_graph import ResultGraph, ResultNode
 from dpsim.core.validation import (
     ValidationReport,
@@ -77,6 +83,15 @@ class DownstreamLifecycleResult:
     m3_breakthrough: BreakthroughResult | None = None
     dsd_variants: list["DSDMediaVariant"] = field(default_factory=list)
     dsd_summary: "DSDPropagationSummary | None" = None
+    # v0.2.0 (A5): typed M3 primitive exposed for downstream UI/dossier
+    # consumers. The lifecycle orchestrator still drives M3 via the
+    # legacy dual-path (run_chromatography_method + _run_dsd_downstream_screen);
+    # full replacement with run_method_simulation is v0.3.0 module B5 work.
+    performance_recipe: PerformanceRecipe | None = None
+    # v0.5.0 (D3): ProcessDossier is the default reproducible-run artifact.
+    # Built from the M1 FullResult + calibration store + recipe target profile.
+    # ``None`` only when M1 itself failed to produce a result.
+    process_dossier: Any = None
     resolved_parameters: dict[str, ResolvedParameter] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
@@ -246,12 +261,39 @@ class DownstreamProcessOrchestrator:
         """
 
         recipe = recipe or default_affinity_media_recipe()
+
+        # v0.2.0 (A5): first-principles guardrails run BEFORE recipe resolution.
+        # Findings (BLOCKER/WARNING) are merged into the lifecycle validation
+        # report so downstream consumers see them alongside per-stage issues.
+        # The pre-resolution pass evaluates G1 (M1 wash mass-balance) and emits
+        # G3 deferred-warning when an elute gradient_field is declared without
+        # a resolved isotherm. G5 is checked again post-FMC below.
+        fp_report = validate_recipe_first_principles(recipe)
+
         resolved_inputs = resolve_lifecycle_inputs(recipe, base_params=params)
         params = resolved_inputs.parameters
 
         graph = ResultGraph()
         validation = ValidationReport()
+        validation.extend(fp_report)
         validation.extend(resolved_inputs.validation)
+
+        # v0.2.0 (A5): expose the typed M3 primitive on the lifecycle result.
+        # UI / ProcessDossier consumers can pass this to run_method_simulation.
+        performance_recipe: PerformanceRecipe | None = None
+        try:
+            performance_recipe = performance_recipe_from_resolved(resolved_inputs)
+        except ValueError as exc:
+            validation.add(
+                ValidationSeverity.WARNING,
+                "PERFORMANCE_RECIPE_UNAVAILABLE",
+                (
+                    f"PerformanceRecipe could not be built from the resolved "
+                    f"recipe: {exc}. Lifecycle continues, but downstream M3 "
+                    "consumers expecting the typed primitive will see None."
+                ),
+                module="M3",
+            )
         notes: list[str] = []
         calibration_store = getattr(run_context, "calibration_store", None)
 
@@ -418,9 +460,51 @@ class DownstreamProcessOrchestrator:
         fmc_calibration_overrides: list[str] = []
         if calibration_store is not None:
             fmc, fmc_calibration_overrides = calibration_store.apply_to_fmc(fmc)
+
+        # v0.5.0 (D5): apply ModelMode guard to the FMC manifest. Mirrors
+        # the v0.4.0 / C2 M3 mode guard, finishing the architect-coherence
+        # Deficit 2 cleanup. Reuses the centralised helper in method.py so
+        # M2 and M3 share the same mode-conditional gating semantics.
+        from dpsim.module3_performance.method import (
+            _apply_mode_guard as _m3_mode_guard,
+            is_method_calibrated,
+        )
+
+        _mode_value = getattr(getattr(params, "model_mode", None), "value", "")
+        if fmc.model_manifest is not None and _mode_value:
+            fmc.model_manifest = _m3_mode_guard(
+                fmc.model_manifest,
+                {"model_mode": _mode_value},
+                has_calibration=is_method_calibrated(fmc),
+            )
+
+        # v0.2.0 (A5): re-run first-principles guardrails now that the FMC is
+        # built. This catches G5 (ligand-accessibility floor) which the
+        # pre-resolution pass cannot evaluate. G1 issues from the first pass
+        # are already in `validation`; re-running G1 would duplicate them.
+        fp_post_report = validate_recipe_first_principles(recipe, fmc=fmc)
+        for issue in fp_post_report.issues:
+            if issue.code.startswith("FP_G5_"):
+                validation.add(
+                    issue.severity,
+                    issue.code,
+                    issue.message,
+                    module=issue.module,
+                    recommendation=issue.recommendation,
+                )
         m3_process_state, m3_process_state_overrides = (
             _m3_process_state_from_calibration_store(calibration_store)
         )
+        # v0.4.0 (C7): inject polymer_family into the M3 process state so the
+        # family-aware Protein A scope-of-claim guard in method.py can read it.
+        # Compare by .value per CLAUDE.md cp1252/enum-reload quirk note.
+        _family_value = getattr(getattr(props, "polymer_family", None), "value", "")
+        if _family_value:
+            m3_process_state["polymer_family"] = _family_value
+        # v0.4.0 (C2): inject ModelMode so the M3 mode guard can fire.
+        _mode_value = getattr(getattr(params, "model_mode", None), "value", "")
+        if _mode_value:
+            m3_process_state["model_mode"] = _mode_value
         m3_reference_dbc = _m3_reference_dbc_from_calibration_store(calibration_store)
         if fmc_calibration_overrides or m3_process_state_overrides:
             _annotate_fmc_m3_calibration(
@@ -957,6 +1041,33 @@ class DownstreamProcessOrchestrator:
             "static binding or breakthrough data."
         )
 
+        # v0.5.0 (D3): build the ProcessDossier as the default lifecycle
+        # output. Closes architect-coherence-audit D6 (LOW). The dossier is
+        # built from the M1 FullResult plus calibration entries; downstream
+        # consumers (UI dossier export, regulated batch records) can
+        # serialize it directly via .to_json_dict() without rebuilding.
+        process_dossier: Any = None
+        try:
+            from dpsim.process_dossier import ProcessDossier as _ProcessDossier
+
+            process_dossier = _ProcessDossier.from_run(
+                m1_result,
+                calibration_store=calibration_store,
+                target_profile=recipe.target,
+                notes=" | ".join(notes) if notes else "",
+            )
+        except Exception as _dossier_exc:
+            validation.add(
+                ValidationSeverity.WARNING,
+                "PROCESS_DOSSIER_UNAVAILABLE",
+                (
+                    f"ProcessDossier could not be built: {_dossier_exc}. "
+                    "Lifecycle continues; downstream dossier consumers will "
+                    "see ``process_dossier=None``."
+                ),
+                module="lifecycle",
+            )
+
         return DownstreamLifecycleResult(
             recipe=recipe,
             graph=graph,
@@ -969,6 +1080,8 @@ class DownstreamProcessOrchestrator:
             m3_breakthrough=m3_result,
             dsd_variants=dsd_variants,
             dsd_summary=dsd_summary,
+            performance_recipe=performance_recipe,
+            process_dossier=process_dossier,
             resolved_parameters=resolved_inputs.resolved_parameters,
             notes=notes,
         )
@@ -1001,13 +1114,16 @@ class DownstreamProcessOrchestrator:
             _run_l2_l4_at_R,
         )
 
-        if not quantiles and mode != "adaptive":
-            raise ValueError("At least one DSD quantile is required.")
-        if max_representatives <= 0:
-            raise ValueError("dsd_max_representatives must be positive.")
         mode = mode.lower().strip()
-        if mode not in {"representative", "adaptive"}:
-            raise ValueError("dsd_mode must be 'representative' or 'adaptive'.")
+        if not quantiles and mode == "representative":
+            raise ValueError("At least one DSD quantile is required.")
+        if mode in {"representative", "adaptive"} and max_representatives <= 0:
+            raise ValueError("dsd_max_representatives must be positive.")
+        if mode not in {"representative", "adaptive", "bin_resolved"}:
+            raise ValueError(
+                "dsd_mode must be 'representative', 'adaptive', or "
+                "'bin_resolved' (v0.4.0 / C5)."
+            )
         quantiles = tuple(sorted(set(quantiles)))
         dsd_payload = getattr(m1_contract, "bead_size_distribution", None)
         representative_rows: list[dict[str, float | str]]
@@ -1139,6 +1255,10 @@ def _dsd_representative_rows(
     enough; otherwise it collapses the distribution to evenly spaced
     volume-probability representatives. This gives a bounded-cost path from
     d50/d90-style screening toward true DSD-resolved packed-bed risk.
+    ``bin_resolved`` (v0.4.0 / C5) always returns every non-zero bin with no
+    downsampling — closes architect-coherence-audit Deficit 3 by removing
+    the 3-quantile collapse on the lifecycle orchestration path. Bin count
+    is the M1 DSD payload's volume_fraction length (typically 10-30).
     """
 
     if mode == "representative":
@@ -1146,6 +1266,10 @@ def _dsd_representative_rows(
         for row in rows:
             row["representative_source"] = "requested_quantile"
         return rows, "representative"
+
+    if mode == "bin_resolved":
+        bin_rows = _dsd_distribution_bin_rows(dsd_payload)
+        return bin_rows, f"bin_resolved_{len(bin_rows)}_bins"
 
     bin_rows = _dsd_distribution_bin_rows(dsd_payload)
     if len(bin_rows) <= max_representatives:
@@ -1636,6 +1760,33 @@ def _m3_calibration_posterior_diagnostics(
         # affinity operation; keep this as a conservative screening factor.
         capacity_terms.append(0.25 * affinity["rel"])
         relative_values.append(affinity["rel"])
+
+    # v0.4.0 (C6): expose Protein A pH-shape posterior widths.
+    # Closes scientific-advisor §5 P5+ scope gap. Full sensitivity into
+    # elution recovery is deferred to v0.5.0 (P5++ Monte Carlo); for now
+    # the relative widths are emitted so consumers see the visible interval.
+    pH_transition_post = _posterior_summary_for_parameters(
+        entries, {"protein_a_pH_transition"}
+    )
+    if pH_transition_post is not None:
+        diagnostics["protein_a_pH_transition_calibration_sigma"] = (
+            pH_transition_post["sigma"]
+        )
+        diagnostics["protein_a_pH_transition_calibration_relative_uncertainty"] = (
+            pH_transition_post["rel"]
+        )
+        relative_values.append(pH_transition_post["rel"])
+    pH_steepness_post = _posterior_summary_for_parameters(
+        entries, {"protein_a_pH_steepness"}
+    )
+    if pH_steepness_post is not None:
+        diagnostics["protein_a_pH_steepness_calibration_sigma"] = (
+            pH_steepness_post["sigma"]
+        )
+        diagnostics["protein_a_pH_steepness_calibration_relative_uncertainty"] = (
+            pH_steepness_post["rel"]
+        )
+        relative_values.append(pH_steepness_post["rel"])
 
     combined_capacity_rel = _quadrature(capacity_terms)
     if combined_capacity_rel > 0.0:

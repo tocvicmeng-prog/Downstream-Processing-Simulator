@@ -47,6 +47,12 @@ class BreakthroughResult:
         mass_balance_error: Relative mass balance error [-].
         z: Axial cell-centre positions [m], when supplied by the LRM solver.
         q_profile_final: Final bound-phase axial profile [mol/m^3].
+
+    v0.6.0 (E1): typed ``Quantity`` accessors are available alongside the bare-
+    float fields. Existing arithmetic consumers continue to read e.g.
+    ``result.dbc_10pct`` as float; new unit-aware code reads
+    ``result.dbc_10pct_q`` for a ``Quantity`` carrying the documented unit.
+    Closes architect-coherence-audit Deficit 1 phase 1.
     """
 
     time: np.ndarray
@@ -65,6 +71,40 @@ class BreakthroughResult:
     # Inherits the weakest tier from the upstream FMC manifest, then applies
     # M3-specific gates (mass-balance > 5% downgrades to QUALITATIVE_TREND).
     model_manifest: Optional[ModelManifest] = None
+
+    # v0.6.0 (E1) — typed Quantity accessors (read-only). The underlying
+    # bare-float fields above remain authoritative for arithmetic; the
+    # accessors below give downstream consumers a typed-unit handle.
+
+    @property
+    def dbc_5pct_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.dbc_5pct), "mol/m3", source="M3.run_breakthrough")
+
+    @property
+    def dbc_10pct_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.dbc_10pct), "mol/m3", source="M3.run_breakthrough")
+
+    @property
+    def dbc_50pct_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.dbc_50pct), "mol/m3", source="M3.run_breakthrough")
+
+    @property
+    def pressure_drop_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(float(self.pressure_drop), "Pa", source="M3.run_breakthrough")
+
+    @property
+    def mass_balance_error_q(self):
+        from dpsim.core.quantities import Quantity
+        return Quantity(
+            float(self.mass_balance_error),
+            "1",
+            source="M3.run_breakthrough",
+            note="Relative mass-balance error (dimensionless fraction).",
+        )
 
 
 def _compute_dbc(
@@ -133,10 +173,10 @@ def _compute_dbc(
 def run_breakthrough(
     column: ColumnGeometry,
     microsphere=None,
-    C_feed: float = 1.0,
-    flow_rate: float = 1e-8,
-    feed_duration: float = 600.0,
-    total_time: float = 1200.0,
+    C_feed=1.0,
+    flow_rate=1e-8,
+    feed_duration=600.0,
+    total_time=1200.0,
     extinction_coeff: float = 36000.0,
     sigma_detector: float = 1.0,
     isotherm: LangmuirIsotherm | None = None,
@@ -173,6 +213,16 @@ def run_breakthrough(
     Returns:
         BreakthroughResult with DBC values, UV signal, and mass balance.
     """
+    # v0.6.1 (F1): accept Quantity-or-float on the documented-unit scalar args.
+    # When a Quantity is passed, its unit is enforced; floats are assumed to
+    # be in the documented unit.
+    from dpsim.core.quantities import unwrap_to_unit
+
+    C_feed = unwrap_to_unit(C_feed, "mol/m3")
+    flow_rate = unwrap_to_unit(flow_rate, "m3/s")
+    feed_duration = unwrap_to_unit(feed_duration, "s")
+    total_time = unwrap_to_unit(total_time, "s")
+
     # ── Override column with microsphere properties if available ──
     if microsphere is not None:
         m1 = microsphere.m1_contract
@@ -618,6 +668,7 @@ def run_gradient_elution(
     atol: float = 1e-8,
     process_state=None,
     gradient_field: str | None = None,
+    fmc=None,
 ) -> GradientElutionResult:
     """Simulate multi-component gradient elution chromatography.
 
@@ -885,15 +936,16 @@ def run_gradient_elution(
         overall_yield * 100,
     )
 
-    # Manifest: gradient elution has no FMC argument in this signature, so the
-    # caller upstream (UI/CLI) is responsible for providing one if available.
-    # We still build a manifest so the result is uniformly evidence-tagged;
-    # mass-balance gate uses the worst per-component error.
+    # Manifest: when an upstream FunctionalMediaContract is supplied, the
+    # gradient-elution tier inherits from FMC exactly as run_breakthrough does
+    # (v0.2.0 module A2). When fmc=None, the manifest defaults to
+    # SEMI_QUANTITATIVE per _build_m3_chrom_manifest, then is capped by the
+    # mass-balance gate using the worst per-component error.
     worst_mb = float(np.max(mass_balance_errors)) if len(mass_balance_errors) > 0 else 0.0
     manifest = _build_m3_chrom_manifest(
         model_basename="M3.gradient_elution.LRM",
         isotherm=isotherm,
-        fmc=None,  # Not currently passed to gradient API; caller supplies if known.
+        fmc=fmc,
         worst_mass_balance_error=worst_mb,
         diagnostics_extra={
             "n_components": int(n_comp),

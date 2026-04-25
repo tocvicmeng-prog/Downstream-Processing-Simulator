@@ -510,12 +510,21 @@ def _cmd_lifecycle(args):
         print(f"  M3 DBC10 = {m3.dbc_10pct:.3g} mol/m3 column; dP = {m3.pressure_drop / 1000:.2f} kPa")
         print(f"  M3 mass balance error = {m3.mass_balance_error:.2%}")
     if m3_method is not None:
+        # v0.3.0 (B6): Protein A cycle-lifetime is presented as a bucketed
+        # ranking when no calibration is loaded, to avoid false precision
+        # on a screening correlation that is UNSUPPORTED as a numeric claim.
+        from dpsim.module3_performance.method import (
+            cycle_lifetime_label,
+            is_method_calibrated,
+        )
+
+        _calibrated = is_method_calibrated(fmc)
         print(
             "  M3 method: "
             f"{' -> '.join(step.operation.value for step in m3_method.method_steps)}; "
             f"maldistribution risk = {m3_method.operability.maldistribution_risk}; "
             f"Protein A lifetime screen = "
-            f"{m3_method.protein_a.cycle_lifetime_to_70pct_capacity:.0f} cycles"
+            f"{cycle_lifetime_label(m3_method.protein_a, is_calibrated=_calibrated)}"
         )
         if m3_method.loaded_elution is not None:
             print(

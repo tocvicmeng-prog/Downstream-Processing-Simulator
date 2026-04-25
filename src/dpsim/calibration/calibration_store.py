@@ -18,6 +18,56 @@ from .calibration_data import CalibrationEntry
 logger = logging.getLogger(__name__)
 
 
+def _promote_fmc_manifest_to_calibrated(
+    fmc: Any,
+    *,
+    sources: list[str] | None = None,
+) -> None:
+    """Promote a calibrated FMC's typed evidence-tier through model_manifest.
+
+    v0.4.0 (C3): the legacy ``confidence_tier: str`` side-channel is no longer
+    authoritative. ``_build_m3_chrom_manifest`` reads
+    ``fmc.model_manifest.evidence_tier`` to decide M3 tier inheritance, so any
+    calibration applied to the FMC must update that typed enum or the M3
+    manifest will not reflect the calibration state.
+
+    Promotes ``model_manifest.evidence_tier`` to CALIBRATED_LOCAL (only when it
+    was previously SEMI_QUANTITATIVE or weaker — never downgrade a stronger
+    upstream tier). Records the calibration sources on
+    ``model_manifest.calibration_ref`` and adds a provenance assumption.
+    """
+    from dataclasses import replace
+
+    from dpsim.datatypes import ModelEvidenceTier
+
+    manifest = getattr(fmc, "model_manifest", None)
+    if manifest is None:
+        return
+    current_tier = manifest.evidence_tier
+    order = list(ModelEvidenceTier)
+    # Only promote when the current tier is weaker than CALIBRATED_LOCAL.
+    if order.index(current_tier) <= order.index(ModelEvidenceTier.CALIBRATED_LOCAL):
+        return  # already CALIBRATED_LOCAL or stronger; do not downgrade
+
+    new_tier = ModelEvidenceTier.CALIBRATED_LOCAL
+    new_calibration_ref = manifest.calibration_ref
+    if sources:
+        unique_sources = sorted({s for s in sources if s})
+        if unique_sources:
+            new_calibration_ref = "; ".join(unique_sources)
+
+    new_assumptions = list(manifest.assumptions) + [
+        "FMC manifest tier promoted to CALIBRATED_LOCAL by CalibrationStore.apply_to_fmc.",
+    ]
+
+    fmc.model_manifest = replace(
+        manifest,
+        evidence_tier=new_tier,
+        calibration_ref=new_calibration_ref,
+        assumptions=new_assumptions,
+    )
+
+
 def _estimate_fmc_qmax_from_density(fmc: Any) -> float | None:
     """Recompute qmax from calibrated M2 ligand/activity density when possible."""
 
@@ -196,11 +246,13 @@ class CalibrationStore:
                 overrides.append(desc)
                 logger.info(desc)
 
-                # Update confidence to reflect calibration
+                # Update confidence to reflect calibration. The typed-enum
+                # promotion in _promote_fmc_manifest_to_calibrated below is
+                # the authoritative tier signal — the legacy
+                # ``fmc.confidence_tier`` string field was removed in v0.5.0
+                # (D2) so this no longer touches a string side-channel.
                 if hasattr(fmc_out, 'q_max_confidence') and "q_max" in entry.parameter_name:
                     fmc_out.q_max_confidence = "calibrated"
-                if hasattr(fmc_out, 'confidence_tier'):
-                    fmc_out.confidence_tier = "calibrated"
 
         if (
             activity_directly_calibrated
@@ -230,6 +282,13 @@ class CalibrationStore:
 
         if overrides:
             logger.info("Applied %d calibration overrides to FMC", len(overrides))
+            # v0.4.0 (C3): promote the typed model_manifest.evidence_tier to
+            # CALIBRATED_LOCAL when any FMC override is applied. This closes
+            # the architect-coherence-audit D3 finding that the calibration
+            # tier was propagated only through the legacy string side-channel.
+            _promote_fmc_manifest_to_calibrated(
+                fmc_out, sources=[e.source_reference for e in self._entries if e.source_reference],
+            )
         else:
             logger.debug("No calibration entries matched FMC context")
 
