@@ -329,7 +329,12 @@ def render_tab_m2(tab_container, _smgr) -> None:
                 _conc = st.number_input("Concentration (mM)", 0.5, 200.0, 10.0, key=f"m2_conc_{i}_{_wk}")
                 _temp_C = st.slider("Temperature (C)", 4, 80,
                                      int(_profile.temperature_default - 273.15), key=f"m2_temp_{i}_{_wk}")
-                _time_h = st.number_input("Time (h)", 0.25, 48.0,
+                # v0.3.7 (UI run-fix): minimum lowered from 0.25 h to 0.05 h
+                # to accommodate v9.x reagents with shorter time_default
+                # (cnbr / hrp / tresyl / alcl3 at 600 s = 0.167 h; borax at
+                # 300 s = 0.083 h). The 0.25 h floor was tuned for the v9.1
+                # reagent set only.
+                _time_h = st.number_input("Time (h)", 0.05, 48.0,
                                            float(_profile.time_default / 3600), key=f"m2_time_{i}_{_wk}")
                 _ph = st.slider("pH", 3.0, 14.0, float(_profile.ph_optimum), step=0.5, key=f"m2_ph_{i}_{_wk}")
                 st.markdown(
