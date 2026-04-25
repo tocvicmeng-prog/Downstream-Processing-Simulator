@@ -1,5 +1,89 @@
 # Changelog
 
+## v0.3.7 — First Edition Manual Refresh + Appendix J v0.3.x Addendum (2026-04-25)
+
+Documentation refresh covering the v0.3.x cycle. The user-facing instruction
+manual has been substantially rewritten to reflect everything shipped from
+v0.3.0 (P5++ MC-LRM driver) through v0.3.6 (follow-on closures). Appendix J
+gains a new § J.11 v0.3.x Addendum covering the 44 reagents that surfaced
+in the M2 dropdown via the v0.3.4 audit fix.
+
+### First Edition manual (Edition 2.0)
+
+`docs/user_manual/polysaccharide_microsphere_simulator_first_edition.md` —
+~1100 lines, full rewrite. Covers:
+
+- Updated polymer-family catalogue: 4 (v9.1) → 21 (v9.5) families across
+  baseline / expansion / niche / multi-variant composite tiers, with a
+  selection chart and ion-gelant reference table.
+- Updated M2 chemistry catalogue: 17 chemistry buckets (was 9 before
+  v0.3.4); 96 reagents (was 50); chemistry-bucket workflow chart;
+  family-reagent compatibility matrix; staged-template guide.
+- New M3 chapter: Lumped Rate Model description; v0.3.0 MC-LRM
+  uncertainty driver with Tier-1/Tier-2 safeguards; reformulated AC#3
+  convergence diagnostics; v0.3.1 optional Bayesian fit; v0.3.2 UI
+  band rendering and ProcessDossier MC export.
+- Calibration / wet-lab loop chapter with the evidence-tier inheritance
+  rule and the v0.2.0 wet-lab ingestion path.
+- Appendix restructured to the user-specified 9-section format:
+  A. Detailed Input Requirements
+  B. Process Steps
+  C. Essential Input & Process Checklist
+  D. Frequently Asked Questions (28 Q&A)
+  E. Architectural Ideas and Working Principles
+  F. Chemical and Physical Principles
+  G. Formulas and Mathematical Theorems
+  H. Standard Wet-Lab Protocols (cross-reference to Appendix J)
+  I. Troubleshooting Table (24 entries)
+- Workflow charts paired with complex procedural terminology
+  throughout (lifecycle flow, polymer-family selection, MC dispatch,
+  M2 step configuration, M3 method).
+
+### Appendix J § J.11 addendum
+
+`docs/user_manual/appendix_J_functionalization_protocols.md` extended
+from 2254 to ~2620 lines. New section covers:
+
+- **Cross-reference table** mapping every v0.3.x `reagent_key` (96
+  reagents) to its protocol section in Appendix J.
+- **§ J.11.2 Cyanuric chloride activation** — triazine anchor for dye
+  pseudo-affinity ligands.
+- **§ J.11.3 Genipin secondary crosslinking** — mild post-coupling
+  amine-bridge.
+- **§ J.11.4 Borax reversibility warning** — temporary porogen only;
+  must pair with covalent secondary crosslink.
+- **§ J.11.5 HRP / H₂O₂ / tyramine** — phenol-radical crosslinking.
+- **§ J.11.6 AlCl₃ trivalent gelant** — non-biotherapeutic safety
+  warning + research-only protocol.
+- **§ J.11.7 Glutathione / GST-tag** affinity coupling.
+- **§ J.11.8 Calmodulin / TAP-tag** Ca²⁺-dependent affinity.
+- **§ J.11.9 Cibacron Blue / Procion Red** dye pseudo-affinity.
+- **§ J.11.10 MEP HCIC** mixed-mode chromatography ligand.
+- **§ J.11.11 Thiophilic 2-mercaptoethanol** ligand (T-Sorb / T-Gel).
+- **§ J.11.12 m-APBA boronate** affinity for cis-diol analytes.
+- **§ J.11.13 Oligonucleotide DNA** sequence-specific affinity.
+- **§ J.11.14 Material-as-ligand: amylose / chitin** (B9 pattern).
+
+Every new section carries SDS-lite hazard block, recipe with stoichiometry,
+mass-balance check guidance, and reference to the relevant `reagent_key`
+in `REAGENT_PROFILES`.
+
+### PDF rebuild
+
+`docs/user_manual/build_pdf.py` rebuilds both PDFs:
+
+- `polysaccharide_microsphere_simulator_first_edition.pdf` (~198 KB)
+- `appendix_J_functionalization_protocols.pdf` (~237 KB)
+- `DPSIM_UNIFIED_DOCUMENTATION_AUDIT_2026-04-25.pdf` (~69 KB)
+
+### UI integration (unchanged)
+
+The upper-right corner of the dashboard already exposes both PDFs via
+`st.download_button` (📘 Manual + 🧪 Appendix J), per the existing
+implementation in `src/dpsim/visualization/app.py:290-345`. Auto-build
+runs `build_pdf.py` on first render if either PDF is missing. No
+changes to the UI layout were required for v0.3.7.
+
 ## v0.3.6 — Close All Tracked v0.3.x Follow-Ons (2026-04-25)
 
 Closes the seven actionable follow-ons accumulated across the v0.3.x

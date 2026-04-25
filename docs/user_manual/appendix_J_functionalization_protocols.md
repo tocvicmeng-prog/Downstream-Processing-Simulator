@@ -2251,4 +2251,356 @@ simulator's prediction, ingest the assay data through the Calibration panel
 or CLI so the model is downgraded, calibrated, or corrected against actual
 bench data.
 
+---
+
+## J.11 v0.3.x Addendum — Newly-Surfaced Reagent Protocols
+
+The v0.3.4 audit fix exposed 44 additional reagents in the M2 dropdown that
+were already in the backend but had no UI surface. The v0.3.6 follow-on
+added two inverse-direction click reagents (alkyne-side variants). This
+addendum maps every v0.3.x-era `reagent_key` to its protocol section in
+Appendix J above, plus protocol stubs for the eight specialty chemistries
+that did not have a dedicated entry in the v9.1 protocol set.
+
+### J.11.1 Reagent → Protocol Cross-Reference Table
+
+| `reagent_key` | M2 chemistry bucket | Appendix J section | Notes |
+|---|---|---|---|
+| `cnbr_activation` | Hydroxyl Activation | J.1.1 | Full SDS-lite + recipe |
+| `ech_activation` | Hydroxyl Activation | J.1.2 | Full |
+| `bdge_activation` | Hydroxyl Activation | J.1.3 | (BDDE in J — same chemistry) |
+| `dvs_activation` | Hydroxyl Activation | J.1.4 | Full |
+| `cdi_activation` | Hydroxyl Activation | J.1.5 | Full |
+| `tresyl_chloride_activation` | Hydroxyl Activation | J.1.6 | Full |
+| `stmp_secondary` | Secondary Crosslinking | J.1.7 | Full (note: triggerable dual-network) |
+| `edc_nhs_activation` | Hydroxyl Activation | J.3.1 | EDC/NHS ester chain |
+| `cyanuric_chloride_activation` | Hydroxyl Activation | J.11.2 (new) | Triazine activation; see § J.11.2 below |
+| `glyoxyl_chained_activation` | Hydroxyl Activation | J.3.5 | Hydrazide / Fc-glycan oxidation |
+| `periodate_oxidation` | Hydroxyl Activation | J.3.5 | Same chain as glyoxyl |
+| `pyridyl_disulfide_activation` | Hydroxyl Activation | J.2.3 | Disulfide-exchange thiol coupling |
+| `genipin_secondary` | Secondary Crosslinking | J.11.3 (new) | Amine-bridge crosslinker; see § J.11.3 |
+| `glutaraldehyde_secondary` | Secondary Crosslinking | J.3.2 | Two-step GA Schiff-base + reduction |
+| `glyoxal_dialdehyde` | Secondary Crosslinking | J.3.2 | Same chemistry as GA, smaller bridge |
+| `borax_reversible_crosslinking` | Secondary Crosslinking | J.11.4 (new) | Reversibility warning; see § J.11.4 |
+| `bis_epoxide_crosslinking` | Secondary Crosslinking | J.1.3 | BDDE / EGDGE chemistry |
+| `hrp_h2o2_tyramine` | Secondary Crosslinking | J.11.5 (new) | Phenol radical coupling; see § J.11.5 |
+| `alcl3_trivalent_gelant` | Secondary Crosslinking | J.11.6 (new) | NON-BIOTHERAPEUTIC; see § J.11.6 |
+| `deae_coupling`, `q_coupling`, `cm_coupling`, `sp_coupling` | Ligand Coupling | J.2.2 | Epoxide + amine route |
+| `phenyl_coupling`, `butyl_coupling`, `octyl_coupling`, `hexyl_coupling` | Ligand Coupling | J.2.2 | Epoxide + hydrophobic chain |
+| `ida_coupling`, `nta_coupling` | Ligand Coupling | J.2.2 | Chelator coupling on epoxide |
+| `glutathione_coupling` | Ligand Coupling | J.2.2 / J.11.7 (new) | Thiol on epoxide; see § J.11.7 for GST-tag context |
+| `heparin_coupling` | Ligand Coupling | J.2.2 | Heparin amine on epoxide |
+| `protein_a_coupling` | Protein Coupling | J.3.1, J.3.3 | NHS-ester or DMP routes |
+| `protein_g_coupling`, `protein_ag_coupling`, `protein_l_coupling` | Protein Coupling | J.3.1 | Same NHS-ester chain |
+| `protein_a_cys_coupling`, `protein_g_cys_coupling`, `generic_cys_protein_coupling` | Protein Coupling | J.2.3 | Cys-thiol on DVS or maleimide |
+| `protein_a_hydrazide_coupling` | Protein Coupling | J.3.5 | Hydrazide / Fc-glycan oxidation |
+| `protein_a_nhs_coupling` | Protein Coupling | J.3.1 | Standard NHS coupling |
+| `protein_a_vs_coupling` | Protein Coupling | J.2.3 | DVS coupling chain |
+| `streptavidin_coupling` | Protein Coupling | J.3.1 | NHS chain; biotin pre-binding common |
+| `con_a_coupling`, `wga_coupling`, `jacalin_coupling`, `lentil_lectin_coupling` | Protein Coupling | J.3.1 | Standard lectin NHS coupling |
+| `calmodulin_cbp_tap_coupling` | Protein Coupling | J.11.8 (new) | TAP-tag context; see § J.11.8 |
+| `p_aminobenzamidine_coupling` | Protein Coupling | J.2.2 | Trypsin-affinity amine on epoxide |
+| `multipoint_stability_uplift` | Protein Coupling | J.3.5 | Glyoxyl multipoint amine |
+| `cuaac_click_coupling`, `cuaac_click_alkyne_side` | Click Chemistry | J.2.5 | Same chemistry, opposite handle direction |
+| `spaac_click_coupling`, `spaac_click_alkyne_side` | Click Chemistry | J.2.5 | Same chemistry, opposite handle direction |
+| `cibacron_blue_f3ga_coupling`, `procion_red_he3b_coupling` | Dye Pseudo-Affinity | J.11.9 (new) | Triazine-anchored dyes; see § J.11.9 |
+| `mep_hcic_coupling` | Mixed-Mode HCIC | J.11.10 (new) | MEP HCIC; see § J.11.10 |
+| `thiophilic_2me_coupling` | Thiophilic | J.11.11 (new) | T-Sorb / T-Gel; see § J.11.11 |
+| `apba_boronate_coupling` | Boronate | J.11.12 (new) | m-APBA on epoxide; see § J.11.12 |
+| `peptide_affinity_hwrgwv` | Peptide Affinity | J.3.1 | Standard peptide NHS coupling |
+| `oligonucleotide_dna_coupling` | Oligonucleotide | J.11.13 (new) | DNA on CNBr-activated; see § J.11.13 |
+| `amylose_mbp_affinity`, `chitin_cbd_intein` | Material-as-Ligand | J.11.14 (new) | Material-as-ligand pattern; see § J.11.14 |
+| `dadpa_spacer*`, `dah_spacer*`, `eda_spacer*`, `peg600_spacer*`, `aha_*`, `hydrazide_spacer_arm`, `oligoglycine_spacer`, `aminooxy_peg_linker`, `cystamine_disulfide_spacer`, `succinic_anhydride_carboxylation`, `adh_hydrazone` | Spacer Arm | J.4.* | Various spacer-arm subsections |
+| `sm_peg2`, `sm_peg4`, `sm_peg12`, `sm_peg24` | Spacer Arm | J.4.* | NHS-PEG-Maleimide heterobifunctional |
+| `nickel_charging`, `cobalt_charging`, `copper_charging`, `zinc_charging`, `nickel_charging_ida`, `nickel_charging_nta`, `edta_stripping` | Metal Charging | J.5.* | Standard IMAC metal-loading chain |
+| `tcep_reduction`, `dtt_reduction` | Protein Pretreatment | J.6.* | Reduction protocols |
+| `wash_buffer` | Washing | (advisory) | No reaction; mass-balance bookkeeping only |
+| `triazine_dye_leakage_advisory` | Washing | (advisory) | Wash endpoint guidance for dye-affinity matrices |
+| `ethanolamine_quench`, `mercaptoethanol_quench`, `nabh4_quench`, `acetic_anhydride_quench` | Quenching | J.7.* | Standard quench chain |
+
+> **Reading the table.** A protocol section listed as "(new)" was added in the v0.3.7 documentation cycle. All other sections were present in the v9.1 baseline of Appendix J.
+
+The remainder of § J.11 contains the new protocol stubs.
+
+### J.11.2 Cyanuric Chloride Activation (Triazine Anchor)
+
+**Rationale.** Cyanuric chloride (2,4,6-trichloro-1,3,5-triazine) is the
+classical anchor for Cibacron Blue F3GA, Procion Red HE-3B, and other
+reactive-dye pseudo-affinity ligands. The first chloride displaces a
+matrix -OH or -NH₂; the remaining two are partially hydrolysed or
+displaced by the dye chromophore.
+
+**SDS-lite.**
+- Hazards: severe respiratory and skin sensitiser; acute aquatic toxicity;
+  releases HCl on hydrolysis.
+- PPE: butyl-rubber gloves, splash goggles, fume hood, lab coat.
+- Waste: aqueous neutralised; do NOT mix with reductants or amines outside
+  the planned reaction.
+
+**Recipe (per gram dry matrix).**
+1. Equilibrate matrix in **acetone or DMF** (dry organic solvent).
+2. Add cyanuric chloride at **5 mM** in the same dry solvent.
+3. React **30 min at 0–4 °C** with gentle agitation.
+4. Wash sequentially with the dry solvent → 50:50 dry solvent / water →
+   water (5 column volumes each).
+5. Couple the dye-amine in **0.1 M sodium carbonate, pH 9.5, 4 h at 25 °C**.
+6. Block residual chlorides with **1 M ethanolamine, pH 9.0, 2 h at 25 °C**.
+7. Wash thoroughly to remove unreacted dye until A₆₂₀ baseline (Cibacron
+   Blue) or A₅₃₆ baseline (Procion Red) is reached in the wash.
+
+**Mass-balance check.** Spectrophotometric dye loading by depletion:
+`coupled_dye = A_initial − A_final` at the dye's λ_max.
+
+### J.11.3 Genipin Secondary Crosslinking
+
+**Rationale.** Genipin reacts with primary amines (chitosan, lysine
+side-chains) to form a stable blue crosslink network. Useful as a
+secondary post-coupling crosslink to lock in the M2 functional state;
+slow (24 h), mild, biocompatible. Native blue colour from the genipin
+chromophore is a useful coupling indicator but interferes with A₅₈₀-band
+measurements downstream.
+
+**SDS-lite.**
+- Hazards: low acute toxicity; staining; skin sensitisation rare.
+- PPE: nitrile gloves, lab coat.
+- Waste: aqueous; standard biological-waste channel.
+
+**Recipe.** 2 mM genipin in the post-coupling buffer (pH 5–7), 24 h at
+37 °C with gentle agitation. Confirm crosslinking by visible blue colour
+intensifying (A₅₈₀ rise plateau) and by a swelling-ratio drop of
+20–40%.
+
+### J.11.4 Borax Reversible Crosslinking — TEMPORARY POROGEN ONLY
+
+**Critical safety / scientific note.** Borax (sodium tetraborate)
+forms borate-cis-diol esters with adjacent -OH pairs (mannitol-class
+diols, agarose, dextran). These crosslinks are **REVERSIBLE**:
+
+- Stable at **pH > 8.5**.
+- Dissociate at **pH < 8.5** OR in the presence of competing
+  diols / sugars.
+
+Borax-crosslinked beads cannot survive normal chromatography elution
+(typical bind/wash buffers are pH 7.4). Use borax ONLY as a temporary
+porogen / model network during synthesis, then **always** lock in
+the structure with a covalent secondary crosslink (BDDE / ECH /
+DVS) before downstream packing.
+
+**SDS-lite.**
+- Hazards: reproductive toxicant (Cat. 1B in EU); skin and eye
+  irritant.
+- PPE: nitrile gloves, splash goggles.
+- Waste: aqueous neutralised.
+
+**Recipe.** 50 mM borax buffer, pH 9.5, 1 h at 25 °C. Confirm the
+network is in place by transient swelling-ratio drop, then **trigger
+the covalent secondary crosslink immediately afterwards**:
+
+- BDDE: 2% v/v in 0.1 M NaOH, 4 h at 50 °C.
+- ECH: 5% v/v in 0.5 M NaOH, 6 h at 40 °C.
+- DVS: 100 mM in 0.5 M Na₂CO₃, pH 11, 1 h at 25 °C.
+
+Wash with water and 0.1 M acetic acid (pH 4 — drops the borax) until
+A₂₃₀ baseline.
+
+### J.11.5 HRP / H₂O₂ / Tyramine Phenol-Radical Crosslinking
+
+**Rationale.** Horseradish peroxidase (HRP) catalyses the formation of
+phenoxy radicals from tyramine in the presence of H₂O₂; these radicals
+couple to tyrosine residues and to other tyramine molecules, forming a
+covalent network. Useful for hyaluronate (HA) bead formation per
+Sakai et al. 2009.
+
+**SDS-lite.**
+- HRP: low acute toxicity; allergen.
+- H₂O₂: corrosive; oxidiser; release O₂ on contact with reductants.
+- Tyramine: mild; controlled in some jurisdictions (vasoactive amine).
+- PPE: nitrile or butyl gloves, splash goggles, fume hood for H₂O₂
+  handling.
+
+**Recipe.** Tyramine pre-conjugated to the polymer (HA-tyramine, 5–10%
+loading typical). Initiate with HRP (1 µg/mL) + H₂O₂ (1 mM) in PBS at
+pH 7.4, 25 °C, 10–30 min. Quench by adding catalase (10 µg/mL) and
+washing.
+
+### J.11.6 AlCl₃ Trivalent Gelant — NON-BIOTHERAPEUTIC RESEARCH USE ONLY
+
+**Critical safety / scientific note.** Al³⁺ forms strong ionic crosslinks
+with carboxylate-bearing polymers (alginate, gellan, pectin) by
+bridging 3 carboxylates per Al³⁺ — stronger than Ca²⁺. The resulting
+gel is mechanically tougher.
+
+**However**, residual aluminum is regulated by FDA (oral and parenteral
+limits) and EP (parenteral grade specifications). The
+`biotherapeutic_safe = False` flag in the ion-gelant registry blocks
+AlCl₃ from default workflows. Use only for research / non-biotherapeutic
+applications (food gels for which aluminum residue is documented and
+acceptable, or disposable / non-implant matrices).
+
+**SDS-lite.**
+- AlCl₃: corrosive; releases HCl on hydrolysis.
+- PPE: butyl gloves, splash goggles, fume hood for the anhydrous form.
+
+**Recipe.** 10 mM AlCl₃ external bath, pH 4–5, 5 min at 25 °C. Wash
+with water until conductivity baseline. **Always assay residual Al by
+ICP-MS or aluminium-specific spectrophotometry before approving the
+batch for any contact with biotherapeutic processes.**
+
+### J.11.7 Glutathione Coupling for GST-Tag Affinity
+
+**Rationale.** GST-tagged fusion proteins bind glutathione with µM
+affinity. Glutathione is coupled to an epoxide-activated matrix via
+its thiol. Eluted by 5–10 mM reduced glutathione in PBS.
+
+**SDS-lite.**
+- Glutathione: low toxicity; air-sensitive (oxidises to GSSG).
+- PPE: standard.
+
+**Recipe.** Activate matrix with epichlorohydrin or BDDE per § J.1.2 /
+§ J.1.3. Couple glutathione at **20 mM in 0.1 M sodium carbonate,
+pH 8.5–9.0, 16 h at 25 °C** under inert (N₂) atmosphere. Wash with
+PBS until A₂₈₀ baseline.
+
+### J.11.8 Calmodulin Coupling for CBP / TAP Tag Affinity
+
+**Rationale.** Calmodulin binds calmodulin-binding-peptide (CBP) tags
+in the presence of Ca²⁺ and elutes when EGTA chelates the Ca²⁺. Used
+in the TAP (tandem affinity purification) workflow.
+
+**SDS-lite.**
+- Calmodulin: low toxicity; protein.
+- EGTA: low toxicity; chelator.
+- PPE: standard.
+
+**Recipe.** Activate matrix with NHS-ester chemistry (per § J.3.1).
+Couple calmodulin at **2 mg/mL in PBS + 1 mM CaCl₂, pH 7.4, 4 h at
+4 °C**. Wash with **PBS + 1 mM CaCl₂** to remove uncoupled protein.
+Elute bound CBP-tagged target with **PBS + 5 mM EGTA**.
+
+### J.11.9 Cibacron Blue / Procion Red Dye Pseudo-Affinity Coupling
+
+**Rationale.** Cibacron Blue F3GA binds NAD-binding-pocket proteins
+(albumin, lactate dehydrogenase, hexokinase) via a pseudo-affinity
+interaction with the dianionic dye-NAD mimicry. Procion Red HE-3B has
+similar chemistry with broader specificity.
+
+**SDS-lite.**
+- Cibacron Blue F3GA: stains skin, clothing, lab surfaces. Low acute
+  toxicity. Once on a surface, removal requires bleach.
+- Procion Red HE-3B: same. Persistent staining.
+- PPE: nitrile gloves, lab coat (designated dye coat — not your
+  primary). Eye protection.
+
+**Recipe.** Activate matrix with cyanuric chloride per § J.11.2.
+Couple the dye at **5 mM in 0.1 M sodium carbonate, pH 9.5, 4 h at
+25 °C**. Wash exhaustively with water + 1 M NaCl until A₆₂₀ (Cibacron)
+or A₅₃₆ (Procion) baseline. **Run a triazine-leakage check** (per
+`triazine_dye_leakage_advisory` reagent) at the end of every batch:
+load 10 column volumes of clean elution buffer and assay the eluate
+spectrophotometrically.
+
+### J.11.10 MEP HCIC (4-Mercaptoethylpyridine) Mixed-Mode
+
+**Rationale.** MEP (4-mercaptoethylpyridine) is a hydrophobic charge-
+induction chromatography (HCIC) ligand. At neutral pH the pyridine
+nitrogen is uncharged and the ligand binds proteins hydrophobically;
+on acidic elution the pyridine protonates and electrostatic repulsion
+releases the bound protein. Useful for IgG capture without using
+expensive Protein A.
+
+**SDS-lite.**
+- MEP: thiol; oxidisable; mild irritant.
+- PPE: standard, plus inert (N₂) atmosphere for thiol coupling.
+
+**Recipe.** Activate matrix with DVS or vinyl-sulfone chemistry per
+§ J.1.4 / § J.2.3. Couple MEP at **20 mM in 0.1 M phosphate, pH 8,
+12 h at 25 °C** under N₂. Wash with PBS. Bind feed at pH 7.4; elute
+at pH 4.0 (typical capture of polyclonal IgG: 30–50 mg/mL resin).
+
+### J.11.11 Thiophilic 2-Mercaptoethanol Ligand
+
+**Rationale.** A thiophilic ligand (T-Gel, T-Sorb) is a divinyl-sulfone-
+spaced thioether-sulfone group that binds IgG and other antibodies via
+a sulfone-sulfur interaction. Captures IgG at high salt; elutes at low
+salt. Mild; preserves activity well.
+
+**SDS-lite.**
+- Vinyl sulfone: irritant; fumehood handling per § J.1.4.
+- 2-Mercaptoethanol: stench; toxic; fumehood mandatory.
+- PPE: butyl gloves, fume hood, splash goggles.
+
+**Recipe.** Activate matrix with DVS per § J.1.4. Couple
+2-mercaptoethanol at **100 mM in 0.5 M Na₂CO₃, pH 11, 6 h at 25 °C** in
+the fume hood. Wash with water + 1 M NaCl until A₂₃₀ baseline. Bind
+feed at **0.5 M (NH₄)₂SO₄, pH 7.5**; elute by stepping to **PBS, pH
+7.5** (low salt).
+
+### J.11.12 m-Aminophenylboronic Acid (APBA) Boronate Affinity
+
+**Rationale.** Boronate ligands form reversible covalent esters with
+cis-diol-containing analytes: glycoproteins, sugars, catecholamines,
+and ribose-bearing nucleosides. Bind at pH 8–9 (B(OH)₄⁻ tetrahedral
+form); elute at pH 5 (trigonal B(OH)₃ form, no diol-binding) or with
+sorbitol / fructose displacement.
+
+**SDS-lite.**
+- m-Aminophenylboronic acid (APBA): low acute toxicity; mild irritant.
+- PPE: standard.
+
+**Recipe.** Activate matrix with epichlorohydrin per § J.1.2. Couple
+APBA at **50 mM in 0.1 M sodium borate, pH 9.0, 16 h at 25 °C**. Wash
+with **0.1 M NH₄OAc, pH 8.5**. Bind feed at pH 8.5 in the same buffer;
+elute at **0.1 M NH₄OAc, pH 5** OR **0.5 M sorbitol** in the same pH-8.5
+buffer.
+
+### J.11.13 Oligonucleotide DNA Affinity Coupling
+
+**Rationale.** Sequence-specific DNA ligands capture DNA-binding
+proteins (transcription factors, restriction enzymes). The
+oligonucleotide is amine-modified at the 5' end and couples to a
+CNBr- or NHS-ester-activated matrix.
+
+**SDS-lite.**
+- DNA: low acute toxicity; standard nuclease precautions.
+- PPE: gloves to prevent nuclease contamination.
+
+**Recipe.** Activate matrix with CNBr (per § J.1.1) or NHS-ester
+(per § J.3.1). Couple **5'-amine oligonucleotide at 100 µM in 0.1 M
+sodium phosphate, pH 8.0, 4 h at 25 °C** in nuclease-free conditions.
+Wash with **TE buffer + 0.5 M NaCl** until A₂₆₀ baseline. Always
+quench with 0.1 M Tris pH 8 to passivate residual reactive groups.
+
+### J.11.14 Material-as-Ligand: Amylose (MBP) and Chitin (CBD-Intein)
+
+**Rationale.** In the material-as-ligand (B9) pattern the polysaccharide
+matrix IS the affinity ligand:
+
+- **Amylose** binds MBP-tagged fusion proteins via its β-1,4-glucan
+  helix. Eluted by 10 mM maltose in the bind buffer.
+- **Chitin** binds CBD-tagged fusions (NEB IMPACT system) via the
+  N-acetylglucosamine-binding face of the chitin-binding domain.
+  Self-cleavage by thiol-induced intein splicing gives untagged
+  product directly off-column.
+
+No coupling chemistry is required — the bead IS the affinity ligand.
+The corresponding M1 family solvers (`AMYLOSE`, `CHITIN`) handle bead
+formation; the M2 reagent profiles (`amylose_mbp_affinity`,
+`chitin_cbd_intein`) carry the binding-equilibrium parameters that
+M3 consumes.
+
+**Recipe (capture).**
+- Amylose: bind in PBS, pH 7.4, 25 °C; elute with **10 mM maltose** in
+  the same buffer.
+- Chitin (with intein): bind in PBS + 1 mM EDTA + 0.5 M NaCl, pH 7.5,
+  25 °C; **trigger self-cleavage** by adding **50 mM DTT** (or β-ME)
+  in the same buffer, incubate 16 h at 4 °C, collect the eluate
+  (untagged target).
+
+**SDS-lite.** Both polysaccharides: low toxicity, standard handling.
+DTT and β-ME: standard reductant precautions per § J.6.*.
+
+---
+
+*End of J.11 v0.3.x Addendum.*
+
 *End of Appendix J.*
