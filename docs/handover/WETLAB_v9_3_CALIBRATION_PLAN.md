@@ -103,15 +103,102 @@ These are not blockers, but the campaign goes faster if these are in place first
 
 ---
 
-## 5. Reporting back
+## 5. Reporting back — concrete ingestion procedure (v9.4 follow-on)
 
-When the wet-lab campaign completes, the calibration outputs (fitted parameters, validated DBC values, refined evidence tiers) feed back into the simulator via:
+The simulator-side ingestion path is now implemented (v9.4 follow-on
+commit). The bench scientist does NOT need to touch Python code: a
+YAML campaign file documents the bench measurements, and the
+ingestion module updates ReagentProfile / solver constants with
+provenance recording and tier promotion.
 
-1. **Updated parameters** in the corresponding profile docstrings + `calibration_source` field.
-2. **Tier promotion** — change `confidence_tier` from `"semi_quantitative"` / `"ranking_only"` to `"calibrated_local"` or `"validated_quantitative"` per Reference 01 § 4.3.
-3. **Updated `calibration_ref`** — replace literature citation with project calibration entry ID.
-4. **Update `valid_domain`** in `ModelManifest` if the calibration narrows the domain of validity.
-5. **Add a new test** under `tests/test_v9_3_calibration_*.py` capturing the post-calibration acceptance criterion as a regression gate.
+### 5.1 Workflow
+
+1. **Bench scientist** fills in a YAML campaign file based on either:
+   - `data/wetlab_calibration_examples/Q-013_chitosan_kernel_calibration.yaml`
+     — for Q-013 kernel calibrations (chitosan-only, dextran-ECH).
+   - `data/wetlab_calibration_examples/Q-014_v9_2_profile_validation.yaml`
+     — for Q-014 ReagentProfile validations.
+2. **Ingestion check** (no permanent changes yet):
+
+   ```python
+   from pathlib import Path
+   from dpsim.calibration.wetlab_ingestion import (
+       load_campaign, apply_campaign, propose_solver_constant_patches,
+   )
+
+   campaign = load_campaign(Path("path/to/your_campaign.yaml"))
+   result = apply_campaign(campaign)
+   print(result.manifest())          # JSON summary
+   print(f"Tier promotions: {result.tier_promotions}")
+   print(f"Solver-constant patches: {propose_solver_constant_patches(campaign)}")
+   ```
+
+   This validates the YAML, applies updates **in memory** (the global
+   `REAGENT_PROFILES` dict is NOT mutated), and reports which profiles
+   were updated, which were skipped (unknown profile keys), and which
+   failed (unpatchable parameters). The `manifest()` JSON is suitable
+   for audit-log archival.
+
+3. **Code commit** (permanent changes): once the bench team is
+   satisfied with the ingestion result, an engineer translates the
+   campaign into source-code edits:
+
+   - For each `result.profile_updates[key]`: edit
+     `src/dpsim/module2_functionalization/reagent_profiles.py` to
+     update the kinetic constants on the corresponding profile and
+     promote `confidence_tier` per the campaign.
+   - For each `propose_solver_constant_patches()` entry: edit the
+     module-level constant in the corresponding `level2_gelation/*.py`
+     file with the new value and a `# CALIBRATED v9.x: <campaign_id>`
+     comment.
+   - Add a regression test under `tests/test_v9_x_calibration_*.py`
+     pinning the new value (delta-vs-default within the bench's
+     posterior σ).
+
+4. **Audit trail**: the `IngestionResult.manifest()` JSON is committed
+   alongside the source-code changes, and the campaign YAML file is
+   committed under `data/wetlab_calibration_runs/<campaign_id>.yaml`
+   (separate directory from the `_examples`).
+
+### 5.2 What can be patched
+
+The wet-lab ingestion module enforces a strict whitelist of patchable
+fields in `wetlab_ingestion.py::_PATCHABLE_NUMERIC_FIELDS` and
+`_PATCHABLE_STRING_FIELDS`. **Identity fields** (`name`, `cas`,
+`target_acs`, `chemistry_class`, etc.) are deliberately NOT patchable —
+the bench scientist cannot accidentally rename a profile or change
+its CAS number through a calibration campaign. If a new patchable
+field is needed, the engineer adds it to the whitelist in a code
+commit (so the change is reviewable).
+
+### 5.3 Tier promotion rules
+
+The ingestion module enforces an upward-only tier ladder:
+
+```
+unsupported < ranking_only < qualitative_trend < semi_quantitative
+            < calibrated_local < validated_quantitative
+```
+
+A campaign can only **promote** a profile up the ladder. Attempting
+to downgrade (e.g., assigning `qualitative_trend` to a profile that
+is already `calibrated_local`) raises `ValueError` in strict mode.
+This is a deliberate data-integrity guard: a real bench measurement
+should never decrease evidence quality below the literature-anchored
+default. (Non-strict mode is available for the rare measurement-error
+retraction case.)
+
+### 5.4 Test coverage
+
+`tests/test_wetlab_ingestion.py` covers:
+- YAML/dict loading + schema validation (4 tests)
+- Profile patching + provenance recording (6 tests)
+- Tier promotion (3 tests)
+- End-to-end campaign application + manifest serialisation (5 tests)
+- Solver-constant patch proposals (4 tests)
+- Whitelist coverage (2 parameterised tests)
+
+34 tests total; all pass on the v9.x surface.
 
 ---
 

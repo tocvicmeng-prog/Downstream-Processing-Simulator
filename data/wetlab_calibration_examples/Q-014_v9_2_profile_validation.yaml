@@ -1,0 +1,133 @@
+# ───────────────────────────────────────────────────────────────────────
+# Wet-lab calibration campaign — Q-014 v9.2 profile validation
+# ───────────────────────────────────────────────────────────────────────
+#
+# Purpose:
+#   Validate the 18 v9.2 ReagentProfile entries against the
+#   literature-anchored acceptance protocols documented in
+#   WETLAB_v9_3_CALIBRATION_PLAN.md § 3. Each row that passes the
+#   acceptance test (predicted observable within ±20 % of measured)
+#   gets promoted from SEMI_QUANTITATIVE to CALIBRATED_LOCAL.
+#
+# Reference:
+#   docs/handover/WETLAB_v9_3_CALIBRATION_PLAN.md § 3 (validation matrix)
+#
+# Below is a SKELETON with all 18 v9.2 profiles. Fill in measured_value
+# and posterior_uncertainty after running each acceptance protocol.
+# Skip rows that fail the ±20 % band — they need follow-up bench work
+# before tier promotion.
+# ───────────────────────────────────────────────────────────────────────
+
+campaign_id: "Q-014_v9_2_profile_validation_2026Q3"
+operator: "TBD-bench-scientist"
+lab: "TBD"
+notes: |
+  Validation campaign for the 18 v9.2 Tier-1 reagent profiles.
+  Each entry corresponds to one row in the WETLAB §3 validation matrix.
+  Fill in measured_value after the acceptance protocol; the bench team
+  may skip entries that don't pass the ±20 % band, returning them as
+  follow-up bench work.
+
+entries:
+  # ─── M1 — classical affinity resin completion ────────────────────
+
+  - profile_key: "cnbr_activation"
+    parameter_name: "k_forward"
+    measured_value: 1.0e-3        # TBD — fit from IgG DBC time-course on CNBr-Sepharose 4B
+    units: "m^3/(mol*s)"
+    target_molecule: "IgG (polyclonal, Sigma I4506)"
+    temperature_C: 4.0
+    ph: 8.3
+    measurement_type: "DBC10"
+    fit_method: "Langmuir_breakthrough_fit"
+    posterior_uncertainty: 1.5e-4
+    source_reference: "Lab notebook YYYY-MM-DD p. NN; Cytiva Sepharose 4B datasheet"
+    replicates: 3
+    bench_date: "TBD"
+    promote_to_tier: "calibrated_local"
+
+  - profile_key: "cdi_activation"
+    parameter_name: "k_forward"
+    measured_value: 5.0e-4        # TBD
+    units: "m^3/(mol*s)"
+    target_molecule: "Lysozyme (Sigma L6876)"
+    temperature_C: 25.0
+    ph: 9.0
+    measurement_type: "DBC10"
+    fit_method: "Langmuir_breakthrough_fit"
+    posterior_uncertainty: 8e-5
+    bench_date: "TBD"
+    promote_to_tier: "calibrated_local"
+
+  # ─── M2 — oriented glycoprotein chain ────────────────────────────
+
+  - profile_key: "periodate_oxidation"
+    parameter_name: "k_forward"
+    measured_value: 2.0e-3        # TBD — fit from DNPH aldehyde-density time course
+    units: "1/s"
+    target_molecule: "agarose 4 % vicinal diols"
+    temperature_C: 4.0
+    ph: 5.0
+    measurement_type: "DNPH_aldehyde_density"
+    fit_method: "least_squares"
+    posterior_uncertainty: 2.5e-4
+    bench_date: "TBD"
+    promote_to_tier: "calibrated_local"
+
+  - profile_key: "adh_hydrazone"
+    parameter_name: "k_forward"
+    measured_value: 5.0e-3        # TBD
+    units: "m^3/(mol*s)"
+    target_molecule: "oxidized-agarose -CHO"
+    temperature_C: 25.0
+    ph: 5.5
+    measurement_type: "FTIR_hydrazone_C=N"
+    fit_method: "least_squares"
+    posterior_uncertainty: 7e-4
+    bench_date: "TBD"
+    promote_to_tier: "calibrated_local"
+
+  - profile_key: "aminooxy_peg_linker"
+    parameter_name: "activity_retention"
+    measured_value: 0.78          # TBD — HRP activity retained on aminooxy-PEG2k vs random-Lys
+    units: "fraction"
+    target_molecule: "HRP (oxidized glycan)"
+    temperature_C: 25.0
+    ph: 4.5
+    measurement_type: "ABTS_activity_assay"
+    fit_method: "ratio_of_means"
+    posterior_uncertainty: 0.05
+    bench_date: "TBD"
+    promote_to_tier: "calibrated_local"
+
+  # ─── M3 / M4 / M5 / M6 / M7 / M8 / M9 — abbreviated entries
+  # Bench team adds these as the campaign progresses; format follows
+  # the M1/M2 entries above. WETLAB plan § 3 lists the 18 acceptance
+  # protocols including:
+  #   - Cibacron Blue F3GA: BSA depletion ≥ 90 %
+  #   - MEP HCIC: IgG DBC ≥ 25 mg/mL, recovery ≥ 85 %
+  #   - BDDE: HA G' ≥ 1 kPa
+  #   - CuAAC: coupling efficiency ≥ 80 %; residual Cu ≤ 30 ppm
+  #   - Glyoxyl-CALB: T_50 uplift ≥ 10 °C
+  #   - Amylose-MBP: DBC ≥ 3 mg/mL, recovery ≥ 80 %
+  #   - APBA-HbA1c: recovery ≥ 95 %, resolution ≥ 1.5
+
+  # Example for a profile that's expected to be skipped (no useful
+  # bench data this campaign — kinetics fitted in a later round):
+
+  - profile_key: "cuaac_click_coupling"
+    parameter_name: "regulatory_limit_ppm"
+    measured_value: 8.5           # TBD — measured by ICP-MS post-EDTA wash
+    units: "ppm"
+    target_molecule: "residual Cu (ICH Q3D)"
+    measurement_type: "ICP-MS"
+    fit_method: "direct_measurement"
+    posterior_uncertainty: 0.5
+    source_reference: "Lab notebook YYYY-MM-DD p. NN; ICP-MS run ID"
+    replicates: 3
+    bench_date: "TBD"
+    # Don't tier-promote — this is a single-parameter validation, not
+    # a kernel calibration. Use the same SEMI_QUANTITATIVE tier so
+    # downstream consumers know the kinetic constants are still
+    # literature-anchored.
+    promote_to_tier: "semi_quantitative"

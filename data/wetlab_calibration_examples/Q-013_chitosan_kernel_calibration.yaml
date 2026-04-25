@@ -1,0 +1,74 @@
+# ───────────────────────────────────────────────────────────────────────
+# Wet-lab calibration campaign — Q-013 chitosan-only kernel
+# ───────────────────────────────────────────────────────────────────────
+#
+# Purpose:
+#   Promote dpsim/level2_gelation/chitosan_only.py from
+#   SEMI_QUANTITATIVE → CALIBRATED_LOCAL by fitting the empirical
+#   pore-size correlation prefactor and the chitosan amine pKa against
+#   bench data.
+#
+# Reference:
+#   docs/handover/WETLAB_v9_3_CALIBRATION_PLAN.md § 2.1
+#
+# Procedure (summary):
+#   1. Make 5 chitosan-only beads at c = 5, 10, 20, 30, 40 mg/mL
+#   2. Measure pore-size by SEC inverse calibration with dextran probes
+#      (0.1 / 1 / 10 / 100 / 1000 kDa)
+#   3. Fit the pore-size correlation: pore = K * (10/c)^a
+#   4. Measure chitosan amine pKa by potentiometric titration
+#   5. Fill in the entries below with fitted values
+#   6. Run: python -m dpsim.calibration.wetlab_ingestion <this-file>
+#
+# Once ingested, the simulator's chitosan-only solver will report
+# CALIBRATED_LOCAL evidence tier with the fitted parameters as
+# defaults.
+# ───────────────────────────────────────────────────────────────────────
+
+campaign_id: "Q-013_chitosan_kernel_2026Q3"
+operator: "TBD-bench-scientist"
+lab: "TBD"
+notes: |
+  Chitosan stock: Sigma 448877 (medium MW, DDA characterised by
+  potentiometric titration to be filled in below).
+  Genipin lot: Wako 078-03021.
+  TNBSA assay kit: Pierce 28997.
+  All beads inverse-emulsion + genipin-crosslinked.
+
+entries:
+  # ─── Solver-level constant calibrations ──────────────────────────
+  # (profile_key starts with "solver:" → routed to
+  # propose_solver_constant_patches() rather than reagent profiles)
+
+  - profile_key: "solver:dpsim.level2_gelation.chitosan_only"
+    parameter_name: "_CHITOSAN_AMINE_PKA"
+    measured_value: 6.45        # TBD — fill in after potentiometric titration
+    units: "pH"
+    target_molecule: "chitosan amine"
+    measurement_type: "potentiometric_titration"
+    fit_method: "Henderson-Hasselbalch"
+    posterior_uncertainty: 0.05  # TBD — replicate σ
+    source_reference: "Lab notebook YYYY-MM-DD p. NN"
+    replicates: 3
+    bench_date: "TBD"
+    promote_to_tier: "calibrated_local"
+
+  # ─── Profile-level chitosan crosslinking calibrations ────────────
+  # Genipin secondary crosslinking is the canonical chitosan crosslinker.
+  # If TNBSA shows residual amines higher than the literature default
+  # alpha_final=0.95 implies, update the rate constant or alpha_final.
+
+  - profile_key: "genipin_secondary"
+    parameter_name: "k_forward"
+    measured_value: 2.0e-6      # TBD — fit from time-course TNBSA
+    units: "m^3/(mol*s)"
+    target_molecule: "chitosan -NH2"
+    temperature_C: 37.0
+    ph: 7.4
+    measurement_type: "TNBSA_time_course"
+    fit_method: "least_squares"
+    posterior_uncertainty: 2e-7
+    source_reference: "Lab notebook YYYY-MM-DD p. NN"
+    replicates: 4
+    bench_date: "TBD"
+    promote_to_tier: "calibrated_local"
