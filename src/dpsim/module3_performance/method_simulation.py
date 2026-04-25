@@ -32,6 +32,7 @@ from .method import (
     ChromatographyMethodStep,
     run_chromatography_method,
 )
+from .monte_carlo import LRMSolver, MCBands, run_mc
 from .orchestrator import (
     GradientElutionResult,
     _build_m3_chrom_manifest,
@@ -39,6 +40,7 @@ from .orchestrator import (
 )
 
 if TYPE_CHECKING:
+    from dpsim.calibration import PosteriorSamples
     from dpsim.module2_functionalization.orchestrator import FunctionalMicrosphere
 
 _TIER_ORDER = list(ModelEvidenceTier)
@@ -93,6 +95,13 @@ class MethodSimulationResult:
     model_manifest: ModelManifest
     assumptions: list[str]
     wet_lab_caveats: list[str]
+    monte_carlo: MCBands | None = None
+    """v0.3.0 (G3): MC LRM uncertainty bands. ``None`` when MC was not
+    requested via ``recipe.dsd_policy.monte_carlo_n_samples > 0`` or when
+    no ``posterior_samples`` / ``mc_lrm_solver`` was supplied to
+    ``run_method_simulation``. Smoke-baseline preservation: when
+    ``monte_carlo_n_samples == 0`` (default), this field stays ``None``
+    and the legacy result is byte-identical to v0.2.x."""
 
     def as_summary(self) -> dict[str, Any]:
         """JSON-serialisable summary suitable for ProcessDossier export."""
@@ -133,6 +142,21 @@ class MethodSimulationResult:
             "gradient_elution_simulated": self.gradient_elution is not None,
             "weakest_tier": self.model_manifest.evidence_tier.value,
             "calibration_ref": self.model_manifest.calibration_ref,
+            "monte_carlo": (
+                None
+                if self.monte_carlo is None
+                else {
+                    "n_samples": self.monte_carlo.n_samples,
+                    "n_failures": self.monte_carlo.n_failures,
+                    "n_resampled": self.monte_carlo.n_resampled,
+                    "solver_unstable": self.monte_carlo.solver_unstable,
+                    "scalar_quantiles": self.monte_carlo.scalar_quantiles,
+                    "convergence_pass": (
+                        self.monte_carlo.convergence_diagnostics.all_quantiles_stable
+                        and self.monte_carlo.convergence_diagnostics.overlap_passes(0.05)
+                    ),
+                }
+            ),
         }
 
 
@@ -146,6 +170,8 @@ def run_method_simulation(
     fmc: Any | None = None,
     process_state: Any | None = None,
     dsd_payload: Any | None = None,
+    posterior_samples: "PosteriorSamples | None" = None,
+    mc_lrm_solver: LRMSolver | None = None,
 ) -> MethodSimulationResult:
     """Run the full M3 chromatography method, with optional DSD propagation.
 
@@ -211,6 +237,14 @@ def run_method_simulation(
     if gradient_elution is not None and gradient_elution.model_manifest is not None:
         assumptions.extend(gradient_elution.model_manifest.assumptions)
 
+    mc_bands = _maybe_run_monte_carlo(
+        recipe=recipe,
+        posterior_samples=posterior_samples,
+        mc_lrm_solver=mc_lrm_solver,
+    )
+    if mc_bands is not None:
+        assumptions.extend(mc_bands.model_manifest.assumptions)
+
     return MethodSimulationResult(
         representative=representative,
         dsd_quantile_results=dsd_results,
@@ -218,6 +252,50 @@ def run_method_simulation(
         model_manifest=manifest,
         assumptions=assumptions,
         wet_lab_caveats=wet_lab_caveats,
+        monte_carlo=mc_bands,
+    )
+
+
+def _maybe_run_monte_carlo(
+    *,
+    recipe: PerformanceRecipe,
+    posterior_samples: "PosteriorSamples | None",
+    mc_lrm_solver: LRMSolver | None,
+) -> MCBands | None:
+    """Dispatch the v0.3.0 MC LRM driver when the recipe opts in.
+
+    Smoke-baseline preservation (R-G3-1 / AC#5): when
+    ``recipe.dsd_policy.monte_carlo_n_samples == 0`` (default), this
+    function returns ``None`` immediately and the legacy
+    ``MethodSimulationResult`` is byte-identical to v0.2.x. The MC path
+    only fires when *all three* preconditions hold: ``n_samples > 0``,
+    ``posterior_samples is not None``, ``mc_lrm_solver is not None``.
+
+    The third precondition (``mc_lrm_solver`` not None) is intentional
+    — a higher-level helper that wires posterior parameters into the
+    underlying ``solve_lrm`` call site is targeted for v0.3.x follow-on.
+    For v0.3.0 the caller supplies the solver lambda explicitly so the
+    integration surface stays minimal.
+    """
+    policy = recipe.dsd_policy
+    if policy.monte_carlo_n_samples <= 0:
+        return None
+    if posterior_samples is None or mc_lrm_solver is None:
+        import logging
+        logging.getLogger("dpsim.module3_performance.method_simulation").warning(
+            "monte_carlo_n_samples=%d but posterior_samples=%s and "
+            "mc_lrm_solver=%s; MC dispatch skipped.",
+            policy.monte_carlo_n_samples,
+            "None" if posterior_samples is None else "<set>",
+            "None" if mc_lrm_solver is None else "<set>",
+        )
+        return None
+    return run_mc(
+        posterior_samples,
+        mc_lrm_solver,
+        n=policy.monte_carlo_n_samples,
+        n_seeds=policy.monte_carlo_n_seeds,
+        parameter_clips=policy.monte_carlo_parameter_clips,
     )
 
 

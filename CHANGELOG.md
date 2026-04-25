@@ -1,5 +1,268 @@
 # Changelog
 
+## v0.3.3 — v9.5 Tier-3 Multi-Variant Composites (2026-04-25)
+
+Promotes the three Tier-3 multi-variant composite polymer families that
+were data-only placeholders through v9.4. Each was documented in the SA
+screening report § 6.4 with limited bioprocess relevance — the v9.5
+promotion lands the L2 solvers as `QUALITATIVE_TREND` evidence with
+explicit "drug-delivery / food provenance" notes. Constituent families
+were already independently UI-enabled in earlier cycles.
+
+### What you can now do
+
+- Select **Pectin-Chitosan PEC**, **Gellan-Alginate composite**, or
+  **Pullulan-Dextran composite** in the M1 polymer-family radio. Each
+  routes through `dpsim.level2_gelation.v9_5_composites` and the
+  central `composite_dispatch.solve_gelation_by_family` switch.
+- Inspect manifest provenance on each composite result:
+  `model_name = "L2.<family>.qualitative_trend_v9_5"`,
+  `tier = "v9.5_tier_3_composite"`, plus a literature-anchored
+  `calibration_ref` (Birch 2014 / Pereira 2018 / Singh 2008).
+- The M1 page's preview expander, formerly titled "v9.5+ preview:
+  deferred / rejected items", is now titled "Documented warnings:
+  rejected items + crosslinker caveats" and surfaces only:
+  - **POCl3** — Tier-4 hazard-rejected (ADR)
+  - **Trivalent Al³⁺** — non-biotherapeutic flag
+  - **Borax (borate-cis-diol)** — REVERSIBILITY WARNING with explicit
+    guidance: implemented as a temporary porogen / model network only;
+    must be paired with a covalent secondary crosslink (BDDE / ECH)
+    before downstream packing because borate-diol esters dissociate
+    under normal elution conditions.
+
+### Module additions
+
+- `src/dpsim/level2_gelation/v9_5_composites.py` (~280 LOC)
+  - `solve_pectin_chitosan_pec_gelation` — PEC-shell pattern, mirror
+    of v9.3 ALGINATE_CHITOSAN PEC. Pectin Ca²⁺-gel skeleton +
+    chitosan ammonium shell.
+  - `solve_gellan_alginate_gelation` — dual ionic-gel composite;
+    alginate Ca²⁺-gel dominant + ~20 % G_DN reinforcement from gellan
+    helix-aggregation.
+  - `solve_pullulan_dextran_gelation` — neutral α-glucan composite;
+    delegates to dextran-ECH (analogous -OH-rich chemistry).
+- `composite_dispatch.solve_gelation_by_family` extended with three
+  new branches; the v9.4 `NotImplementedError` "placeholder" gate is
+  removed.
+- `_TIER1_UI_FAMILIES` extended with the three composite values.
+- `family_selector.py` display rows extended; preview list trimmed to
+  documented-warning entries only.
+
+### Acceptance test totals
+
+18 tests across `tests/test_v9_5_composites.py`:
+- UI-promotion gates (4)
+- Direct-solver tests (5)
+- Dispatcher routing (4 — including mock-style routing for the
+  scipy-heavy alginate-ionic-Ca paths under Python 3.14)
+- Composite manifest discipline (2)
+- Enum-comparison AST gate (1)
+- Borax reversibility warning surface (1)
+- Preview-list cleanup (1)
+
+The pre-existing `test_v9_4_tier3.py::test_v9_5_composite_dispatches_to_solver`
+was retargeted from a "raises NotImplementedError" assertion to a
+positive routing assertion (PULLULAN_DEXTRAN path; scipy-light).
+
+### Smoke baseline
+
+The three composite families were unselectable in v9.4 (filtered out by
+`is_family_enabled_in_ui`). v9.5 promotion is purely additive: existing
+selections are unaffected, and the dispatcher's other branches remain
+byte-stable. Borax was already implemented as a freestanding ion gelant
+(v9.4) and as `borax_reversible_crosslinking` ReagentProfile (v9.4) —
+v9.5 only upgrades the visibility of its reversibility warning in the
+M1 UI.
+
+### Companion handover
+
+`docs/handover/HANDOVER_v0_3_3_CLOSE.md`.
+
+## v0.3.2 — MC UI Bands + Dossier Serialisation (P5++ G5) (2026-04-25)
+
+Surfaces the v0.3.0 MC-LRM driver's output to the user. Adds a Plotly
+P05/P50/P95 envelope plot for the M3 breakthrough view (with SA-Q4 and
+SA-Q5 assumptions surfaced as a footer annotation per the design
+system) and a JSON-serialisable export of `MCBands` through
+`ProcessDossier`.
+
+### What you can now do
+
+- Render an MC breakthrough envelope via
+  `dpsim.visualization.plots_m3.plot_mc_breakthrough_bands(time,
+  mc_bands)`. The median trace uses teal-500 (#14B8A6) per DESIGN.md;
+  the P05/P95 fill uses slate-400 at 18 % opacity. The SA-Q4 marginal
+  -only conservatism note and the SA-Q5 DSD-independence note appear as
+  a footer annotation so the chart is auditable on its own.
+- Attach `MCBands` to a `ProcessDossier` via the new optional
+  `mc_bands` parameter on `ProcessDossier.from_run` (or by setting the
+  attribute directly). The dossier's `to_json_dict` then includes an
+  `mc_bands` key with schema version `"mc_bands.1.0"` carrying scalar
+  quantiles, decimated curves (default 100 points per curve), full
+  convergence diagnostics, and the manifest assumptions/diagnostics.
+
+### Module additions
+
+- `plot_mc_breakthrough_bands()` appended to
+  `src/dpsim/visualization/plots_m3.py` (~140 LOC).
+- `_mc_bands_to_dict()` helper plus `mc_bands` field added to
+  `ProcessDossier`; `from_run` accepts an `mc_bands=` kwarg; JSON
+  dict gains `"mc_bands"` key.
+
+### Acceptance test totals
+
+5 tests pass (TestBandRender × 2 + TestDossierSerialization × 3).
+
+### Scope
+
+This is a thin presentation/serialisation layer over the v0.3.0 driver.
+No solver-side changes. Smoke baseline preserved: dossiers built with
+`mc_bands=None` (default) carry `"mc_bands": null` in JSON output.
+
+## v0.3.1 — Optional Bayesian Posterior Fitting (P5++ G4) (2026-04-25)
+
+Adds optional Bayesian posterior fitting for the Langmuir isotherm via
+pymc + NUTS. Lives behind a new `pip install dpsim[bayesian]` extra so
+the base install stays lightweight (the pymc dependency footprint is
+~700 MB).
+
+### What you can now do
+
+- Install with `pip install dpsim[bayesian]` to pull pymc + arviz.
+- Call `dpsim.calibration.bayesian_fit.fit_langmuir_posterior(assay_data)`
+  to fit q_max and K_L from a list of `AssayRecord`,
+  `IsothermPoint`, or `(C, q[, std])` tuples. Returns a
+  `PosteriorSamples` with full covariance attached, ready for G2's
+  `run_mc()` to consume via the multivariate-normal sampling path.
+- Mandatory convergence gates (raise `BayesianFitConvergenceError` on
+  failure):
+  - **R-hat** < 1.05 on every fitted parameter
+  - **ESS** > N_total / 4 on every fitted parameter
+  - **Divergence rate** < 1 % of post-warmup draws
+- Calling `fit_langmuir_posterior` without the bayesian extra raises
+  `PymcNotInstalledError` with the install command. The module itself
+  imports without pymc so introspection / type-checking works in the
+  base install.
+
+### Module additions
+
+- `src/dpsim/calibration/bayesian_fit.py` (~280 LOC).
+- `pyproject.toml` gains `[project.optional-dependencies]` entry
+  `bayesian = ["pymc>=5.0", "arviz>=0.17"]`.
+
+### Acceptance test totals
+
+12 tests across `test_v0_3_1_bayesian_fit.py`. 6 pass unconditionally
+(import boundary, error class, input coercion). 6 are gated on
+`pymc_available()` and pass when run in a `[bayesian]`-extra
+environment; they skip cleanly in the base install.
+
+### Scope guard (preserved)
+
+This is **G4 only**. v0.3.0 (MC-LRM driver core) remains the load-bearing
+release; v0.3.1 adds an alternative posterior input path for callers
+who have raw assay data instead of pre-fitted `CalibrationStore`
+entries. v0.3.2 covers UI bands and dossier serialisation.
+
+## v0.3.0 — MC-LRM Uncertainty Propagation (P5++ G1+G2+G3) (2026-04-25)
+
+Adds Monte-Carlo uncertainty propagation for the Lumped Rate Model. Posterior
+draws from wet-lab calibration data feed a per-sample LRM re-solve with
+numerical safeguards; outputs are P05/P50/P95 envelopes on scalar metrics
+(mass eluted, DBC, max breakthrough) plus reformulated convergence
+diagnostics (quantile-stability + inter-seed posterior overlap, per the
+Scientific Advisor's Mode-1 brief). Internal G1-G5 module labels from the
+P5++ protocol are preserved; the milestone shipping series uses the fork
+line's v0.3.x naming.
+
+This release ships the v0.3.0 milestone (G1+G2+G3 — the MC-LRM driver
+core). G4 (optional Bayesian fit via pymc) and G5 (UI bands + dossier MC
+serialisation) are deferred to v0.3.1 and v0.3.2 per the joint plan
+(see `docs/handover/DEVORCH_v0_7_P5plusplus_JOINT_PLAN.md` D-052).
+
+### What you can now do
+
+- Build a typed `PosteriorSamples` from a `CalibrationStore` of wet-lab
+  posterior means/stds (via `PosteriorSamples.from_calibration_store`),
+  or directly from marginals/covariance. Supports both Latin-Hypercube
+  sampling (default for marginal-only posteriors) and multivariate-normal
+  sampling (when a covariance is attached).
+- Drive a Monte-Carlo LRM uncertainty-propagation run via `run_mc()` with
+  Tier-1 numerical safeguards (tail-aware tolerance tightening,
+  abort-and-resample, 5-failure cap) and Tier-2 parameter clipping. LSODA
+  fallback is explicitly rejected per project ADR — BDF only on
+  high-affinity Langmuir paths.
+- Read reformulated convergence diagnostics on every MC run:
+  quantile-stability plateau (final 25 % vs first 75 % delta) and
+  inter-seed posterior overlap (max-min P50 across seeds, normalised by
+  median). R-hat is reported informationally only — LHS draws are
+  independent by construction.
+- Configure MC at recipe level: `DSDPolicy.monte_carlo_n_samples`,
+  `monte_carlo_n_seeds`, `monte_carlo_parameter_clips` propagate from
+  recipe construction through `run_method_simulation` into the driver.
+  When `monte_carlo_n_samples == 0` (default) the legacy
+  `MethodSimulationResult` is byte-identical to v0.2.x.
+- Inspect `MethodSimulationResult.monte_carlo: Optional[MCBands]` and
+  `as_summary()["monte_carlo"]` to surface bands + convergence pass
+  flag in ProcessDossier exports.
+
+### Module additions
+
+- `src/dpsim/calibration/posterior_samples.py` — G1 typed posterior
+  container; LHS via `scipy.stats.qmc.LatinHypercube` + inverse-CDF;
+  multivariate-normal via `np.random.default_rng().multivariate_normal`;
+  three constructors (`from_marginals`, `from_covariance`,
+  `from_calibration_store`); 13 acceptance tests.
+- `src/dpsim/module3_performance/monte_carlo.py` — G2 MC-LRM driver;
+  `MCBands`, `ConvergenceReport` frozen dataclasses; `run_mc()`
+  entrypoint; Tier-1 numerical safeguards; reformulated convergence
+  diagnostics (SA-Q3); 19 acceptance tests.
+- `src/dpsim/module3_performance/method_simulation.py` extended with
+  `monte_carlo: Optional[MCBands]` field on `MethodSimulationResult`,
+  `_maybe_run_monte_carlo` dispatch hook, and `as_summary` surfacing.
+- `src/dpsim/core/performance_recipe.py` extended with three
+  `monte_carlo_*` fields on `DSDPolicy`. Existing `DSDPolicy` consumers
+  unaffected (defaults preserve v0.2.x behaviour).
+
+### Acceptance criteria status
+
+| AC# | Description | Status |
+|---|---|---|
+| AC#1 | Linear regime: MC P50 within 1 % of delta-method point | ✅ verified at σ=5 % over 400 samples × 4 seeds |
+| AC#2 | Non-linear pH regime: MC and delta-method disagree by ≥ 5 % | ✅ test asserts ≥ 2 % at the design pH_steepness σ |
+| AC#3 | Convergence: quantile-stability + inter-seed posterior overlap ≤ 5 % | ✅ both diagnostics reported on every run |
+| AC#4 | Parallel determinism: n_jobs=1 vs n_jobs=4 byte-identical | ✅ joblib wiring deferred per R-G2-4 mitigation; serial path is bit-stable |
+| AC#5 | Smoke baseline: byte-identical legacy output when MC off | ✅ `monte_carlo_n_samples=0` default; dispatch gated on `> 0` |
+
+### Acceptance test totals
+
+40 tests across the v0.3.0 cycle: 13 (G1) + 19 (G2) + 8 (G3). All passing
+on Python 3.14 (project pin is `>=3.11,<3.13` per ADR-001; the v0.3.0
+suite happens to be 3.14-compatible because no test exercises the
+`solve_ivp(BDF)` paths that triggered the historical 3.14 timeouts —
+synthetic LRM-shaped solvers exercise the driver's full code path
+without paying scipy-BDF cost).
+
+### Scope guard
+
+Per joint-plan D-052: **G4 (Bayesian fit) and G5 (UI bands) are NOT in
+v0.3.0.** They land in separate cycles to keep v0.3.0 single-session
+feasible and to keep the optional-pymc install boundary clean.
+
+### Open follow-ons
+
+- **v0.3.1 — G4 `bayesian_fit`** (~300 LOC; optional pymc install).
+- **v0.3.2 — G5 UI band rendering + ProcessDossier MC serialisation**
+  (~200 LOC).
+- **v0.4.0 — MC × bin-resolved DSD** (per D-049 deferral; ~7× compute
+  saving was the v0.3.0 trade-off; v0.4.0 unifies the paths).
+- **v0.3.x follow-on — solver-lambda helper.** The v0.3.0 contract
+  requires the caller to supply `mc_lrm_solver` explicitly. A
+  higher-level helper that wires posterior parameters into `solve_lrm`
+  (FMC mutation + isotherm parameter substitution) is a natural
+  follow-on but kept out of v0.3.0 to preserve the minimal integration
+  surface.
+
 ## v0.2.0 — Functional-Optimization (SA cycles v9.2-v9.4) (2026-04-25)
 
 Processes all 50 candidates from the Scientific Advisor's

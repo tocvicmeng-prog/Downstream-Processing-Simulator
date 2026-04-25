@@ -6,6 +6,7 @@ overrides semi-quantitative defaults in FunctionalMediaContract.
 
 from .calibration_data import CalibrationEntry
 from .calibration_store import CalibrationStore
+from .posterior_samples import PosteriorSamples
 
-__all__ = ["CalibrationEntry", "CalibrationStore"]
+__all__ = ["CalibrationEntry", "CalibrationStore", "PosteriorSamples"]
 

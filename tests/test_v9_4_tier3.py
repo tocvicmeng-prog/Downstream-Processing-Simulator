@@ -44,7 +44,12 @@ V9_4_TIER3_PROMOTED_FAMILIES = [
     PolymerFamily.STARCH,
 ]
 
-V9_4_TIER3_PLACEHOLDER_FAMILIES = [
+# v9.5 update: the three multi-variant composite families that were
+# v9.4 data-only placeholders are now UI-enabled and dispatched via
+# v9_5_composites.py. The variable name is preserved for git-blame
+# continuity but the "PLACEHOLDER" semantics no longer apply — these
+# tests assert post-promotion state.
+V9_4_TIER3_PLACEHOLDER_FAMILIES: list = [
     PolymerFamily.PECTIN_CHITOSAN,
     PolymerFamily.GELLAN_ALGINATE,
     PolymerFamily.PULLULAN_DEXTRAN,
@@ -61,9 +66,14 @@ class TestV9_4_Tier3UIPromotion:
         )
 
     @pytest.mark.parametrize("fam", V9_4_TIER3_PLACEHOLDER_FAMILIES)
-    def test_tier3_composite_remains_placeholder(self, fam):
-        """v9.4: multi-variant composites stay data-only until v9.5+."""
-        assert is_family_enabled_in_ui(fam) is False
+    def test_tier3_composite_promoted_in_v9_5(self, fam):
+        """v9.5 promotion: multi-variant composites are now UI-enabled.
+
+        Asserts the post-v9.5 state. The historical v9.4 placeholder
+        gate is preserved in git history; promotion is documented in
+        ``HANDOVER_v0_3_3_CLOSE.md`` and the v0.3.3 CHANGELOG entry.
+        """
+        assert is_family_enabled_in_ui(fam) is True
 
 
 class TestV9_4_Tier3SolverDirect:
@@ -114,15 +124,26 @@ class TestV9_4_Tier3Dispatch:
         assert result is not None
         assert result.pore_size_mean > 0
 
-    @pytest.mark.parametrize("fam", V9_4_TIER3_PLACEHOLDER_FAMILIES)
-    def test_composite_placeholders_raise_not_implemented(self, fam):
-        """v9.4 multi-variant composites must raise NotImplementedError
-        with a clear v9.5 deferral message."""
-        props = replace(MaterialProperties(), polymer_family=fam)
-        with pytest.raises(NotImplementedError, match="Tier-3"):
-            solve_gelation_by_family(
-                SimulationParameters(), props, R_droplet=50e-6,
-            )
+    def test_v9_5_composite_dispatches_to_solver(self):
+        """v9.5 promotion: multi-variant composites now route to a real
+        solver in ``v9_5_composites``. The detailed dispatch tests live
+        in ``test_v9_5_composites.py`` (with mock-style routing for the
+        scipy-heavy paths). Here we use only the scipy-light
+        ``PULLULAN_DEXTRAN`` path (dextran-ECH delegate) so the test is
+        robust under the Python 3.14 + scipy BDF environment quirk
+        (CLAUDE.md). The legacy ``NotImplementedError`` gate would
+        manifest with "placeholder" in the message; we assert that's
+        gone for the only path we can safely exercise here.
+        """
+        props = replace(
+            MaterialProperties(),
+            polymer_family=PolymerFamily.PULLULAN_DEXTRAN,
+        )
+        result = solve_gelation_by_family(
+            SimulationParameters(), props, R_droplet=50e-6,
+        )
+        assert result is not None
+        assert result.model_tier == "pullulan_dextran_v9_5"
 
 
 class TestV9_4_Tier3IonGelants:

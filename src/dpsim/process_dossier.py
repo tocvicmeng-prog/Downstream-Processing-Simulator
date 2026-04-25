@@ -84,6 +84,78 @@ def _capture_environment() -> dict:
     return env
 
 
+def _mc_bands_to_dict(
+    mc_bands: Any,
+    *,
+    decimate_curves_to: int | None = 100,
+) -> dict | None:
+    """Serialise an :class:`MCBands` to a JSON-friendly dict (G5 / v0.3.2).
+
+    Parameters
+    ----------
+    mc_bands : MCBands | None
+        Output of :func:`run_mc`; ``None`` returns ``None``.
+    decimate_curves_to : int | None
+        When set, evenly subsamples each curve in ``curve_bands`` to this
+        many points to keep dossier JSON size bounded. Pass ``None`` to
+        export full-resolution curves.
+
+    Returns
+    -------
+    dict | None
+        JSON-safe dict; ``None`` when ``mc_bands`` is ``None``. Schema:
+
+        ``schema_version="mc_bands.1.0"``, ``n_samples``, ``n_failures``,
+        ``n_resampled``, ``solver_unstable``, ``scalar_quantiles``,
+        ``curve_bands`` (decimated), ``convergence_diagnostics``,
+        ``manifest_assumptions``, ``manifest_diagnostics``.
+    """
+    if mc_bands is None:
+        return None
+
+    import numpy as np
+
+    def _decimate(arr: Any) -> list:
+        a = np.asarray(arr, dtype=float)
+        if decimate_curves_to is None or len(a) <= decimate_curves_to:
+            return a.tolist()
+        idx = np.linspace(0, len(a) - 1, decimate_curves_to).round().astype(int)
+        return a[idx].tolist()
+
+    curve_bands_serialised = {
+        name: _decimate(arr) for name, arr in (mc_bands.curve_bands or {}).items()
+    }
+
+    cd = mc_bands.convergence_diagnostics
+    convergence_dict = {
+        "quantile_stability": dict(cd.quantile_stability),
+        "inter_seed_posterior_overlap": dict(cd.inter_seed_posterior_overlap),
+        "inter_seed_envelope": dict(cd.inter_seed_envelope),
+        "r_hat_informational": dict(cd.r_hat_informational),
+        "all_quantiles_stable": cd.all_quantiles_stable,
+    }
+
+    manifest = mc_bands.model_manifest
+    return {
+        "schema_version": "mc_bands.1.0",
+        "n_samples": int(mc_bands.n_samples),
+        "n_failures": int(mc_bands.n_failures),
+        "n_resampled": int(mc_bands.n_resampled),
+        "n_clipped": dict(mc_bands.n_clipped or {}),
+        "solver_unstable": bool(mc_bands.solver_unstable),
+        "scalar_quantiles": {
+            metric: {k: float(v) for k, v in q.items()}
+            for metric, q in (mc_bands.scalar_quantiles or {}).items()
+        },
+        "curve_bands": curve_bands_serialised,
+        "curve_bands_decimated_to": decimate_curves_to,
+        "convergence_diagnostics": convergence_dict,
+        "manifest_assumptions": list(manifest.assumptions),
+        "manifest_diagnostics": dict(manifest.diagnostics),
+        "manifest_calibration_ref": manifest.calibration_ref,
+    }
+
+
 @dataclass
 class ProcessDossier:
     """Top-level run-record artifact (Node 16).
@@ -100,6 +172,9 @@ class ProcessDossier:
     target_profile: Optional[TargetProductProfile] = None
     environment: dict = field(default_factory=dict)
     notes: str = ""
+    mc_bands: Any = None
+    """v0.3.2 (G5): optional MCBands carrying the M3 MC-LRM uncertainty
+    output. ``None`` (default) preserves v0.2.x dossier byte layout."""
 
     @classmethod
     def from_run(
@@ -109,6 +184,7 @@ class ProcessDossier:
         assay_records: Optional[list] = None,
         target_profile: Optional[TargetProductProfile] = None,
         notes: str = "",
+        mc_bands: Any = None,
     ) -> "ProcessDossier":
         """Build a dossier around a completed FullResult.
 
@@ -141,6 +217,7 @@ class ProcessDossier:
             target_profile=target_profile,
             environment=_capture_environment(),
             notes=notes,
+            mc_bands=mc_bands,
         )
 
     def to_json_dict(self) -> dict:
@@ -212,6 +289,7 @@ class ProcessDossier:
             ),
             "environment": self.environment,
             "notes": self.notes,
+            "mc_bands": _mc_bands_to_dict(self.mc_bands),
         }
 
     def export_json(self, path: Path) -> Path:

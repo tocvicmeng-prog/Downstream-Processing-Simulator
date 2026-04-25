@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "downstream-processing-simulator"
-version = "0.1.0"
+version = "0.3.3"
 description = "Lifecycle simulation of double-emulsification microsphere fabrication, functional ligand crosslinking, and affinity chromatography performance"
 requires-python = ">=3.11,<3.13"
 license = { file = "LICENSE" }
@@ -33,7 +33,12 @@ optimization = ["botorch~=0.17.2", "gpytorch~=1.15.2", "torch~=2.11.0"]
 interactive = ["plotly>=5.18", "jupyter"]
 ui = ["streamlit>=1.30", "plotly>=5.18"]
 dev = ["pytest>=7.4", "pytest-timeout>=2.3", "hypothesis>=6.90", "rich>=13.0", "numba>=0.59"]
-all = ["downstream-processing-simulator[optimization,interactive,dev,ui]"]
+# v0.3.1 (G4): optional Bayesian posterior fitting for the MC-LRM driver.
+# pymc + arviz are heavy (~700 MB combined). The base install never imports
+# them; bayesian_fit.fit_langmuir_posterior raises PymcNotInstalledError
+# with the install command when called without this extra.
+bayesian = ["pymc>=5.0", "arviz>=0.17"]
+all = ["downstream-processing-simulator[optimization,interactive,dev,ui,bayesian]"]
 
 [project.scripts]
 dpsim = "dpsim.__main__:main"

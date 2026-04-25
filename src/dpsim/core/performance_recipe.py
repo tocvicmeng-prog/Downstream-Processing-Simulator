@@ -48,12 +48,27 @@ class DSDPolicy:
         n_jobs: Reserved for joblib-parallel per-quantile execution. Not
             consumed in v0.2.0; kept on the API for forward compatibility
             with the v0.4.0 bin-resolved DSD work.
+        monte_carlo_n_samples: v0.3.0 (G3) — number of Monte-Carlo posterior
+            samples for LRM uncertainty propagation. ``0`` (default) disables
+            MC entirely and preserves bit-identical legacy behaviour. ``> 0``
+            requires both a ``posterior_samples`` and an ``mc_lrm_solver`` to
+            be passed to ``run_method_simulation`` for the MC path to fire.
+        monte_carlo_n_seeds: v0.3.0 (G3) — number of independent seed-wise
+            sub-runs for inter-seed posterior overlap (SA-Q3 / D-047). Default
+            4 per the architect spec. Has effect only when
+            ``monte_carlo_n_samples > 0``.
+        monte_carlo_parameter_clips: v0.3.0 (G3) — optional Tier-2 clipping
+            (SA-Q1 / D-046). Mapping ``{parameter_name: (lo, hi)}``. Has
+            effect only when ``monte_carlo_n_samples > 0``.
     """
 
     quantiles: tuple[float, ...] = (0.10, 0.50, 0.90)
     run_full_method: bool = False
     fast_pressure_screen: bool = True
     n_jobs: int = 1
+    monte_carlo_n_samples: int = 0
+    monte_carlo_n_seeds: int = 4
+    monte_carlo_parameter_clips: dict[str, tuple[float, float]] | None = None
 
 
 @dataclass

@@ -252,29 +252,41 @@ def solve_gelation_by_family(
             mode=mode, timing=timing,
         )
 
-    # ── v9.4 Tier-3 multi-variant composites — data-only placeholders ─
-    # PECTIN_CHITOSAN, GELLAN_ALGINATE, PULLULAN_DEXTRAN are documented
-    # in PolymerFamily but their full solvers are deferred to v9.5.
-    tier_3_composite_placeholders = {
-        PolymerFamily.PECTIN_CHITOSAN.value,
-        PolymerFamily.GELLAN_ALGINATE.value,
-        PolymerFamily.PULLULAN_DEXTRAN.value,
-    }
-    if fam_value in tier_3_composite_placeholders:
-        raise NotImplementedError(
-            f"PolymerFamily {fam_value!r} is a v9.4 Tier-3 multi-variant "
-            f"composite placeholder. L2 solver lands in v9.5 if "
-            f"bioprocess-relevance evidence justifies. Use the constituent "
-            f"single-polymer Tier-3 families (PECTIN, GELLAN, PULLULAN) "
-            f"for v9.4 work."
+    # ── v9.5 Tier-3 multi-variant composite promotions ────────────────
+    # Promoted from v9.4 data-only placeholders. Each delegates to the
+    # closest single-component solver (alginate ionic-Ca for the
+    # PEC/co-gelation paths, dextran-ECH for the neutral-glucan path)
+    # and re-tags with composite provenance per the v9_5_composites
+    # module's _retag_composite helper.
+    if fam_value == PolymerFamily.PECTIN_CHITOSAN.value:
+        from .v9_5_composites import solve_pectin_chitosan_pec_gelation
+        return solve_pectin_chitosan_pec_gelation(
+            params=params, props=props, R_droplet=R_droplet,
+            mode=mode, timing=timing,
+        )
+
+    if fam_value == PolymerFamily.GELLAN_ALGINATE.value:
+        from .v9_5_composites import solve_gellan_alginate_gelation
+        return solve_gellan_alginate_gelation(
+            params=params, props=props, R_droplet=R_droplet,
+            mode=mode, timing=timing,
+        )
+
+    if fam_value == PolymerFamily.PULLULAN_DEXTRAN.value:
+        from .v9_5_composites import solve_pullulan_dextran_gelation
+        return solve_pullulan_dextran_gelation(
+            params=params, props=props, R_droplet=R_droplet,
+            mode=mode, timing=timing,
         )
 
     raise ValueError(
         f"Unknown polymer_family.value = {fam_value!r}. "
         f"Known UI-enabled families: AGAROSE_CHITOSAN, AGAROSE, CHITOSAN, "
         f"DEXTRAN, AMYLOSE, HYALURONATE, KAPPA_CARRAGEENAN, AGAROSE_DEXTRAN, "
-        f"AGAROSE_ALGINATE, ALGINATE_CHITOSAN, CHITIN, plus pipeline-branch "
-        f"families ALGINATE/CELLULOSE/PLGA."
+        f"AGAROSE_ALGINATE, ALGINATE_CHITOSAN, CHITIN, PECTIN, GELLAN, "
+        f"PULLULAN, STARCH, PECTIN_CHITOSAN, GELLAN_ALGINATE, "
+        f"PULLULAN_DEXTRAN, plus pipeline-branch families ALGINATE/"
+        f"CELLULOSE/PLGA."
     )
 
 

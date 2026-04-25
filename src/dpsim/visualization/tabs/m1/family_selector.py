@@ -108,6 +108,19 @@ _FAMILY_DISPLAY: list[tuple[str, PolymerFamily, str]] = [
      "Crosslinked porous starch bead; gelatinization, retrogradation, "
      "and amylase-degradation flags. Research-mode only "
      "(v9.4 QUALITATIVE_TREND)."),
+    # v9.5 Tier-3 multi-variant composite additions (SA screening § 6.4)
+    ("Pectin-Chitosan PEC", PolymerFamily.PECTIN_CHITOSAN,
+     "Polyelectrolyte complex: pectin Ca²⁺-gel skeleton + chitosan "
+     "ammonium PEC shell. pH-controlled drug-delivery; pH window "
+     "5.5–6.5 (v9.5 QUALITATIVE_TREND)."),
+    ("Gellan-Alginate composite", PolymerFamily.GELLAN_ALGINATE,
+     "Dual ionic-gel composite: alginate Ca²⁺-gel dominant + ~20 % G_DN "
+     "reinforcement from gellan helix-aggregation. Food provenance "
+     "(v9.5 QUALITATIVE_TREND)."),
+    ("Pullulan-Dextran composite", PolymerFamily.PULLULAN_DEXTRAN,
+     "Neutral α-glucan composite microbeads; ECH/STMP crosslinked. "
+     "Drug-delivery dominant; structurally analogous to dextran-ECH "
+     "alone (v9.5 QUALITATIVE_TREND)."),
 ]
 
 
@@ -121,31 +134,30 @@ def _enabled_rows() -> list[tuple[str, PolymerFamily, str]]:
     return [row for row in _FAMILY_DISPLAY if is_family_enabled_in_ui(row[1])]
 
 
-# v9.4 update: Tier-3 single-polymer families (PECTIN, GELLAN, PULLULAN,
-# STARCH) have been promoted to selectable status. The preview list now
-# records v9.5+ deferred items: Tier-3 multi-variant composites
-# (pectin-chitosan, gellan-alginate, pullulan-dextran), the rejected
-# Tier-4 reagent (POCl3), and notable crosslinker flags that contributors
-# should be aware of (Al³⁺ non-biotherapeutic, borax reversibility).
+# v9.5 update: Tier-3 multi-variant composites (PECTIN_CHITOSAN,
+# GELLAN_ALGINATE, PULLULAN_DEXTRAN) have been promoted to selectable
+# status with their solver lambdas in
+# ``src/dpsim/level2_gelation/v9_5_composites.py``. The preview list now
+# records only the items that remain documented-warning entries: the
+# rejected Tier-4 reagent (POCl3), and crosslinker flags that contributors
+# should be aware of when configuring formulations (Al³⁺ non-biotherapeutic,
+# borax reversibility).
 _TIER2_PREVIEW_ROWS: list[tuple[str, str]] = [
-    ("Pectin-chitosan polyelectrolyte complex (PEC)",
-     "v9.5 deferred: pectin + chitosan PEC; drug-delivery dominant. "
-     "Constituent pectin available as v9.4 Tier-3."),
-    ("Gellan-alginate composite",
-     "v9.5 deferred: gellan + alginate co-gelation; food provenance. "
-     "Constituents available as Tier-1/Tier-3."),
-    ("Pullulan-dextran composite",
-     "v9.5 deferred: pullulan + dextran composite microbeads; mostly "
-     "drug-delivery applications."),
     ("POCl3 (phosphoryl chloride) — Tier-4 REJECTED",
      "Hazard-rejected: violent reaction with water (HCl release); "
      "food-grade starch context only. Documented as ADR; not implemented."),
     ("Trivalent Al³⁺ gelant — non-biotherapeutic flag",
      "v9.4 Tier-3 implemented behind biotherapeutic_safe=False gate; "
      "documented here for awareness."),
-    ("Reversible borate-cis-diol crosslinking (borax)",
-     "v9.4 Tier-3 implemented as research / temporary porogen; "
-     "documented here for the reversibility warning."),
+    ("Reversible borate-cis-diol crosslinking (borax) — REVERSIBILITY WARNING",
+     "Implemented as a freestanding ion gelant (v9.4 Tier-3) and as a "
+     "ReagentProfile (borax_reversible_crosslinking) for use as a "
+     "TEMPORARY POROGEN or model network during synthesis. Borate-diol "
+     "esters dissociate at pH < 8.5 or in the presence of competing "
+     "diols/sugars, so borax is NOT suitable as the FINAL crosslinker on "
+     "a chromatography matrix — the network would dissociate under "
+     "normal elution. Always pair with a covalent secondary crosslink "
+     "(BDDE / ECH) before downstream packing."),
 ]
 
 
@@ -186,17 +198,24 @@ def render_family_selector(*, key: str = "m1v9_polymer_family") -> FamilyContext
     family = enums[idx]
     st.caption(f"**{sel_name}** — {helps[idx]}")
 
-    # v9.4 update: Tier-3 single-polymer families have been promoted
-    # (selectable above). The preview now records v9.5+ deferred
-    # items: multi-variant composites and rejected Tier-4 chemistries.
-    with st.expander("v9.5+ preview: deferred / rejected items",
+    # v9.5 update: the three Tier-3 multi-variant composites
+    # (pectin-chitosan, gellan-alginate, pullulan-dextran) are now
+    # selectable above. The preview now records only documented
+    # warnings: hazard-rejected Tier-4 chemistries and crosslinker
+    # caveats (Al³⁺ non-biotherapeutic, borax reversibility) that
+    # contributors should be aware of when configuring formulations.
+    with st.expander("Documented warnings: rejected items + crosslinker caveats",
                       expanded=False):
         st.caption(
-            "Items documented in the SA screening report but not "
-            "implemented in v9.4. Multi-variant composites are deferred "
-            "pending bioprocess-relevance evidence; POCl3 is hazard-"
-            "rejected (Tier-4). Listed here for roadmap visibility and "
-            "contributor awareness."
+            "Items documented in the SA screening report as warnings or "
+            "rejections rather than separate selectable families. POCl3 "
+            "is hazard-rejected (Tier-4 ADR). Al³⁺ trivalent gelation is "
+            "implemented but biotherapeutic_safe=False. Borax (borate-"
+            "cis-diol) is implemented as a TEMPORARY POROGEN only — its "
+            "crosslinks dissociate under normal elution, so it must be "
+            "followed by a covalent secondary crosslink (BDDE/ECH) "
+            "before downstream packing. Listed here for contributor "
+            "awareness."
         )
         for row_name, row_help in _TIER2_PREVIEW_ROWS:
             st.markdown(f"- **{row_name}** — {row_help}")

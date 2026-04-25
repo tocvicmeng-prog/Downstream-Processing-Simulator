@@ -108,13 +108,18 @@ _TIER1_UI_FAMILIES: frozenset[str] = frozenset({
     # v9.4 Tier-3 promotions (SA screening § 6.3) — niche / lower
     # bioprocess relevance, but UI-enabled with QUALITATIVE_TREND or
     # SEMI_QUANTITATIVE evidence and explicit "research-mode only"
-    # warnings where appropriate. The simpler composites (pectin-
-    # chitosan, gellan-alginate, pullulan-dextran) remain data-only
-    # placeholders for v9.5+ pending bioprocess-relevance evidence.
+    # warnings where appropriate.
     PolymerFamily.PECTIN.value,
     PolymerFamily.GELLAN.value,
     PolymerFamily.PULLULAN.value,
     PolymerFamily.STARCH.value,
+    # v9.5 Tier-3 multi-variant composite promotions (SA screening § 6.4) —
+    # promoted from data-only placeholder status. Each carries
+    # QUALITATIVE_TREND evidence pending composite-specific wet-lab data;
+    # constituents are independently UI-enabled.
+    PolymerFamily.PECTIN_CHITOSAN.value,
+    PolymerFamily.GELLAN_ALGINATE.value,
+    PolymerFamily.PULLULAN_DEXTRAN.value,
 })
 
 # Families where the polymer IS the affinity matrix (B9 pattern).

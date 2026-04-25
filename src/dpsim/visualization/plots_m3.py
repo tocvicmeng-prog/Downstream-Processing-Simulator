@@ -684,3 +684,142 @@ def plot_pressure_flow_curve(
     )
     return fig
 
+
+# \u2500\u2500\u2500 5. Monte-Carlo band overlay (v0.3.2 / G5) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+
+def plot_mc_breakthrough_bands(
+    time: np.ndarray,
+    mc_bands: object,  # MCBands; loose-typed to avoid heavy import
+    C_feed: float | None = None,
+    curve_name: str = "C_outlet",
+) -> go.Figure:
+    """P05/P50/P95 envelope overlay for an MC breakthrough run (G5).
+
+    Renders the three quantile traces from
+    ``MCBands.curve_bands[curve_name + '_p{05,50,95}']`` plus a
+    ``slate-400`` translucent fill between P05 and P95. Per DESIGN.md
+    the median uses teal-500 (#14B8A6); no purple gradients, no
+    decorative animations. SA-Q4 (independence assumption when
+    marginal-only) and SA-Q5 (DSD \u00d7 MC variance independence) are
+    surfaced as a footer annotation reading off
+    ``mc_bands.model_manifest.assumptions``.
+
+    Parameters
+    ----------
+    time : np.ndarray
+        Time vector (seconds); plotted in minutes.
+    mc_bands : MCBands
+        Output of :func:`dpsim.module3_performance.monte_carlo.run_mc`.
+    C_feed : float | None
+        Optional feed concentration; when supplied, the y-axis is
+        normalised to C/C0.
+    curve_name : str
+        Stem of the curve in ``mc_bands.curve_bands``. Default
+        ``"C_outlet"`` matches :func:`default_lrm_curves`.
+
+    Returns
+    -------
+    go.Figure
+    """
+    p05_key = f"{curve_name}_p05"
+    p50_key = f"{curve_name}_p50"
+    p95_key = f"{curve_name}_p95"
+    bands = getattr(mc_bands, "curve_bands", {})
+    if p50_key not in bands:
+        raise KeyError(
+            f"mc_bands.curve_bands missing {p50_key!r}; available keys: {list(bands)}"
+        )
+    p05 = np.asarray(bands[p05_key], dtype=float)
+    p50 = np.asarray(bands[p50_key], dtype=float)
+    p95 = np.asarray(bands[p95_key], dtype=float)
+
+    n = min(len(p05), len(p50), len(p95), len(time))
+    p05, p50, p95 = p05[:n], p50[:n], p95[:n]
+    t_min = np.asarray(time, dtype=float)[:n] / 60.0
+
+    if C_feed is not None and C_feed > 0:
+        p05 = p05 / C_feed
+        p50 = p50 / C_feed
+        p95 = p95 / C_feed
+        y_title = "C/C\u2080"
+    else:
+        y_title = "C_outlet (mol/m\u00b3)"
+
+    fig = go.Figure()
+
+    # Envelope (slate-400 translucent fill \u2014 design system)
+    fig.add_trace(go.Scatter(
+        x=np.concatenate([t_min, t_min[::-1]]),
+        y=np.concatenate([p95, p05[::-1]]),
+        fill="toself",
+        fillcolor="rgba(148, 163, 184, 0.18)",  # slate-400 @ 18%
+        line=dict(color="rgba(0,0,0,0)"),
+        name="P05 - P95 envelope",
+        hoverinfo="skip",
+        showlegend=True,
+    ))
+
+    # P95 boundary (faint)
+    fig.add_trace(go.Scatter(
+        x=t_min, y=p95, mode="lines", name="P95",
+        line=dict(color="rgba(71, 85, 105, 0.6)", width=1, dash="dot"),
+        hovertemplate="P95: %{y:.3g}<extra></extra>",
+    ))
+
+    # P50 (median \u2014 teal-500 per DESIGN.md)
+    fig.add_trace(go.Scatter(
+        x=t_min, y=p50, mode="lines", name="P50 (median)",
+        line=dict(color="#14B8A6", width=2.5),
+        hovertemplate="P50: %{y:.3g}<extra></extra>",
+    ))
+
+    # P05 boundary (faint)
+    fig.add_trace(go.Scatter(
+        x=t_min, y=p05, mode="lines", name="P05",
+        line=dict(color="rgba(71, 85, 105, 0.6)", width=1, dash="dot"),
+        hovertemplate="P05: %{y:.3g}<extra></extra>",
+    ))
+
+    # SA-Q4/Q5 assumptions footer
+    manifest = getattr(mc_bands, "model_manifest", None)
+    assumptions = getattr(manifest, "assumptions", []) if manifest is not None else []
+    footer_lines = []
+    for a in assumptions:
+        if "marginal-only" in a or "independent parameters" in a:
+            footer_lines.append("SA-Q4: " + a.split(";")[0].strip())
+        elif "MC parameter variance and DSD" in a:
+            footer_lines.append("SA-Q5: parameter and DSD geometric variance treated as independent")
+    n_samples = getattr(mc_bands, "n_samples", 0)
+    n_failures = getattr(mc_bands, "n_failures", 0)
+    n_resampled = getattr(mc_bands, "n_resampled", 0)
+    footer_lines.append(
+        f"N={n_samples} successful samples"
+        + (f", {n_failures} failures" if n_failures else "")
+        + (f", {n_resampled} resampled" if n_resampled else "")
+    )
+    if footer_lines:
+        fig.add_annotation(
+            xref="paper", yref="paper",
+            x=0.0, y=-0.18,
+            xanchor="left", yanchor="top",
+            text="<br>".join(footer_lines),
+            showarrow=False,
+            font=dict(size=11, color="#475569"),  # slate-600
+            align="left",
+        )
+
+    title = "Breakthrough \u2014 Monte-Carlo P05/P50/P95"
+    if getattr(mc_bands, "solver_unstable", False):
+        title += " (SOLVER UNSTABLE)"
+
+    fig.update_xaxes(title_text="Time (min)")
+    fig.update_yaxes(title_text=y_title)
+    fig.update_layout(
+        title=title,
+        height=440,
+        margin=dict(b=110),  # room for footer
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    return fig
+
