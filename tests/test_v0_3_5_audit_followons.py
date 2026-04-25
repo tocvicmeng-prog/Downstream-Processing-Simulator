@@ -132,8 +132,15 @@ class TestACSSiteTypeCoverage:
     def test_known_unreferenced_acs_types_remain_documented(self) -> None:
         """Spot-check the documented unreferenced set so a future
         addition that closes one of these gaps trips the test (the
-        team should celebrate AND update the doc)."""
-        documented_unreferenced = {"alkyne", "sulfate_ester"}
+        team should celebrate AND update the doc).
+
+        v0.3.6 update: alkyne was closed by adding inverse-direction
+        click reagents (cuaac_click_alkyne_side, spaac_click_alkyne_side).
+        Only sulfate_ester remains — that's a passive κ-carrageenan
+        polymer-side surface group, not a reagent target, and is
+        expected to stay unreferenced indefinitely.
+        """
+        documented_unreferenced = {"sulfate_ester"}
 
         referenced: set[str] = set()
         for profile in REAGENT_PROFILES.values():

@@ -2423,6 +2423,74 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         ),
     ),
 
+    # ── v0.3.6: inverse-direction click reagents ──────────────────────
+    # Click reactions are bidirectional w.r.t. which partner sits on the
+    # resin vs the ligand. The two profiles above (cuaac_click_coupling
+    # / spaac_click_coupling) target AZIDE-functionalised resin. The
+    # two below target ALKYNE-functionalised resin — equally common in
+    # practice. Adding both directions also closes the v0.3.5 audit gap
+    # where ALKYNE was unreferenced via target_acs / product_acs.
+
+    # CuAAC, alkyne-on-resin direction.
+    "cuaac_click_alkyne_side": ReagentProfile(
+        name="CuAAC click handle (alkyne on resin; azide ligand)",
+        cas="N/A (chemistry class)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.ALKYNE,
+        product_acs=None,
+        k_forward=10.0,
+        E_a=20000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=0.0,
+        ph_optimum=7.4,
+        temperature_default=298.15,
+        time_default=3600.0,
+        functional_mode="click_handle",
+        chemistry_class="cuaac",
+        installed_ligand="triazole",
+        regulatory_limit_ppm=30.0,
+        ph_min=4.0, ph_max=9.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Kolb et al. (2001) Angew. Chem. Int. Ed. 40:2004",
+        hazard_class="cu_residual_ich_q3d",
+        notes=(
+            "CuAAC, with the alkyne functional group on the resin and "
+            "the azide on the ligand. Same chemistry / kinetics / Cu "
+            "residual concern as cuaac_click_coupling; choose this "
+            "profile when the resin was alkyne-activated (e.g. propargyl "
+            "ether ECH route)."
+        ),
+    ),
+
+    # SPAAC, alkyne-on-resin direction.
+    "spaac_click_alkyne_side": ReagentProfile(
+        name="SPAAC click handle (DBCO/BCN on resin; azide ligand)",
+        cas="N/A (chemistry class)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.ALKYNE,
+        product_acs=None,
+        k_forward=0.5,
+        E_a=25000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=0.0,
+        ph_optimum=7.4,
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="click_handle",
+        chemistry_class="spaac",
+        installed_ligand="triazole_spaac",
+        ph_min=5.0, ph_max=9.0,
+        confidence_tier="semi_quantitative",
+        calibration_source="Agard et al. (2004) J. Am. Chem. Soc. 126:15046",
+        notes=(
+            "SPAAC, with the strain-promoted alkyne (DBCO or BCN) "
+            "pre-installed on the resin via an NHS-ester or amine "
+            "linker; the ligand is azide-functionalised. Same kinetics "
+            "and biotherapeutic-compatibility profile as "
+            "spaac_click_coupling."
+        ),
+    ),
+
     # ── M7 (B8) — Multipoint enzyme immobilization ────────────────────
 
     # B8.1 Glyoxyl-agarose (chained: glycidol → diol → periodate → glyoxyl).

@@ -1,5 +1,142 @@
 # Changelog
 
+## v0.3.6 — Close All Tracked v0.3.x Follow-Ons (2026-04-25)
+
+Closes the seven actionable follow-ons accumulated across the v0.3.x
+handovers. Non-actionable items (wet-lab calibration data, pymc CI
+matrix, Python 3.14 pin, v0.4.0 MC × bin-resolved DSD) remain
+documented as external/architectural follow-ons.
+
+### Fix 1 — Click chemistry alkyne reference (ACS coverage 23/25 → 24/25)
+
+Added inverse-direction click reagent profiles in
+`reagent_profiles.py`:
+
+- `cuaac_click_alkyne_side` — CuAAC where the resin carries the alkyne
+  and the ligand carries the azide.
+- `spaac_click_alkyne_side` — SPAAC where the resin carries the
+  strain-promoted alkyne (DBCO/BCN) and the ligand carries the azide.
+
+Both directions are valid bench protocols. Adds `ALKYNE` to the set
+of `target_acs` values referenced by `REAGENT_PROFILES`. Only
+`sulfate_ester` remains unreferenced (expected — it's a passive
+κ-carrageenan polymer-side surface group, not a reagent target).
+
+REAGENT_PROFILES count: 94 → 96.
+
+### Fix 2 — Low-N MC warning (R-G2-2 mitigation)
+
+`run_mc(n < 100)` now emits a `WARNING`-level log noting that the
+inter-seed posterior-overlap diagnostic (AC#3) becomes noisy below the
+documented N≥200 floor. v0.3.5 left this as a documented but
+unwarned risk.
+
+### Fix 3 — Joblib parallelism in `run_mc` (R-G2-4 mitigation)
+
+The v0.3.0 implementation logged a warning and ran serial when
+`n_jobs > 1`. v0.3.6 actually wires joblib:
+
+- When `n_jobs > 1` and `n_seeds > 1`, dispatch per-seed sub-runs to
+  `joblib.Parallel(backend="loky")`. Each worker derives its RNG
+  seed from `base_seed + i`, so determinism is preserved by
+  construction.
+- Refactored `_per_seed_run` to return its `clip_counts` dict (in
+  addition to mutating an in-out parameter for the serial path) so
+  loky workers can ship clipping diagnostics back to the parent.
+- AC#4 (n_jobs=1 vs n_jobs=4 byte-identical) verified by a new test
+  in `tests/test_v0_3_6_followons.py`.
+
+Falls back gracefully to serial when joblib is not importable or
+n_seeds == 1.
+
+### Fix 4 — Solver-lambda helper (`mc_solver_lambdas.py`)
+
+New module `src/dpsim/module3_performance/mc_solver_lambdas.py` (~100
+LOC) providing `make_langmuir_lrm_solver()`. Returns a callable
+matching the `LRMSolver` contract that:
+
+- constructs a `LangmuirIsotherm` from sampled `q_max` / `K_L`,
+- propagates the `tail_mode` flag into BDF tolerances (10× tighter
+  by default per D-046),
+- raises `ValueError` on non-physical samples (negative q_max, zero
+  K_L) so the driver's abort-and-resample path fires,
+- holds all other `solve_lrm` arguments fixed across samples.
+
+Closes the v0.3.0/v0.3.2 follow-on flagged as "solver-lambda helper
+for production use." Production MC users no longer need to write the
+solver lambda by hand.
+
+### Fix 5 — Pectin DE-dependence (v0.3.3 follow-on)
+
+`solve_pectin_chitosan_pec_gelation` now accepts a
+`degree_of_esterification` parameter (default 0.40, low-methoxy):
+
+- DE ≤ 0.5 — Ca²⁺-driven egg-box ionic gelation (default, calibrated
+  against Voragen 2009).
+- DE > 0.5 — high-methoxy pectin requires sugar-acid co-gelation
+  (sucrose + low pH); not modelled at v9.5 resolution. Solver returns
+  a result with `evidence_tier = UNSUPPORTED` and an explicit
+  `hm_pectin_unsupported` diagnostic so callers can branch.
+
+### Fix 6 — Gellan-alginate mixed K⁺/Ca²⁺ bath (v0.3.3 follow-on)
+
+`solve_gellan_alginate_gelation` now accepts `c_Ca_bath_mM` (default
+50) and `c_K_bath_mM` (default 0):
+
+- Ca²⁺ runs the alginate skeleton path unchanged.
+- When `c_K_bath_mM > 0`, K⁺ contributes a logistic-saturated boost
+  to the gellan helix-aggregation reinforcement (midpoint 100 mM,
+  asymptote +20 % over the Ca²⁺-only baseline). Curve shape from
+  Morris 2012 K⁺-binding data on low-acyl gellan.
+- Mixed-bath state surfaced via `mixed_bath` diagnostic and a
+  dedicated assumption block.
+
+### Fix 7 — Pullulan-dextran STMP variant (v0.3.3 follow-on)
+
+`solve_pullulan_dextran_gelation` now accepts a `crosslink_chemistry`
+literal (`"ech"` default, or `"stmp"`):
+
+- ECH path unchanged from v9.5 baseline.
+- STMP path applies a 1/0.85× pore-size expansion to reflect STMP's
+  lower junction-zone density at equivalent reagent stoichiometry
+  (Singh & Ali 2008). Manifest assumption block notes the
+  phosphate-triester chemistry and food-grade / biotherapeutic-
+  friendly profile.
+
+### Tests
+
+`tests/test_v0_3_6_followons.py` — 22 tests across the 7 fixes:
+
+- 4 click-chemistry alkyne tests (existence, target_acs reference,
+  ACS coverage floor lifted to 24, surfaces in M2 Click Chemistry
+  bucket).
+- 2 low-N warning tests (n<100 fires; n≥100 silent).
+- 2 joblib parallelism tests (byte-identical n_jobs=1 vs n_jobs=4;
+  clip_counts aggregate from workers).
+- 3 solver-lambda tests (callable contract; rejects bad
+  parameter_names; non-physical raises).
+- 3 pectin DE tests (LM default; HM → UNSUPPORTED; out-of-range
+  ValueError).
+- 4 gellan-alginate mixed-bath tests (Ca²⁺-only baseline, mixed-bath
+  factor lift, validation errors).
+- 4 pullulan-dextran STMP tests (default ECH, STMP pore expansion,
+  assumption-block contents, invalid chemistry rejection).
+
+### Audit baseline updates
+
+- `tests/test_v0_3_5_audit_followons.py::test_known_unreferenced_acs_types_remain_documented`
+  baseline updated from `{"alkyne", "sulfate_ester"}` to
+  `{"sulfate_ester"}` to reflect the v0.3.6 close. The test fires
+  again only if the team adds an ACSSiteType that no reagent
+  references.
+
+### Out of scope (remain external follow-ons)
+
+- Composite-specific wet-lab calibration data (needs lab work)
+- pymc upper bound CI matrix (needs CI infrastructure)
+- Python 3.14 + scipy BDF environment quirk (project pin issue)
+- v0.4.0 MC × bin-resolved DSD (separate architectural cycle)
+
 ## v0.3.5 — UI Audit Follow-Ons (Ion Gelants + ACS + Crosslinker Docs) (2026-04-25)
 
 Closes the three remaining items from the v0.3.3 UI audit. With v0.3.4

@@ -206,14 +206,31 @@ def _per_seed_run(
     tail_sigma_threshold: float,
     extract_scalars: ScalarExtractor,
     extract_curves: CurveExtractor,
-    clip_counts: dict[str, int],
-) -> tuple[list[dict[str, float]], list[dict[str, np.ndarray]], int, int, bool]:
+    clip_counts: dict[str, int] | None = None,
+) -> tuple[
+    list[dict[str, float]],
+    list[dict[str, np.ndarray]],
+    int,
+    int,
+    bool,
+    dict[str, int],
+]:
     """Run a single seed's worth of MC samples.
 
     Returns
     -------
-    (scalar_records, curve_records, n_failures, n_resampled, unstable_flag)
+    (scalar_records, curve_records, n_failures, n_resampled, unstable_flag,
+     local_clip_counts)
+
+    v0.3.6: ``local_clip_counts`` is returned so that joblib parallel
+    workers — each running in a separate process under the loky backend
+    — can communicate clip diagnostics back to the parent. The legacy
+    ``clip_counts`` in-out parameter is preserved for the serial path's
+    backwards compatibility (the parent dict is mutated AND the same
+    dict is returned).
     """
+    if clip_counts is None:
+        clip_counts = {}
     pool = samples.draw(n_per_seed, seed=seed, method="auto")
     scalar_records: list[dict[str, float]] = []
     curve_records: list[dict[str, np.ndarray]] = []
@@ -280,7 +297,7 @@ def _per_seed_run(
         scalar_records.append(extract_scalars(result))
         curve_records.append(extract_curves(result))
 
-    return scalar_records, curve_records, n_failures, n_resampled, unstable
+    return scalar_records, curve_records, n_failures, n_resampled, unstable, clip_counts
 
 
 # --------------------------------------------------------------------------- #
@@ -472,10 +489,15 @@ def run_mc(
         raise ValueError(f"n_seeds must be ≥ 1, got {n_seeds}")
     if failure_cap < 1:
         raise ValueError(f"failure_cap must be ≥ 1, got {failure_cap}")
-    if n_jobs != 1:
+
+    # v0.3.6 (R-G2-2 mitigation): warn when total samples < 100 — the
+    # inter-seed posterior-overlap diagnostic becomes noisy below that
+    # floor and AC#3 may fail intermittently.
+    if n < 100:
         logger.warning(
-            "n_jobs > 1 not yet implemented; running serial. (joblib "
-            "wiring deferred to v0.3.0 close per R-G2-4 mitigation.)"
+            "run_mc called with n=%d < 100; inter-seed posterior overlap "
+            "(AC#3) may be noisy. Consider n >= 200 for reliable bands.",
+            n,
         )
 
     extract_scalars = extract_scalars or default_lrm_scalars
@@ -490,26 +512,74 @@ def run_mc(
     total_resampled = 0
     unstable = False
 
-    for i in range(n_seeds):
-        seed_i = base_seed + i
-        scalars_i, curves_i, fails_i, resampled_i, unstable_i = _per_seed_run(
-            seed=seed_i,
-            n_per_seed=n_per_seed,
-            samples=samples,
-            lrm_solver=lrm_solver,
-            parameter_clips=parameter_clips,
-            failure_cap=failure_cap,
-            tail_sigma_threshold=tail_sigma_threshold,
-            extract_scalars=extract_scalars,
-            extract_curves=extract_curves,
-            clip_counts=clip_counts,
+    # v0.3.6 (R-G2-2 / R-G2-4 mitigation): per-seed sub-runs are
+    # embarrassingly parallel — they share no state, each consumes its
+    # own seed-derived RNG. Determinism is preserved because each
+    # sub-run's RNG seed is base_seed + i (independent of execution
+    # order). We dispatch via joblib.Parallel(backend="loky") when
+    # n_jobs > 1; fall back gracefully to serial when joblib is not
+    # importable or n_jobs == 1.
+    parallel_dispatch = n_jobs > 1 and n_seeds > 1
+    if parallel_dispatch:
+        try:
+            from joblib import Parallel, delayed
+        except ImportError:  # pragma: no cover — joblib pinned in pyproject
+            parallel_dispatch = False
+
+    if parallel_dispatch:
+        # Each worker runs in its own loky process with its own
+        # clip_counts dict; we merge them back into the parent's
+        # clip_counts after collection.
+        worker_outputs = Parallel(n_jobs=n_jobs, backend="loky")(
+            delayed(_per_seed_run)(
+                seed=base_seed + i,
+                n_per_seed=n_per_seed,
+                samples=samples,
+                lrm_solver=lrm_solver,
+                parameter_clips=parameter_clips,
+                failure_cap=failure_cap,
+                tail_sigma_threshold=tail_sigma_threshold,
+                extract_scalars=extract_scalars,
+                extract_curves=extract_curves,
+                clip_counts=None,
+            )
+            for i in range(n_seeds)
         )
-        per_seed_scalar_records.append(scalars_i)
-        per_seed_curve_records.append(curves_i)
-        total_failures += fails_i
-        total_resampled += resampled_i
-        if unstable_i:
-            unstable = True
+        for (
+            scalars_i, curves_i, fails_i, resampled_i, unstable_i,
+            worker_clip_counts,
+        ) in worker_outputs:
+            per_seed_scalar_records.append(scalars_i)
+            per_seed_curve_records.append(curves_i)
+            total_failures += fails_i
+            total_resampled += resampled_i
+            if unstable_i:
+                unstable = True
+            for name, count in worker_clip_counts.items():
+                clip_counts[name] = clip_counts.get(name, 0) + count
+    else:
+        for i in range(n_seeds):
+            seed_i = base_seed + i
+            (
+                scalars_i, curves_i, fails_i, resampled_i, unstable_i, _cc,
+            ) = _per_seed_run(
+                seed=seed_i,
+                n_per_seed=n_per_seed,
+                samples=samples,
+                lrm_solver=lrm_solver,
+                parameter_clips=parameter_clips,
+                failure_cap=failure_cap,
+                tail_sigma_threshold=tail_sigma_threshold,
+                extract_scalars=extract_scalars,
+                extract_curves=extract_curves,
+                clip_counts=clip_counts,
+            )
+            per_seed_scalar_records.append(scalars_i)
+            per_seed_curve_records.append(curves_i)
+            total_failures += fails_i
+            total_resampled += resampled_i
+            if unstable_i:
+                unstable = True
 
     flat_scalars = [r for seed_records in per_seed_scalar_records for r in seed_records]
     flat_curves = [r for seed_records in per_seed_curve_records for r in seed_records]
