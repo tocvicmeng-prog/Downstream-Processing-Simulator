@@ -61,12 +61,11 @@ REM and substitute __DPSIM_VERSION__ placeholders in every staged
 REM template. This keeps install.bat / launch_*.bat / README.txt /
 REM RELEASE_NOTES.md banners truthful without hardcoding a version
 REM string in each file (the v0.1.0 templates went stale by v0.3.x).
-python -c "from pathlib import Path; import sys, re;^
- ver = re.search(r'^version = \"([^\"]+)\"', Path('pyproject.toml').read_text(encoding='utf-8'), re.M).group(1);^
- [p.write_text(p.read_text(encoding='utf-8').replace('__DPSIM_VERSION__', ver), encoding='utf-8')^
-  for p in Path('installer/stage').rglob('*')^
-  if p.is_file() and p.suffix in ('.bat', '.txt', '.md')];^
- print(f'[build-installer] Substituted __DPSIM_VERSION__ -> {ver} in staged templates')"
+REM
+REM Lives in installer\substitute_version.py rather than inline as a
+REM ``python -c "..."`` command — cmd.exe's ``^`` line-continuation
+REM collides with the multi-line one-liner pattern.
+python installer\substitute_version.py
 if errorlevel 1 (
     echo [build-installer] ERROR: version substitution failed.
     exit /b 6
