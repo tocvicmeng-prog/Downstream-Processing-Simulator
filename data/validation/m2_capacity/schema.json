@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DPSim M2 Functionalization AssayRecord",
+  "type": "object",
+  "required": ["record_id", "kind", "units", "replicates", "target_module"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "record_id": {"type": "string"},
+    "kind": {
+      "enum": [
+        "ligand_density",
+        "activity_retention",
+        "ligand_leaching",
+        "free_protein_wash_fraction"
+      ]
+    },
+    "units": {
+      "enum": [
+        "mol/m2",
+        "mol/m^2",
+        "umol/m2",
+        "umol/m^2",
+        "nmol/m2",
+        "nmol/m^2",
+        "nmol/cm2",
+        "nmol/cm^2",
+        "pmol/cm2",
+        "pmol/cm^2",
+        "fraction",
+        "1",
+        "-",
+        "%"
+      ]
+    },
+    "replicates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": {"type": "number"},
+          "std": {"type": "number"},
+          "flag": {"type": "string"},
+          "notes": {"type": "string"}
+        }
+      }
+    },
+    "process_conditions": {
+      "type": "object",
+      "description": "M2 wet-lab metadata such as activation chemistry, spacer/linker, ligand lot, coupling pH, temperature_C, contact_time_h, wash_cycles, storage_buffer, storage_time_h, assay_method, and target_molecule."
+    },
+    "target_module": {
+      "const": "M2"
+    },
+    "sample_id": {"type": "string"},
+    "instrument": {"type": "string"},
+    "operator": {"type": "string"},
+    "notebook_ref": {"type": "string"},
+    "timestamp_utc": {"type": "string"},
+    "notes": {"type": "string"}
+  }
+}

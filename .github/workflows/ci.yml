@@ -1,0 +1,120 @@
+name: DPSim CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: dpsim-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  p0-smoke-gates:
+    name: P0 smoke gates (Python ${{ matrix.python }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Configure DPSim runtime directories
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP "dpsim-tmp"
+          $out = Join-Path $env:RUNNER_TEMP "dpsim-output"
+          $cache = Join-Path $env:RUNNER_TEMP "dpsim-cache"
+          New-Item -ItemType Directory -Force -Path $tmp, $out, $cache | Out-Null
+          "DPSIM_TMPDIR=$tmp" >> $env:GITHUB_ENV
+          "DPSIM_OUTPUT_DIR=$out" >> $env:GITHUB_ENV
+          "DPSIM_CACHE_DIR=$cache" >> $env:GITHUB_ENV
+          "TEMP=$tmp" >> $env:GITHUB_ENV
+          "TMP=$tmp" >> $env:GITHUB_ENV
+          "TMPDIR=$tmp" >> $env:GITHUB_ENV
+          "PIP_CACHE_DIR=$(Join-Path $cache 'pip')" >> $env:GITHUB_ENV
+          "MPLCONFIGDIR=$(Join-Path $cache 'matplotlib')" >> $env:GITHUB_ENV
+
+      - name: Install DPSim with development dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Clean architecture tests
+        shell: pwsh
+        run: python -m pytest -q tests/core/test_clean_architecture.py -p no:cacheprovider
+
+      - name: M2 functionalization workflow gate
+        shell: pwsh
+        run: python -m pytest -q tests/test_module2_workflows.py -p no:cacheprovider
+
+      - name: M3 breakthrough gate
+        shell: pwsh
+        run: python -m pytest -q tests/test_module3_breakthrough.py -p no:cacheprovider
+
+      - name: M1 legacy run gate
+        shell: pwsh
+        run: python -m dpsim run configs/fast_smoke.toml --quiet --output "$env:DPSIM_OUTPUT_DIR\m1"
+
+      - name: Lifecycle gate
+        shell: pwsh
+        run: python -m dpsim lifecycle configs/fast_smoke.toml --quiet --output "$env:DPSIM_OUTPUT_DIR\lifecycle"
+
+  full-inherited-suite:
+    name: Full inherited test suite (Python 3.12)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    needs: p0-smoke-gates
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Configure DPSim runtime directories
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP "dpsim-tmp"
+          $out = Join-Path $env:RUNNER_TEMP "dpsim-output"
+          $cache = Join-Path $env:RUNNER_TEMP "dpsim-cache"
+          New-Item -ItemType Directory -Force -Path $tmp, $out, $cache | Out-Null
+          "DPSIM_TMPDIR=$tmp" >> $env:GITHUB_ENV
+          "DPSIM_OUTPUT_DIR=$out" >> $env:GITHUB_ENV
+          "DPSIM_CACHE_DIR=$cache" >> $env:GITHUB_ENV
+          "TEMP=$tmp" >> $env:GITHUB_ENV
+          "TMP=$tmp" >> $env:GITHUB_ENV
+          "TMPDIR=$tmp" >> $env:GITHUB_ENV
+          "PIP_CACHE_DIR=$(Join-Path $cache 'pip')" >> $env:GITHUB_ENV
+          "MPLCONFIGDIR=$(Join-Path $cache 'matplotlib')" >> $env:GITHUB_ENV
+
+      - name: Install DPSim with full inherited-suite dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[all]"
+
+      - name: Run full inherited test suite
+        shell: pwsh
+        run: |
+          python -m pytest -q -p no:cacheprovider --basetemp "$env:DPSIM_TMPDIR\pytest"

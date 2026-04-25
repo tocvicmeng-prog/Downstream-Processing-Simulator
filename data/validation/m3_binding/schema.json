@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DPSim M3 Binding And Breakthrough AssayRecord",
+  "type": "object",
+  "required": ["record_id", "kind", "units", "replicates", "target_module"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "record_id": {"type": "string"},
+    "kind": {
+      "enum": [
+        "static_binding_capacity",
+        "dynamic_binding_capacity",
+        "pressure_flow_curve"
+      ]
+    },
+    "units": {
+      "enum": [
+        "mol/m3",
+        "mol/m^3",
+        "M",
+        "mM",
+        "uM",
+        "umol/mL",
+        "kg/m3",
+        "g/L",
+        "mg/mL",
+        "mg/L",
+        "Pa",
+        "kPa",
+        "MPa",
+        "bar"
+      ]
+    },
+    "replicates": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": {"type": "number"},
+          "std": {"type": "number"},
+          "flag": {"type": "string"},
+          "notes": {"type": "string"}
+        }
+      }
+    },
+    "process_conditions": {
+      "type": "object",
+      "description": "Numeric assay domain metadata. Static records may include equilibrium_concentration_mol_m3 and q_max_reference_mol_m3 for Langmuir K_affinity, or multiple equilibrium concentrations for weighted isotherm fitting. Dynamic records may provide scalar DBC replicates or raw breakthrough arrays such as time_s plus C_over_C0, feed_concentration_mol_m3, flow_rate_m3_s, and bed_volume_m3. Pressure-flow records may provide flow_rates_m3_s plus pressure_drops_Pa for weighted hydraulic slope fitting. Include pH, temperature_C, salt_concentration_M, residence_time_s, bed_height_m, column_diameter_m, and molecular_weight metadata where measured."
+    },
+    "target_module": {
+      "const": "M3"
+    },
+    "sample_id": {"type": "string"},
+    "instrument": {"type": "string"},
+    "operator": {"type": "string"},
+    "notebook_ref": {"type": "string"},
+    "timestamp_utc": {"type": "string"},
+    "notes": {"type": "string"}
+  }
+}

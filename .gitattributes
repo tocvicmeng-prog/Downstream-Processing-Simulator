@@ -1,0 +1,24 @@
+* text=auto
+
+# Keep source, documentation, and structured configuration stable across platforms.
+*.py text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.csv text eol=lf
+
+# Windows launcher and installer scripts should remain native to Windows.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.iss text eol=crlf
+
+# Binary and rendered documentation artifacts.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary

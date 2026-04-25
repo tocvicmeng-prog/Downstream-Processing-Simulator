@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DPSim M1 Washing Residual AssayRecord",
+  "description": "JSON schema for residual oil/surfactant assays used to calibrate M1 wash retention factors. Aligned with dpsim.assay_record.AssayRecord v1.0.",
+  "type": "object",
+  "required": ["record_id", "kind", "units", "replicates", "process_conditions"],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "record_id": {
+      "type": "string",
+      "description": "Unique identifier (lab notebook page or LIMS ID)."
+    },
+    "kind": {
+      "enum": ["residual_oil", "residual_surfactant"]
+    },
+    "units": {
+      "enum": ["fraction", "1", "%", "kg/m3", "g/L", "mg/mL", "mg/L"],
+      "description": "Residual oil should use fraction/1/%. Residual surfactant should use kg/m3, g/L, mg/mL, or mg/L."
+    },
+    "replicates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": {"type": "number", "minimum": 0},
+          "std": {"type": "number", "minimum": 0},
+          "flag": {"enum": ["", "outlier", "censored_low", "censored_high"]},
+          "notes": {"type": "string"}
+        }
+      }
+    },
+    "process_conditions": {
+      "type": "object",
+      "required": ["initial_oil_carryover_fraction", "wash_cycles", "wash_volume_ratio", "wash_mixing_efficiency"],
+      "properties": {
+        "initial_oil_carryover_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+        "wash_cycles": {"type": "number", "minimum": 0},
+        "wash_volume_ratio": {"type": "number", "minimum": 0},
+        "wash_mixing_efficiency": {"type": "number", "minimum": 0, "maximum": 1},
+        "c_span80_kg_m3": {"type": "number", "minimum": 0},
+        "surfactant_kg_m3": {"type": "number", "minimum": 0},
+        "wash_solvent": {"type": "string"},
+        "mixing_mode": {"type": "string"}
+      }
+    },
+    "sample_id": {"type": "string"},
+    "instrument": {"type": "string"},
+    "operator": {"type": "string"},
+    "notebook_ref": {"type": "string"},
+    "timestamp_utc": {"type": "string", "format": "date-time"},
+    "target_module": {"const": "M1"},
+    "notes": {"type": "string"}
+  }
+}

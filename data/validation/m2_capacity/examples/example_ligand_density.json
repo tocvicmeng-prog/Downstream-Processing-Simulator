@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "record_id": "EX-M2-LIGAND-DENSITY-001",
+  "kind": "ligand_density",
+  "units": "umol/m2",
+  "replicates": [
+    {"value": 1.84, "std": 0.08, "flag": "", "notes": "BCA-calibrated coupled Protein A"},
+    {"value": 1.96, "std": 0.08, "flag": "", "notes": "BCA-calibrated coupled Protein A"},
+    {"value": 2.05, "std": 0.08, "flag": "", "notes": "BCA-calibrated coupled Protein A"}
+  ],
+  "process_conditions": {
+    "activation_chemistry": "epichlorohydrin",
+    "linker": "epoxide",
+    "ligand": "Protein A",
+    "ligand_lot": "example_lot",
+    "coupling_pH": 8.6,
+    "temperature_C": 4.0,
+    "contact_time_h": 18.0,
+    "wash_cycles": 4.0,
+    "target_molecule": "IgG"
+  },
+  "sample_id": "example_media_lot_A",
+  "instrument": "plate_reader_uv280_example",
+  "operator": "example",
+  "notebook_ref": "EXAMPLE-LN-M2-001",
+  "timestamp_utc": "2026-04-25T00:00:00+00:00",
+  "target_module": "M2",
+  "notes": "Template only; replace with real assay records before calibration."
+}

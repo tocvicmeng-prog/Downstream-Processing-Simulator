@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DPSim M1 Physical QC AssayRecord",
+  "type": "object",
+  "required": ["record_id", "kind", "units", "replicates", "target_module"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "record_id": {"type": "string"},
+    "kind": {
+      "enum": [
+        "pore_size",
+        "porosity",
+        "swelling_ratio",
+        "bulk_modulus",
+        "compression_modulus"
+      ]
+    },
+    "units": {
+      "enum": [
+        "m",
+        "um",
+        "nm",
+        "fraction",
+        "1",
+        "%",
+        "Pa",
+        "kPa",
+        "MPa"
+      ]
+    },
+    "replicates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": {"type": "number"},
+          "std": {"type": "number"},
+          "flag": {"type": "string"},
+          "notes": {"type": "string"}
+        }
+      }
+    },
+    "process_conditions": {
+      "type": "object",
+      "description": "Numeric process conditions defining the calibration domain, e.g. c_agarose_kg_m3, cooling_rate_K_s, bead_d50_m, buffer_pH."
+    },
+    "target_module": {
+      "enum": ["M1", "L4", "M3"]
+    },
+    "sample_id": {"type": "string"},
+    "instrument": {"type": "string"},
+    "operator": {"type": "string"},
+    "notebook_ref": {"type": "string"},
+    "timestamp_utc": {"type": "string"},
+    "notes": {"type": "string"}
+  }
+}

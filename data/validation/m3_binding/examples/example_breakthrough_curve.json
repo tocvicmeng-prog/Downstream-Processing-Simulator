@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "record_id": "EX-M3-BREAKTHROUGH-001",
+  "kind": "dynamic_binding_capacity",
+  "units": "mol/m3",
+  "replicates": [],
+  "process_conditions": {
+    "time_s": [0.0, 120.0, 240.0, 360.0, 480.0, 600.0],
+    "C_over_C0": [0.0, 0.01, 0.04, 0.11, 0.28, 0.55],
+    "feed_concentration_mol_m3": 1.0,
+    "flow_rate_m3_s": 1.0e-8,
+    "bed_volume_m3": 1.0e-6,
+    "bed_height_m": 0.10,
+    "column_diameter_m": 0.00357,
+    "residence_time_s": 100.0,
+    "buffer_pH": 7.4,
+    "temperature_C": 25.0,
+    "salt_concentration_M": 0.15,
+    "target_molecule": "IgG",
+    "breakthrough_threshold_fractions": [0.05, 0.10, 0.50],
+    "dbc_std_mol_m3": 2.0
+  },
+  "sample_id": "example_media_lot_A",
+  "instrument": "akta_uv280_example",
+  "operator": "example",
+  "notebook_ref": "EXAMPLE-LN-M3-002",
+  "timestamp_utc": "2026-04-25T00:00:00+00:00",
+  "target_module": "M3",
+  "notes": "Template raw breakthrough curve; DPSim integrates C/C0 to DBC threshold references."
+}

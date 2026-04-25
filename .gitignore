@@ -1,0 +1,22 @@
+output/
+.dpsim_tmp/
+.dpsim_cache/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.pytest_tmp/
+pytest-cache-files-*/
+*.pyc
+.context/
+scientific_advisor_output.md
+build/
+dist/
+release/
+installer/stage/
+# Local backup files — never commit
+*.v8bak
+*.bak
+
+# Local virtualenvs
+.venv*/
+.gstack/

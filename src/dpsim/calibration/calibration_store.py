@@ -1,0 +1,297 @@
+"""Calibration store: load, save, query, and apply calibration data.
+
+v6.0-alpha: In-memory store backed by JSON file. Applies measured values
+to FunctionalMediaContract, logging every override for transparency
+(audit F2 requirement).
+"""
+
+from __future__ import annotations
+
+import copy
+import json
+import logging
+from pathlib import Path
+from typing import Any
+
+from .calibration_data import CalibrationEntry
+
+logger = logging.getLogger(__name__)
+
+
+def _estimate_fmc_qmax_from_density(fmc: Any) -> float | None:
+    """Recompute qmax from calibrated M2 ligand/activity density when possible."""
+
+    density = float(getattr(fmc, "functional_ligand_density", 0.0))
+    if density <= 0.0:
+        return None
+    basis = str(getattr(fmc, "capacity_area_basis", "") or "").strip()
+    if basis == "ligand_accessible":
+        area_per_bed_volume = float(getattr(fmc, "ligand_accessible_area_per_bed_volume", 0.0))
+    else:
+        area_per_bed_volume = float(getattr(fmc, "reagent_accessible_area_per_bed_volume", 0.0))
+        if area_per_bed_volume <= 0.0:
+            area_per_bed_volume = float(getattr(fmc, "ligand_accessible_area_per_bed_volume", 0.0))
+    if area_per_bed_volume <= 0.0:
+        return None
+    ligand_type = str(getattr(fmc, "ligand_type", "none"))
+    stoich = {
+        "affinity": 2.0,
+        "imac": 1.0,
+        "iex_anion": 1.0,
+        "iex_cation": 1.0,
+        "gst_affinity": 1.0,
+        "biotin_affinity": 2.5,
+        "heparin_affinity": 1.0,
+    }.get(ligand_type)
+    if stoich is None:
+        return None
+    metal_fraction = 1.0
+    if ligand_type == "imac":
+        metal_fraction = max(0.0, min(float(getattr(fmc, "metal_loaded_fraction", 1.0)), 1.0))
+    return density * area_per_bed_volume * stoich * metal_fraction
+
+
+class CalibrationStore:
+    """Load, save, query, and apply user-supplied calibration data.
+
+    Usage::
+
+        store = CalibrationStore()
+        store.load_json("my_calibration.json")
+        fmc_calibrated, overrides = store.apply_to_fmc(fmc)
+        # overrides is a list of human-readable override descriptions
+    """
+
+    def __init__(self) -> None:
+        self._entries: list[CalibrationEntry] = []
+
+    def add(self, entry: CalibrationEntry) -> None:
+        """Add a calibration entry."""
+        self._entries.append(entry)
+
+    def load_json(self, path: str | Path) -> int:
+        """Load calibration entries from a JSON file.
+
+        JSON format: list of dicts, each matching CalibrationEntry fields.
+
+        Args:
+            path: Path to JSON file.
+
+        Returns:
+            Number of entries loaded.
+        """
+        path = Path(path)
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, list):
+            raise ValueError(f"Expected JSON array, got {type(data).__name__}")
+
+        count = 0
+        for item in data:
+            try:
+                entry = CalibrationEntry.from_dict(item)
+                self._entries.append(entry)
+                count += 1
+            except (KeyError, TypeError, ValueError) as e:
+                logger.warning("Skipping invalid calibration entry: %s", e)
+
+        logger.info("Loaded %d calibration entries from %s", count, path)
+        return count
+
+    def save_json(self, path: str | Path) -> None:
+        """Save all entries to a JSON file."""
+        path = Path(path)
+        data = [e.to_dict() for e in self._entries]
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        logger.info("Saved %d calibration entries to %s", len(data), path)
+
+    def query(
+        self,
+        profile_key: str,
+        parameter_name: str = "",
+    ) -> list[CalibrationEntry]:
+        """Query entries by profile key and optionally parameter name.
+
+        Args:
+            profile_key: Reagent profile key to match.
+            parameter_name: Optional parameter name filter.
+
+        Returns:
+            List of matching CalibrationEntry objects.
+        """
+        results = [e for e in self._entries if e.profile_key == profile_key]
+        if parameter_name:
+            results = [e for e in results if e.parameter_name == parameter_name]
+        return results
+
+    @property
+    def entries(self) -> list[CalibrationEntry]:
+        """All stored entries (read-only view)."""
+        return list(self._entries)
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+    def apply_to_fmc(self, fmc: Any) -> tuple[Any, list[str]]:
+        """Apply calibration overrides to a FunctionalMediaContract.
+
+        For each calibration entry that matches the FMC's profile context,
+        overrides the corresponding FMC field. Returns a modified copy and
+        a log of all overrides applied.
+
+        Supported parameter_name -> FMC field mappings:
+            "estimated_q_max" -> fmc.estimated_q_max
+            "q_max" -> fmc.estimated_q_max (alias)
+            "charge_density" -> fmc.charge_density
+            "functional_ligand_density" -> fmc.functional_ligand_density
+            "activity_retention" -> fmc.activity_retention
+            "ligand_leaching_fraction" -> fmc.ligand_leaching_fraction
+            "free_protein_wash_fraction" -> fmc.free_protein_wash_fraction
+
+        M3 isotherm entries such as "K_L" and "K_affinity" are consumed by
+        lifecycle orchestration as process-state values, because they are not
+        fields on the FunctionalMediaContract itself.
+
+        Args:
+            fmc: FunctionalMediaContract instance.
+
+        Returns:
+            Tuple of (modified_fmc_copy, list_of_override_descriptions).
+        """
+        fmc_out = copy.deepcopy(fmc)
+        overrides: list[str] = []
+
+        # Map parameter names to FMC fields
+        _FMC_FIELD_MAP = {
+            "estimated_q_max": "estimated_q_max",
+            "q_max": "estimated_q_max",
+            "charge_density": "charge_density",
+            "functional_ligand_density": "functional_ligand_density",
+            "activity_retention": "activity_retention",
+            "ligand_leaching_fraction": "ligand_leaching_fraction",
+            "free_protein_wash_fraction": "free_protein_wash_fraction",
+        }
+
+        qmax_directly_calibrated = any(
+            entry.parameter_name in {"estimated_q_max", "q_max"}
+            for entry in self._entries
+        )
+        density_directly_calibrated = False
+        activity_directly_calibrated = False
+        for entry in self._entries:
+            field_name = _FMC_FIELD_MAP.get(entry.parameter_name)
+            if field_name and hasattr(fmc_out, field_name):
+                old_val = getattr(fmc_out, field_name)
+                setattr(fmc_out, field_name, entry.measured_value)
+                if entry.parameter_name == "functional_ligand_density":
+                    density_directly_calibrated = True
+                if entry.parameter_name == "activity_retention":
+                    activity_directly_calibrated = True
+                desc = (
+                    f"OVERRIDE: {field_name} {old_val:.4g} -> {entry.measured_value:.4g} "
+                    f"({entry.units}, {entry.confidence}, {entry.source_reference})"
+                )
+                overrides.append(desc)
+                logger.info(desc)
+
+                # Update confidence to reflect calibration
+                if hasattr(fmc_out, 'q_max_confidence') and "q_max" in entry.parameter_name:
+                    fmc_out.q_max_confidence = "calibrated"
+                if hasattr(fmc_out, 'confidence_tier'):
+                    fmc_out.confidence_tier = "calibrated"
+
+        if (
+            activity_directly_calibrated
+            and not density_directly_calibrated
+            and getattr(fmc_out, "total_coupled_density", 0.0) > 0.0
+        ):
+            old_density = float(getattr(fmc_out, "functional_ligand_density", 0.0))
+            new_density = float(fmc_out.total_coupled_density) * float(fmc_out.activity_retention)
+            fmc_out.functional_ligand_density = new_density
+            overrides.append(
+                "DERIVED: functional_ligand_density "
+                f"{old_density:.4g} -> {new_density:.4g} mol/m2 "
+                "from calibrated activity_retention and total_coupled_density"
+            )
+
+        if (density_directly_calibrated or activity_directly_calibrated) and not qmax_directly_calibrated:
+            qmax = _estimate_fmc_qmax_from_density(fmc_out)
+            if qmax is not None:
+                old_qmax = float(getattr(fmc_out, "estimated_q_max", 0.0))
+                fmc_out.estimated_q_max = qmax
+                fmc_out.q_max_confidence = "calibrated_from_m2_assay"
+                overrides.append(
+                    "DERIVED: estimated_q_max "
+                    f"{old_qmax:.4g} -> {qmax:.4g} mol/m3 "
+                    "from calibrated M2 ligand/activity assay"
+                )
+
+        if overrides:
+            logger.info("Applied %d calibration overrides to FMC", len(overrides))
+        else:
+            logger.debug("No calibration entries matched FMC context")
+
+        return fmc_out, overrides
+
+    # ── v6.1: Cross-module calibration ───────────────────────────────────
+
+    def query_by_module(self, target_module: str) -> list[CalibrationEntry]:
+        """Return all entries targeting a specific module (L1, L2, L3, etc.)."""
+        return [e for e in self._entries if e.target_module == target_module]
+
+    def apply_to_model_params(
+        self,
+        target_module: str,
+        params_obj: object,
+    ) -> tuple[object, list[str]]:
+        """Apply calibration entries for a specific module to a parameter object.
+
+        For each entry where target_module matches and parameter_name corresponds
+        to an attribute on params_obj, override the attribute with measured_value.
+
+        Parameters
+        ----------
+        target_module : str
+            "L1", "L2", "L3", "L4", "M2", or "M3".
+        params_obj : object
+            Any object with settable attributes matching entry.parameter_name.
+            For L1: KernelConfig (breakage_C1, breakage_C2, etc.)
+            For L2: MaterialProperties (pore coefficients)
+            For L3: MaterialProperties (k_xlink_0, E_a_xlink, f_bridge)
+
+        Returns
+        -------
+        Tuple of (modified_params_copy, list_of_override_descriptions).
+        """
+        import copy as _copy
+        out = _copy.deepcopy(params_obj)
+        overrides: list[str] = []
+
+        module_entries = self.query_by_module(target_module)
+        for entry in module_entries:
+            attr = entry.parameter_name
+            if hasattr(out, attr):
+                old_val = getattr(out, attr)
+                setattr(out, attr, entry.measured_value)
+                desc = (
+                    f"CALIBRATION [{target_module}]: {attr} "
+                    f"{old_val:.4g} -> {entry.measured_value:.4g} "
+                    f"({entry.units}, {entry.confidence}, "
+                    f"fit={entry.fit_method}, ref={entry.source_reference})"
+                )
+                overrides.append(desc)
+                logger.info(desc)
+
+        if overrides:
+            logger.info(
+                "Applied %d calibration overrides to %s params",
+                len(overrides), target_module,
+            )
+        return out, overrides
+
+    def has_calibration_for(self, target_module: str) -> bool:
+        """Return True if any calibration entries target this module."""
+        return any(e.target_module == target_module for e in self._entries)
+
