@@ -49,7 +49,8 @@ def render_crosslinking_section(
 
     Widget keys preserved: m1_crosslinker, m1_c_xl, m1_DDA, m1_T_xl, m1_t_xl, m1_uv.
     """
-    st.subheader("Crosslinking (L3)")
+    # v0.4.13: subheader removed — wrapping section card supplies the
+    # eyebrow + title via chrome.section_card_header.
 
     # v0.4.4: crosslinking widgets migrated to labeled_widget.
     from dpsim.visualization.help import get_help, labeled_widget

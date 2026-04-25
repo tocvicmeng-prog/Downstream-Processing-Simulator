@@ -86,6 +86,88 @@ def _extract_run_report(lifecycle_result: Any) -> Any | None:
     return _AdHocReport()
 
 
+def _extract_kpi_metrics(lifecycle_result: Any) -> dict[str, str]:
+    """Pull the four headline column-performance KPIs from a lifecycle
+    result, formatted as display strings for the rail's KPI grid.
+
+    Canonical Direction-A KPIs (per ``DPSim UI Optimization`` reference):
+
+    - ``dbc10``    — Dynamic binding capacity at 10% breakthrough (mg/mL)
+    - ``recovery`` — Product recovery from elute pool (%)
+    - ``hetp``     — Height equivalent to a theoretical plate (mm)
+    - ``dp``       — Pressure drop across packed bed (MPa)
+
+    The lifecycle result aggregates per-module sub-results with
+    inconsistent attribute names. This helper probes known paths in
+    order and falls back to ``""`` when none are available — the rail
+    then renders ``"—"`` for that cell, preserving the grid layout.
+
+    Returns:
+        Dict whose keys are the KPI ids plus optional ``<key>_delta``
+        and ``<key>_delta_dir`` entries for delta-chip rendering.
+    """
+    out: dict[str, str] = {}
+
+    m3 = getattr(lifecycle_result, "m3_method", None) or getattr(
+        lifecycle_result, "m3_result", None
+    )
+
+    # ── DBC₁₀: dynamic binding capacity at 10% breakthrough (mg/mL) ──
+    if m3 is not None:
+        for attr in ("dbc10_mg_mL", "dbc10", "dbc_10", "dbc"):
+            v = getattr(m3, attr, None)
+            if v is None:
+                continue
+            try:
+                out["dbc10"] = f"{float(v):.1f}"
+                break
+            except (TypeError, ValueError):
+                pass
+
+    # ── RECOVERY (M3 % product recovered from elute pool) ────────────
+    if m3 is not None:
+        for attr in ("recovery_pct", "recovery", "yield_pct"):
+            v = getattr(m3, attr, None)
+            if v is None:
+                continue
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                continue
+            pct = f * 100 if f <= 1.5 else f
+            out["recovery"] = f"{pct:.1f}"
+            break
+
+    # ── HETP (height equivalent to a theoretical plate, mm) ──────────
+    if m3 is not None:
+        for attr in ("hetp_mm", "hetp", "plate_height_mm"):
+            v = getattr(m3, attr, None)
+            if v is None:
+                continue
+            try:
+                out["hetp"] = f"{float(v):.2f}"
+                break
+            except (TypeError, ValueError):
+                pass
+
+    # ── ΔP (pressure drop across packed bed, MPa) ────────────────────
+    if m3 is not None:
+        for attr in ("delta_p_MPa", "dp_MPa", "delta_p", "pressure_drop_MPa"):
+            v = getattr(m3, attr, None)
+            if v is None:
+                continue
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                continue
+            # Heuristic: if value > 10, assume Pa and convert.
+            mpa = f / 1e6 if f > 10 else f
+            out["dp"] = f"{mpa:.2f}"
+            break
+
+    return out
+
+
 def _extract_breakthrough_curve(lifecycle_result: Any) -> Any | None:
     """Pull a ``BreakthroughCurve``-shaped object from the run, if any.
 
@@ -162,6 +244,7 @@ def autowire_shell_state(
                 snapshot=snapshot_recipe(current_recipe),  # type: ignore[arg-type]
                 evidence_min=str(tier_value),
                 notes="Auto-captured at run completion.",
+                metrics=_extract_kpi_metrics(lifecycle_result),
             )
         except Exception:  # pragma: no cover — defensive
             pass

@@ -36,7 +36,7 @@ def render_formulation_alginate(*, is_stirred: bool) -> AlginateContext:
     # v0.4.4: alginate formulation widgets migrated to labeled_widget.
     from dpsim.visualization.help import labeled_widget
 
-    st.subheader("Formulation — Alginate")
+    # v0.4.14: subheader removed — wrapping card supplies the header.
 
     c_alginate_pct = labeled_widget(
         "Alginate concentration",
@@ -111,8 +111,13 @@ def render_formulation_alginate(*, is_stirred: bool) -> AlginateContext:
         ),
     )
 
-    st.markdown("---")
-    st.subheader("Surfactant")
+    # v0.4.14: surfactant sub-section as a chrome eyebrow.
+    from dpsim.visualization.design import chrome as _chrome
+    st.html(
+        '<div style="margin-top:12px;">'
+        + _chrome.eyebrow("Surfactant")
+        + '</div>'
+    )
     surf_keys = list(SURFACTANTS.keys())
     surf_names = [SURFACTANTS[k].name for k in surf_keys]
     surf_sel_name = labeled_widget(

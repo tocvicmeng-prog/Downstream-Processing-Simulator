@@ -37,8 +37,12 @@ def render_formulation_section(*, is_stirred: bool) -> AgaroseChitosanContext:
     Widget keys preserved from v8.x:
         m1_surfactant, m1_c_agar, m1_c_chit, m1_span_vv, m1_span_wv,
         m1_T_oil, m1_T_oil_leg.
+
+    v0.4.13: the "Formulation" subheader is removed — tab_m1.py now
+    wraps this call in a section card whose header supplies the
+    eyebrow + title. The internal "Cooling & Gelation (L2)" sub-section
+    is rendered as a chrome.eyebrow for the same reason.
     """
-    st.subheader("Formulation")
 
     # v0.4.4: A+C formulation widgets migrated to labeled_widget for
     # inline help on each parameter.
@@ -124,7 +128,12 @@ def render_formulation_section(*, is_stirred: bool) -> AgaroseChitosanContext:
 
     # L2 cooling + pore model (right column in the legacy layout, but
     # logically part of A+C formulation so we include it here).
-    st.subheader("Cooling & Gelation (L2)")
+    from dpsim.visualization.design import chrome as _chrome
+    st.html(
+        '<div style="margin-top:14px;">'
+        + _chrome.eyebrow("Cooling & Gelation · L2")
+        + '</div>'
+    )
     if is_stirred:
         cooling_rate_Cmin = labeled_widget(
             "Cooling rate",

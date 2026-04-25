@@ -37,7 +37,7 @@ def render_formulation_cellulose(*, is_stirred: bool) -> CelluloseContext:
     # v0.4.4: cellulose formulation widgets migrated to labeled_widget.
     from dpsim.visualization.help import labeled_widget
 
-    st.subheader("Formulation — Cellulose (NIPS)")
+    # v0.4.14: subheader removed — wrapping card supplies the header.
 
     phi_cell_pct = labeled_widget(
         "Cellulose initial volume fraction",
@@ -87,8 +87,13 @@ def render_formulation_cellulose(*, is_stirred: bool) -> CelluloseContext:
         cooling_rate_Cmin = 0.0
         st.caption("Isothermal solvent — no cooling-rate input.")
 
-    st.markdown("---")
-    st.subheader("Surfactant")
+    # v0.4.14: surfactant sub-section as a chrome eyebrow.
+    from dpsim.visualization.design import chrome as _chrome
+    st.html(
+        '<div style="margin-top:12px;">'
+        + _chrome.eyebrow("Surfactant")
+        + '</div>'
+    )
     surf_keys = list(SURFACTANTS.keys())
     surf_names = [SURFACTANTS[k].name for k in surf_keys]
     surf_sel_name = labeled_widget(

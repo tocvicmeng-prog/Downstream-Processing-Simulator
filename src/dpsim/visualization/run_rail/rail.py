@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import html as _html
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, Final
 
 import streamlit as st
 
@@ -13,6 +14,7 @@ from dpsim.visualization.evidence.rollup import (
     StageEvidence,
     render_evidence_summary,
 )
+from dpsim.visualization.run_rail.history import latest
 from dpsim.visualization.run_rail.progress import (
     get_error_msg,
     get_progress,
@@ -21,6 +23,26 @@ from dpsim.visualization.run_rail.progress import (
     set_progress,
     set_run_state,
 )
+
+# The four headline KPIs shown in the Direction-A rail. Order is
+# meaningful — left-to-right, top-to-bottom in a 2x2 grid. Per the
+# canonical Direction-A reference (DPSim UI Optimization standalone),
+# the rail KPIs are column-performance metrics, not M1 fabrication
+# outputs. DSD lives in the M1 stage card; the rail tracks the lifecycle
+# end-state (DBC₁₀ + Recovery + HETP + ΔP).
+_KPI_KEYS: Final[tuple[str, ...]] = ("dbc10", "recovery", "hetp", "dp")
+_KPI_LABEL: Final[dict[str, str]] = {
+    "dbc10": "DBC₁₀",
+    "recovery": "RECOVERY",
+    "hetp": "HETP",
+    "dp": "ΔP",
+}
+_KPI_UNIT: Final[dict[str, str]] = {
+    "dbc10": "mg/mL",
+    "recovery": "%",
+    "hetp": "mm",
+    "dp": "MPa",
+}
 
 
 def _run_stop_button(*, key: str = "dpsim_run_button") -> None:
@@ -90,6 +112,117 @@ def _progress_bar() -> None:
         )
 
 
+def _format_relative_short(seconds: int) -> str:
+    """Compact "6 min ago" / "2 h ago" formatter for the rail header."""
+    if seconds < 60:
+        return f"{seconds}s ago"
+    if seconds < 3600:
+        return f"{seconds // 60} min ago"
+    if seconds < 86400:
+        return f"{seconds // 3600} h ago"
+    return f"{seconds // 86400} d ago"
+
+
+def _render_last_run_header() -> None:
+    """Direction-A "LAST RUN +#NNN · NN min ago" rail header.
+
+    Renders an eyebrow + recipe name + status pill block above the KPI
+    grid. Pulls from ``run_rail.history.latest()``; if no run has been
+    appended yet, shows a muted "no run yet" placeholder so the
+    structural layout is preserved.
+    """
+    entry = latest()
+    if entry is None:
+        st.html(
+            chrome.eyebrow("Last run · — no run yet", accent=True)
+            + '<div class="dps-mono" style="font-size:11.5px;'
+            'color:var(--dps-text-dim);padding:4px 0 8px;">'
+            "Run the lifecycle to populate KPIs.</div>"
+        )
+        return
+
+    from datetime import datetime, timezone
+
+    delta = datetime.now(tz=timezone.utc) - entry.timestamp_utc
+    rel = _format_relative_short(int(delta.total_seconds()))
+    eyebrow_text = f"Last run · #{entry.run_id} · {rel}"
+    state = get_run_state()
+    status_label = "complete" if state in ("idle", "done") else state
+    status_color = (
+        "var(--dps-green-500)"
+        if state in ("idle", "done")
+        else "var(--dps-amber-500)"
+        if state in ("running", "stopping")
+        else "var(--dps-red-600)"
+    )
+    st.html(
+        chrome.eyebrow(eyebrow_text, accent=True)
+        + '<div style="display:flex;align-items:center;'
+        'justify-content:space-between;gap:8px;'
+        'margin-top:4px;padding:6px 8px;'
+        'background:var(--dps-surface-2);'
+        'border:1px solid var(--dps-border);border-radius:4px;">'
+        '<span class="dps-mono" style="font-size:12px;'
+        f'color:var(--dps-text);">{_html.escape(entry.recipe_name)}</span>'
+        + chrome.chip(status_label, color=status_color)
+        + '</div>'
+    )
+
+
+def _render_kpi_grid() -> None:
+    """Render the 2x2 KPI grid: DSD / RECOVERY / DBC / PURITY.
+
+    Reads metrics from ``run_rail.history.latest().metrics`` (a
+    ``dict[str, str]`` populated by ``shell.autowire`` at run
+    completion). Missing or absent metrics render as "—" so the grid
+    layout is stable regardless of which run output is available.
+
+    Each cell shows: KPI label (caps eyebrow) · big mono value · unit
+    suffix · optional delta chip.
+    """
+    entry = latest()
+    metrics: dict[str, str] = dict(entry.metrics) if entry is not None else {}
+
+    def _cell(key: str) -> str:
+        label = _KPI_LABEL[key]
+        unit = _KPI_UNIT[key]
+        raw = metrics.get(key, "")
+        delta = metrics.get(f"{key}_delta", "")
+        delta_dir_raw = metrics.get(f"{key}_delta_dir", "")
+        delta_dir: Any = None
+        if delta_dir_raw == "up":
+            delta_dir = "up"
+        elif delta_dir_raw == "down":
+            delta_dir = "down"
+        value = raw if raw else "—"
+        unit_html = unit if value != "—" else ""
+        value_html = chrome.metric_value(
+            value=value,
+            unit=unit_html,
+            delta=delta,
+            delta_direction=delta_dir,
+            size=22,
+        )
+        return (
+            '<div style="background:var(--dps-surface);'
+            'border:1px solid var(--dps-border);border-radius:4px;'
+            'padding:8px 10px;display:flex;flex-direction:column;'
+            'gap:3px;min-width:0;">'
+            '<div class="dps-mono" style="font-size:10px;'
+            'letter-spacing:0.12em;text-transform:uppercase;'
+            f'color:var(--dps-text-dim);font-weight:600;">{label}</div>'
+            f'<div style="display:flex;align-items:baseline;gap:4px;">'
+            f'{value_html}</div></div>'
+        )
+
+    st.html(
+        '<div style="display:grid;'
+        'grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;">'
+        + "".join(_cell(k) for k in _KPI_KEYS)
+        + "</div>"
+    )
+
+
 def render_run_rail(
     *,
     current_recipe: Any | None = None,
@@ -99,60 +232,135 @@ def render_run_rail(
 ) -> None:
     """Render the sticky run rail into the current Streamlit slot.
 
-    Composition (top → bottom):
-        1. Run / Stop button + progress
-        2. Breakthrough preview (P05/P50/P95 envelope)
-        3. Evidence rollup (lifecycle min + per-stage)
-        4. Recipe diff vs last successful run
+    Composition — 4 discrete ``st.container(border=True)`` cards,
+    matching the canonical Direction-A reference (RunRail in
+    eb686cbe.js):
+
+        Card 1: "Last run · #N" eyebrow + recipe-name title +
+                "complete" status chip. Body: 2x2 KPI grid.
+        Card 2: "Breakthrough" eyebrow + "C/C₀ vs CV · MC-LRM" title +
+                "P05–P95" chip. Body: breakthrough SVG.
+        Card 3: "Evidence roll-up" eyebrow + lifecycle-min title +
+                EvidenceBadge right. Body: per-stage ladder.
+                Omitted entirely when no stages are present.
+        Card 4: No eyebrow/title strip — "Pending edits" surface with
+                diff panel, then run/stop button + keyboard hint.
 
     Args:
         current_recipe: Live recipe for diff. ``None`` skips the diff
             panel.
-        stages: Per-stage evidence summaries. Empty skips the rollup.
+        stages: Per-stage evidence summaries. Empty skips Card 3.
         breakthrough_curve: Optional ``BreakthroughCurve`` from the
             chrome module. ``None`` shows the synthetic placeholder.
-        extra_top_section: Optional callable rendered between the run
-            controls and the breakthrough preview. Use for surfacing
-            run-history shortcuts or other rail-scoped extras.
+        extra_top_section: Optional callable rendered at the bottom of
+            the rail (history shortcuts, baseline picker). The name is
+            preserved for backward compatibility but its position has
+            moved to the foot per the Direction-A reference.
     """
     # Anchor marker so app.py's CSS can apply position: sticky to this
     # column. Renders an empty zero-height div with the marker class.
     st.html('<div class="dps-rail-marker" style="height:0;"></div>')
 
-    # Top: run controls
-    st.html(chrome.eyebrow("Run controls", accent=True))
-    _run_stop_button()
-    _progress_bar()
-
-    if extra_top_section is not None:
-        extra_top_section()
-
-    st.html('<div class="dps-divider" style="margin:12px 0;"></div>')
-
-    # Breakthrough preview
-    st.html(chrome.eyebrow("Breakthrough · P05 / P50 / P95"))
-    st.html(
-        '<div style="margin-top:4px;padding:8px;'
-        'background:var(--dps-surface-2);'
-        'border:1px solid var(--dps-border);border-radius:4px;">'
-        + chrome.breakthrough(curve=breakthrough_curve, width=320, height=86)
-        + '</div>'
+    # ── Card 1: Last run + KPI grid ───────────────────────────────────
+    entry = latest()
+    state = get_run_state()
+    status_label = "complete" if state in ("idle", "done") else state
+    status_color = (
+        "var(--dps-green-500)"
+        if state in ("idle", "done")
+        else "var(--dps-amber-500)"
+        if state in ("running", "stopping")
+        else "var(--dps-red-600)"
     )
+    if entry is not None:
+        from datetime import datetime, timezone
 
-    st.html('<div class="dps-divider" style="margin:12px 0;"></div>')
+        delta = datetime.now(tz=timezone.utc) - entry.timestamp_utc
+        rel = _format_relative_short(int(delta.total_seconds()))
+        card1_eyebrow = f"Last run · #{entry.run_id} · {rel}"
+        card1_title = entry.recipe_name
+    else:
+        card1_eyebrow = "Last run · —"
+        card1_title = "No run yet"
 
-    # Evidence rollup
-    if list(stages):
-        render_evidence_summary(stages)
-        st.html('<div class="dps-divider" style="margin:12px 0;"></div>')
-
-    # Recipe diff — honour the active baseline name from session state,
-    # so the named-baseline picker actually drives the diff target.
-    if current_recipe is not None:
-        baseline_name = st.session_state.get(
-            "_dpsim_diff_baseline_name", "last_run"
+    with st.container(border=True):
+        st.html(
+            chrome.card_header_strip(
+                eyebrow_text=card1_eyebrow,
+                title=card1_title,
+                right_html=chrome.chip(status_label, color=status_color),
+            )
         )
-        render_diff_panel(
-            current_recipe=current_recipe,
-            baseline_name=baseline_name,
+        _render_kpi_grid()
+
+    # ── Card 2: Breakthrough preview ─────────────────────────────────
+    with st.container(border=True):
+        st.html(
+            chrome.card_header_strip(
+                eyebrow_text="Breakthrough",
+                title="C/C₀ vs CV · MC-LRM",
+                right_html=chrome.chip("P05–P95"),
+            )
         )
+        st.html(
+            '<div style="padding:4px 0;">'
+            + chrome.breakthrough(
+                curve=breakthrough_curve, width=320, height=86
+            )
+            + "</div>"
+        )
+
+    # ── Card 3: Evidence roll-up (skipped when no stages) ────────────
+    stages_list = list(stages)
+    if stages_list:
+        from dpsim.visualization.evidence.rollup import aggregate_min_tier
+
+        min_tier = aggregate_min_tier(stages_list)
+        tier_short = min_tier.upper().split("_")[0]  # e.g. "SEMI"
+        with st.container(border=True):
+            st.html(
+                chrome.card_header_strip(
+                    eyebrow_text="Evidence roll-up",
+                    title=f"Lifecycle min: {tier_short}",
+                    right_html=chrome.evidence_badge(min_tier, compact=True),
+                )
+            )
+            render_evidence_summary(stages_list)
+
+    # ── Card 4: Pending edits + run/stop CTA ─────────────────────────
+    with st.container(border=True):
+        # Compute pending-edits count for the eyebrow chip
+        if current_recipe is not None:
+            baseline_name = st.session_state.get(
+                "_dpsim_diff_baseline_name", "last_run"
+            )
+            st.html(
+                chrome.card_header_strip(
+                    eyebrow_text="Pending edits",
+                )
+            )
+            render_diff_panel(
+                current_recipe=current_recipe,
+                baseline_name=baseline_name,
+            )
+        else:
+            st.html(
+                chrome.card_header_strip(
+                    eyebrow_text="Re-run lifecycle",
+                )
+            )
+        _run_stop_button()
+        _progress_bar()
+        st.html(
+            '<div class="dps-mono" style="font-size:10.5px;'
+            "color:var(--dps-text-dim);text-align:center;"
+            'padding-top:4px;">'
+            "↵ Enter to run · Esc to cancel</div>"
+        )
+
+    # Optional rail extras (history dropdown, baseline picker) —
+    # tucked under a collapsed expander so they don't clutter the
+    # primary state surfaces above.
+    if extra_top_section is not None:
+        with st.expander("Run history & baselines", expanded=False):
+            extra_top_section()

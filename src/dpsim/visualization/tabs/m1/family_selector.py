@@ -178,7 +178,8 @@ def render_family_selector(*, key: str = "m1v9_polymer_family") -> FamilyContext
     placeholder families exist in PolymerFamily but are hidden until v9.3.
     """
     rows = _enabled_rows()
-    st.subheader("Polymer Family")
+    # v0.4.13: subheader removed — the wrapping section card in tab_m1.py
+    # supplies the eyebrow + title via chrome.section_card_header.
     display_names = [row[0] for row in rows]
     enums = [row[1] for row in rows]
     helps = [row[2] for row in rows]

@@ -256,6 +256,133 @@ def stage_node(
 
 
 # ──────────────────────────────────────────────────────────────────────
+# card_header_strip — canonical Card header (separate <header> + body)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def card_header_strip(
+    *,
+    eyebrow_text: str = "",
+    title: str = "",
+    right_html: str = "",
+    badge_html: str = "",
+) -> str:
+    """Render the canonical Direction-A Card header strip.
+
+    Mirrors the React `Card` component's `<header>` element from
+    ``DPSim UI Optimization _standalone_.html``: a horizontal flex row
+    with the eyebrow + title on the left and an optional `right` slot
+    (Chip / Btn / EvidenceBadge) on the right, separated from the body
+    by a 1px border-bottom rule.
+
+    Pair with ``st.container(border=True)`` so the surface chrome comes
+    from Streamlit's container border and this strip provides only the
+    header content + bottom rule:
+
+        with st.container(border=True):
+            st.html(card_header_strip(
+                eyebrow_text="Hardware",
+                title="Stirred vessel · v9.0 in-M1",
+                right_html=chip("tip 0.66 m/s"),
+            ))
+            # ... body widgets ...
+
+    Use ``card_header_strip`` for new code; the older
+    ``section_card_header`` is retained for back-compat with v0.4.13
+    call sites.
+
+    Args:
+        eyebrow_text: Optional uppercase mono micro-label.
+        title: Card title in plain case (14px Geist Sans 600).
+        right_html: Optional HTML rendered right-aligned in the header
+            row (Chip / Btn / EvidenceBadge / etc).
+        badge_html: Optional inline badge in the title row, between
+            title and right slot.
+    """
+    eyebrow_html = eyebrow(eyebrow_text) if eyebrow_text else ""
+    title_html = (
+        f'<div style="font-size:13.5px;font-weight:600;'
+        f'color:var(--dps-text);">{_esc(title)}</div>'
+        if title
+        else ""
+    )
+    right_block = ""
+    if badge_html or right_html:
+        right_block = (
+            '<div style="display:flex;align-items:center;gap:8px;'
+            'margin-left:auto;">'
+            f"{badge_html}{right_html}</div>"
+        )
+    return (
+        '<div style="display:flex;align-items:center;'
+        'justify-content:space-between;gap:12px;'
+        'margin:-14px -14px 12px -14px;'
+        'padding:10px 14px;'
+        'border-bottom:1px solid var(--dps-border);">'
+        '<div style="display:flex;flex-direction:column;gap:2px;'
+        'min-width:0;">'
+        f"{eyebrow_html}{title_html}</div>"
+        f"{right_block}</div>"
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# section_card_header — eyebrow + title + optional trust badge
+# ──────────────────────────────────────────────────────────────────────
+
+
+def section_card_header(
+    *,
+    eyebrow_text: str,
+    title: str,
+    badge_html: str = "",
+    right_html: str = "",
+) -> str:
+    """Compose the standard section-card header strip.
+
+    Pattern matches the Direction-A reference: small uppercase mono
+    eyebrow above a 14px Geist-Sans title, with an optional trust
+    badge (or any HTML) right-aligned in the same row as the title.
+
+    Use inside ``st.container(border=True)`` blocks to wrap subsystem
+    forms (Polymer family, Formulation, Crosslinking, Hardware,
+    Targets, etc.) so each surface gets the same header rhythm.
+
+    Args:
+        eyebrow_text: The uppercase mono micro-label (no need to
+            uppercase manually; CSS does it).
+        title: The section title in plain case (e.g. "Aqueous polymer
+            phase"). Rendered at 14px Geist Sans 600.
+        badge_html: Optional HTML for an inline evidence/trust badge
+            in the title row. Pass the result of
+            ``evidence_badge(tier, compact=True)``.
+        right_html: Optional extra HTML at the far right of the title
+            row (e.g. a tip-speed pill in the Hardware card).
+
+    Returns:
+        Self-contained HTML — emit via ``st.html``.
+    """
+    eyebrow_html = eyebrow(eyebrow_text)
+    title_row_right = ""
+    if badge_html or right_html:
+        title_row_right = (
+            '<div style="display:flex;align-items:center;gap:8px;'
+            'margin-left:auto;">'
+            f"{badge_html}{right_html}</div>"
+        )
+    return (
+        '<div style="display:flex;flex-direction:column;gap:2px;'
+        'margin-bottom:10px;">'
+        f"{eyebrow_html}"
+        '<div style="display:flex;align-items:center;gap:8px;'
+        'min-width:0;">'
+        f'<span style="font-size:14px;font-weight:600;'
+        f'color:var(--dps-text);line-height:1.25;">{_esc(title)}</span>'
+        f"{title_row_right}</div></div>"
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Card — surface with optional header
 # ──────────────────────────────────────────────────────────────────────
 
@@ -462,6 +589,7 @@ def breakthrough(
     show_axis: bool = True,
     accent: str = "var(--dps-accent)",
     dbc_marker_at: float = 0.55,
+    show_pre_pos: bool = True,
 ) -> str:
     """Render a small breakthrough-curve preview.
 
@@ -474,6 +602,9 @@ def breakthrough(
         accent: P50 line + uncertainty-band tint colour.
         dbc_marker_at: x position (0..1) at which to drop the DBC10
             indicator.
+        show_pre_pos: When ``True``, label the pre- and post-breakthrough
+            ends of the curve (matches the Direction-A reference rail
+            chart). PRE = below DBC threshold; POS = past breakthrough.
     """
     c = curve if curve is not None else _synthetic_breakthrough_curve()
     pad_l = 22
@@ -541,6 +672,25 @@ def breakthrough(
         f'cy="{ys(0.1):.1f}" r="2.4" fill="{accent}"/>'
     )
 
+    pre_pos_html = ""
+    if show_pre_pos:
+        # PRE label sits just inside the left edge near the baseline;
+        # POS sits just inside the right edge near the plateau. Colour
+        # matches the axis-label colour family so they read as labels,
+        # not data.
+        pre_pos_html = (
+            f'<text x="{xs(0.02):.1f}" y="{ys(0.06):.1f}" '
+            f'text-anchor="start" font-size="9" font-weight="600" '
+            f'fill="var(--dps-text-muted)" '
+            f'font-family="var(--dps-font-mono)" '
+            f'letter-spacing="0.08em">PRE</text>'
+            f'<text x="{xs(0.98):.1f}" y="{ys(0.94):.1f}" '
+            f'text-anchor="end" font-size="9" font-weight="600" '
+            f'fill="var(--dps-text-muted)" '
+            f'font-family="var(--dps-font-mono)" '
+            f'letter-spacing="0.08em">POS</text>'
+        )
+
     return (
         f'<svg width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" style="display:block;">'
@@ -548,7 +698,7 @@ def breakthrough(
         f'<path d="{band}" fill="{accent}" fill-opacity="0.16"/>'
         f'<path d="{path_of(c.p50)}" fill="none" '
         f'stroke="{accent}" stroke-width="1.5"/>'
-        f"{axis_html}{dbc_html}</svg>"
+        f"{axis_html}{dbc_html}{pre_pos_html}</svg>"
     )
 
 
@@ -578,8 +728,9 @@ class StageSpec:
 def pipeline_spine(stages: Iterable[StageSpec], *, active_id: str) -> str:
     """Compose a horizontal pipeline spine from a list of ``StageSpec``.
 
-    Renders 7 ``stage_node`` cells with ``→`` separators between them.
-    Click handling is the caller's responsibility (typically a row of
+    Renders N ``stage_node`` cells with ``→`` mono separators between
+    them, matching the canonical Direction-A reference layout. Click
+    handling is the caller's responsibility (typically a row of
     ``st.button`` overlaid via column layout, with this helper rendering
     the visual chrome behind them).
 
@@ -601,11 +752,12 @@ def pipeline_spine(stages: Iterable[StageSpec], *, active_id: str) -> str:
         )
         cells.append(node)
         if i < len(items) - 1:
+            # Mono "→" separator between stage nodes — canonical pattern.
             cells.append(
-                '<div style="align-self:center;'
+                '<div style="align-self:center;flex:0 0 auto;'
                 "color:var(--dps-text-dim);"
                 "font-family:var(--dps-font-mono);"
-                'font-size:12px;">→</div>'
+                'font-size:14px;line-height:1;padding:0 2px;">→</div>'
             )
     return (
         '<nav style="display:flex;align-items:stretch;'

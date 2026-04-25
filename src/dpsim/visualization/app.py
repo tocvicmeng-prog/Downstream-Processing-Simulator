@@ -57,10 +57,12 @@ from dpsim.visualization.shell import (
 from dpsim.visualization.shell.shell import default_evidence_stages
 from dpsim.visualization.ui_state import SessionStateManager
 from dpsim.visualization.ui_recipe import ensure_process_recipe_state
+from dpsim.visualization.shell.stage_panels import (
+    render_calibration_stage,
+    render_run_lifecycle_stage,
+    render_validation_stage,
+)
 from dpsim.visualization.ui_workflow import (
-    render_calibration_status_panel,
-    render_lifecycle_results_panel,
-    render_lifecycle_run_panel,
     render_stage_context_panel,
     render_target_product_profile_editor,
 )
@@ -90,7 +92,9 @@ inject_global_css()
 # token file: hide Streamlit's auto-page nav, hide the Deploy button,
 # tighten widget margins, etc. Kept compact since the bulk of the
 # styling now lives in tokens.css.
-st.html(
+# v0.4.18 (P10): switched from st.html to st.markdown — Streamlit 1.55
+# strips <style> tags from st.html output (see tokens.py docstring).
+st.markdown(
     """
     <style>
     /* Hide Streamlit's auto-page nav (v9.0 M8). */
@@ -194,7 +198,8 @@ st.html(
         }
     }
     </style>
-    """
+    """,
+    unsafe_allow_html=True,
 )
 
 
@@ -407,13 +412,13 @@ def _render_stage(active: StageId) -> None:
         render_tab_m3(tab_container=container)
         return
     if active == "run":
-        render_lifecycle_run_panel(recipe, st.session_state)
+        render_run_lifecycle_stage(recipe, st.session_state)
         return
     if active == "validation":
-        render_lifecycle_results_panel(recipe, st.session_state)
+        render_validation_stage(recipe, st.session_state)
         return
     if active == "calibrate":
-        render_calibration_status_panel(recipe, st.session_state)
+        render_calibration_stage(recipe, st.session_state)
         return
 
 
@@ -481,17 +486,21 @@ if _direction == "a":
         rail_renderer=_render_rail,
         manual_pdf_button=_render_manual_pdf_buttons,
         stage_status_map=_status_map,
+        direction_switch_renderer=render_direction_switch,
     )
-    # Direction switch lives subtly under the top bar.
-    with st.container():
-        _ds_cols = st.columns([8, 1])
-        with _ds_cols[1]:
-            render_direction_switch()
 else:
-    # Direction B — triptych. Top-bar lite (no stage spine — the
-    # triptych IS the stage strip). Bottom dock holds run controls.
+    # Direction B — triptych. v0.4.12: the 7-stage tab strip is now
+    # rendered above the triptych (matches the reference screenshots).
+    # Behaviour: clicking M1/M2/M3 focuses that triptych column;
+    # clicking a non-triptych stage (Target/Run/Validate/Calibrate)
+    # falls back to a single-stage view, same as Direction A.
     from dpsim.visualization.shell.shell import (
+        render_stage_spine as _render_stage_spine,
         render_top_bar as _render_top_bar,
+    )
+    from dpsim.visualization.shell.triptych import (
+        get_triptych_focus,
+        set_triptych_focus,
     )
     _render_top_bar(
         version="0.4.2",
@@ -499,11 +508,20 @@ else:
         modified=_diffs_pending > 0,
         evidence_stages=_evidence_stages,
         manual_pdf_button=_render_manual_pdf_buttons,
+        direction_switch_renderer=render_direction_switch,
     )
-    with st.container():
-        _ds_cols = st.columns([8, 1])
-        with _ds_cols[1]:
-            render_direction_switch()
+    _b_evidence_map = {s.stage_id: s.tier for s in _evidence_stages}
+    _b_active = _render_stage_spine(
+        status_map=_status_map,
+        evidence_map=_b_evidence_map,
+    )
+
+    # If a triptych stage is active, sync the focus and render the
+    # triptych. Otherwise render the single-stage body (Target / Run /
+    # Validate / Calibrate are not part of the triptych).
+    if _b_active in ("m1", "m2", "m3"):
+        if get_triptych_focus() != _b_active:
+            set_triptych_focus(_b_active)  # type: ignore[arg-type]
 
     def _b_m1() -> None:
         _render_stage("m1")
@@ -517,10 +535,19 @@ else:
     def _b_dock() -> None:
         _render_rail()
 
-    render_triptych(
-        m1_renderer=_b_m1,
-        m2_renderer=_b_m2,
-        m3_renderer=_b_m3,
-        evidence_stages=_evidence_stages,
-        dock_renderer=_b_dock,
-    )
+    if _b_active not in ("m1", "m2", "m3"):
+        # Single-stage view for non-triptych stages; reuse the same
+        # main grid so the rail still appears on the right.
+        from dpsim.visualization.shell.shell import render_main_grid
+        render_main_grid(
+            stage_renderer=_render_stage,
+            rail_renderer=_render_rail,
+        )
+    else:
+        render_triptych(
+            m1_renderer=_b_m1,
+            m2_renderer=_b_m2,
+            m3_renderer=_b_m3,
+            evidence_stages=_evidence_stages,
+            dock_renderer=_b_dock,
+        )

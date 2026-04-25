@@ -58,7 +58,10 @@ def render_tab_m3(tab_container) -> None:
         tab_container: Streamlit tab container from st.tabs().
     """
     with tab_container:
-        st.header("Module 3: Performance Characterization")
+        # v0.4.14: Direction-A page-header pair replacing legacy st.header.
+        from dpsim.visualization.design import chrome as _chrome_top
+        st.html(_chrome_top.eyebrow("Stage 04 · M3", accent=True))
+        st.html('<h1 style="margin:0 0 12px 0;">Column method</h1>')
 
         # ── Upstream M2 Status Banner ────────────────────────────────────
         if "m2_result" not in st.session_state:
@@ -83,91 +86,150 @@ def render_tab_m3(tab_container) -> None:
             ),
         )
 
-        st.subheader("Column/Reactor")
-        # v0.4.1: migrated to labeled_widget for inline help. Each widget
-        # picks up its tooltip from the central HELP_CATALOG, so help text
-        # stays consistent across the UI and is editable in one place.
-        from dpsim.visualization.help import get_help, labeled_widget
-        _m3c1, _m3c2 = st.columns(2)
-        with _m3c1:
-            col_diam_mm = labeled_widget(
-                "Column I.D.",
-                help=get_help("m3.column.diameter"),
-                unit="mm",
-                widget=lambda: st.number_input(
-                    "Column I.D. (mm)", 1.0, 50.0, 10.0,
-                    key="m3_col_d", label_visibility="collapsed",
-                ),
+        with st.container(border=True):
+            st.html(
+                _chrome_top.card_header_strip(
+                    eyebrow_text="Column geometry",
+                    title="Packed bed",
+                )
             )
-            bed_height_cm = labeled_widget(
-                "Bed height",
-                help=get_help("m3.column.length"),
-                unit="cm",
-                widget=lambda: st.number_input(
-                    "Bed height (cm)", 1.0, 30.0, 10.0,
-                    key="m3_bed_h", label_visibility="collapsed",
-                ),
+            # v0.4.1: migrated to labeled_widget for inline help. Each widget
+            # picks up its tooltip from the central HELP_CATALOG, so help text
+            # stays consistent across the UI and is editable in one place.
+            from dpsim.visualization.help import get_help, labeled_widget
+            _m3c1, _m3c2 = st.columns(2)
+            with _m3c1:
+                col_diam_mm = labeled_widget(
+                    "Column I.D.",
+                    help=get_help("m3.column.diameter"),
+                    unit="mm",
+                    widget=lambda: st.number_input(
+                        "Column I.D. (mm)", 1.0, 50.0, 10.0,
+                        key="m3_col_d", label_visibility="collapsed",
+                    ),
+                )
+                bed_height_cm = labeled_widget(
+                    "Bed height",
+                    help=get_help("m3.column.length"),
+                    unit="cm",
+                    widget=lambda: st.number_input(
+                        "Bed height (cm)", 1.0, 30.0, 10.0,
+                        key="m3_bed_h", label_visibility="collapsed",
+                    ),
+                )
+            with _m3c2:
+                bed_porosity = labeled_widget(
+                    "Bed porosity",
+                    widget=lambda: st.slider(
+                        "Bed porosity", 0.25, 0.50, 0.38, step=0.01,
+                        key="m3_eps_b", label_visibility="collapsed",
+                    ),
+                )
+                flow_rate_mL = labeled_widget(
+                    "Flow rate",
+                    help=get_help("m3.flow_rate"),
+                    unit="mL/min",
+                    widget=lambda: st.number_input(
+                        "Flow rate (mL/min)", 0.01, 20.0, 1.0, step=0.1,
+                        key="m3_flow", label_visibility="collapsed",
+                    ),
+                )
+
+            # v0.4.17 (P4): derived-geometry strip — bed volume,
+            # superficial linear velocity (cm/h), and one-CV residence
+            # time. These are read-only derivations from the inputs
+            # above; the LRM solver does its own rigorous calculation
+            # but surfacing them at the input site lets the operator
+            # sanity-check method conditions before Run.
+            import math as _math_m3
+            _r_cm = (col_diam_mm / 10.0) / 2.0
+            _bed_volume_mL = _math_m3.pi * _r_cm * _r_cm * bed_height_cm
+            _area_cm2 = _math_m3.pi * _r_cm * _r_cm
+            _u_super_cm_h = (
+                (flow_rate_mL * 60.0) / _area_cm2 if _area_cm2 > 0 else 0.0
             )
-        with _m3c2:
-            bed_porosity = labeled_widget(
-                "Bed porosity",
-                widget=lambda: st.slider(
-                    "Bed porosity", 0.25, 0.50, 0.38, step=0.01,
-                    key="m3_eps_b", label_visibility="collapsed",
-                ),
+            _void_volume_mL = _bed_volume_mL * float(bed_porosity)
+            _tau_void_min = (
+                _void_volume_mL / flow_rate_mL if flow_rate_mL > 0 else 0.0
             )
-            flow_rate_mL = labeled_widget(
-                "Flow rate",
-                help=get_help("m3.flow_rate"),
-                unit="mL/min",
-                widget=lambda: st.number_input(
-                    "Flow rate (mL/min)", 0.01, 20.0, 1.0, step=0.1,
-                    key="m3_flow", label_visibility="collapsed",
-                ),
+            st.html(
+                '<div class="dps-mono" style="display:flex;align-items:center;'
+                "gap:14px;padding:6px 10px;margin-top:6px;"
+                "background:var(--dps-surface-2);"
+                "border:1px solid var(--dps-border);border-radius:3px;"
+                'font-size:11px;color:var(--dps-text-muted);">'
+                '<span>V_bed <span style="color:var(--dps-text);">'
+                f'{_bed_volume_mL:.2f} mL</span></span>'
+                '<span>u_super <span style="color:var(--dps-text);">'
+                f'{_u_super_cm_h:.0f} cm/h</span></span>'
+                '<span>τ_void <span style="color:var(--dps-text);">'
+                f'{_tau_void_min:.2f} min</span></span>'
+                '<span style="margin-left:auto;color:var(--dps-text-dim);">'
+                "derived</span>"
+                "</div>"
             )
 
-        # Pressure preview
-        if "m2_result" in st.session_state:
-            from dpsim.module3_performance.hydrodynamics import ColumnGeometry as _CG_preview
-            m2r_prev = st.session_state["m2_result"]
-            _preview_col = _CG_preview(
-                diameter=col_diam_mm / 1000, bed_height=bed_height_cm / 100,
-                particle_diameter=m2r_prev.m1_contract.bead_d50,
-                bed_porosity=bed_porosity,
-                G_DN=m2r_prev.G_DN_updated, E_star=m2r_prev.E_star_updated)
-            _dP = _preview_col.pressure_drop(flow_rate_mL / 60e6)
-            st.metric("Estimated Pressure Drop", f"{_dP / 1000:.1f} kPa")
+            # Pressure preview
+            if "m2_result" in st.session_state:
+                from dpsim.module3_performance.hydrodynamics import ColumnGeometry as _CG_preview
+                m2r_prev = st.session_state["m2_result"]
+                _preview_col = _CG_preview(
+                    diameter=col_diam_mm / 1000, bed_height=bed_height_cm / 100,
+                    particle_diameter=m2r_prev.m1_contract.bead_d50,
+                    bed_porosity=bed_porosity,
+                    G_DN=m2r_prev.G_DN_updated, E_star=m2r_prev.E_star_updated)
+                _dP = _preview_col.pressure_drop(flow_rate_mL / 60e6)
+                st.metric("Estimated Pressure Drop", f"{_dP / 1000:.1f} kPa")
 
-        # v0.4.1: Column cross-section animation with phase tabs. Per the
-        # SA Q2 sign-off in SA_v0_4_0_RUSHTON_FIDELITY.md §3, the visual
-        # keeps BOTH bead recolour (bound payload concentration on resin)
-        # AND streaming dots (eluate / wash / CIP outflow), with phase-
-        # dependent legend labels.
-        with st.expander(
-            "🧪 Column cross-section — phase animation",
-            expanded=False,
-        ):
-            from dpsim.visualization.components import render_column_xsec
-            from dpsim.visualization.help import labeled_widget as _lw_xsec
-            _phase = _lw_xsec(
+        # v0.4.11: Live phase view — rendered inline at full size to match
+        # the Direction-A reference (was hidden in a collapsed expander
+        # since v0.4.1). The phase animation IS the column-method
+        # affordance; per the SA Q2 sign-off in
+        # SA_v0_4_0_RUSHTON_FIDELITY.md §3, the visual keeps BOTH bead
+        # recolour (bound payload concentration on resin) AND streaming
+        # dots (eluate / wash / CIP outflow), with phase-dependent
+        # legend labels.
+        from dpsim.visualization.components import render_column_xsec
+        from dpsim.visualization.design import chrome as _chrome
+        from dpsim.visualization.help import labeled_widget as _lw_xsec
+        st.html(_chrome.eyebrow("Live phase view"))
+        _phase = _lw_xsec(
+            "Phase",
+            help=(
+                "load: target binds resin · wash: impurities flushed · "
+                "elute: bound target releases · cip: stripped residuals."
+            ),
+            widget=lambda: st.radio(
                 "Phase",
-                help=(
-                    "load: target binds resin · wash: impurities flushed · "
-                    "elute: bound target releases · cip: stripped residuals."
-                ),
-                widget=lambda: st.radio(
-                    "Phase",
-                    ["load", "wash", "elute", "cip"],
-                    horizontal=True,
-                    key="m3_xsec_phase",
-                    label_visibility="collapsed",
-                ),
+                ["load", "wash", "elute", "cip"],
+                horizontal=True,
+                key="m3_xsec_phase",
+                label_visibility="collapsed",
+            ),
+        )
+        render_column_xsec(
+            phase=_phase,  # type: ignore[arg-type]
+            column_length_mm=float(bed_height_cm * 10),
+            column_diameter_mm=float(col_diam_mm),
+        )
+
+        # v0.4.17 (P7): Monte-Carlo uncertainty card — promoted from
+        # the sidebar popover into a primary M3 card per the canonical
+        # Direction-A reference. The panel writes _unc_spec /
+        # _unc_n_jobs into session state; the M3 Run button below
+        # picks them up automatically.
+        from dpsim.visualization.panels import render_uncertainty_panel
+        with st.container(border=True):
+            st.html(
+                _chrome_top.card_header_strip(
+                    eyebrow_text="Monte-Carlo uncertainty",
+                    title="LRM with posterior propagation",
+                    right_html=_chrome_top.chip(
+                        "P05–P95", color="var(--dps-accent)",
+                    ),
+                )
             )
-            render_column_xsec(
-                phase=_phase,  # type: ignore[arg-type]
-                column_length_mm=float(bed_height_cm * 10),
-                column_diameter_mm=float(col_diam_mm),
-            )
+            render_uncertainty_panel(as_card=True)
 
         # Mode-specific inputs
         chrom_mode = "Breakthrough"
@@ -208,234 +270,263 @@ def render_tab_m3(tab_container) -> None:
                 ),
             )
 
-            st.subheader("Feed")
-            # v0.4.3: feed + isotherm migrated to labeled_widget.
-            from dpsim.visualization.help import labeled_widget as _lw_m3
-            C_feed_mg = _lw_m3(
-                "Feed concentration",
-                help=(
-                    "Total target concentration in the feed stream. "
-                    "Drives load-step mass balance and DBC10 calculation."
-                ),
-                unit="mg/mL",
-                widget=lambda: st.number_input(
-                    "Feed conc. (mg/mL)", 0.01, 50.0, 1.0,
-                    key="m3_Cfeed", label_visibility="collapsed",
-                ),
-            )
-            feed_dur_min = _lw_m3(
-                "Feed duration",
-                help="Duration of the load step. Sets the integral mass loaded onto the bed.",
-                unit="min",
-                widget=lambda: st.number_input(
-                    "Feed duration (min)", 1.0, 60.0, 10.0,
-                    key="m3_feed_dur", label_visibility="collapsed",
-                ),
-            )
-            total_time_min = _lw_m3(
-                "Total time",
-                help="Total simulation time, including post-load tail. Must exceed feed duration.",
-                unit="min",
-                widget=lambda: st.number_input(
-                    "Total time (min)", 5.0, 120.0, 20.0,
-                    key="m3_total_t", label_visibility="collapsed",
-                ),
-            )
-
-            st.subheader("Isotherm")
-            q_max = _lw_m3(
-                "q_max",
-                help=(
-                    "Langmuir saturation capacity in mol/m\u00b3. "
-                    "Drives the high-load asymptote of binding capacity."
-                ),
-                unit="mol/m\u00b3",
-                widget=lambda: st.number_input(
-                    "q_max (mol/m\u00b3)", 1.0, 500.0, 100.0,
-                    key="m3_qmax", label_visibility="collapsed",
-                ),
-            )
-            K_L_m3 = _lw_m3(
-                "K_L",
-                help=(
-                    "Langmuir affinity constant in m\u00b3/mol. "
-                    "Higher K_L = sharper breakthrough; the DBC\u2081\u2080 "
-                    "metric depends on K_L \u00d7 q_max."
-                ),
-                unit="m\u00b3/mol",
-                widget=lambda: st.number_input(
-                    "K_L (m\u00b3/mol)", 10.0, 1e5, 1000.0,
-                    key="m3_KL", label_visibility="collapsed",
-                ),
-            )
-            st.caption("Default isotherm parameters are illustrative \u2014 user calibration required.")
-
-            # v0.4.5: \u03b5\u2082\u2088\u2080 + gradient + Protein A + catalysis migrated.
-            ext_coeff = _lw_m3(
-                "\u03b5\u2082\u2088\u2080",
-                help=(
-                    "Molar extinction coefficient of the target at 280 nm "
-                    "in M\u207b\u00b9\u00b7cm\u207b\u00b9. Used to convert absorbance traces to "
-                    "concentration. **Default 36 000 fits ~50 kDa "
-                    "proteins (e.g. BSA \u2248 43 800)**. For IgG use \u2248 "
-                    "210 000 (Pace 1995, \u03b5^1% \u2248 1.4 mL\u00b7mg\u207b\u00b9\u00b7cm\u207b\u00b9 \u00d7 "
-                    "MW 150 kDa); for sdAb / nanobody use \u2248 28 000. "
-                    "Mismatched \u03b5 scales the C\u2082\u2088\u2080 trace linearly, so "
-                    "DBC\u2081\u2080 scales the same way \u2014 set this correctly "
-                    "before reading binding capacities."
-                ),
-                unit="1/(M\u00b7cm)",
-                widget=lambda: st.number_input(
-                    "\u03b5\u2082\u2088\u2080 (1/(M\u00b7cm))", 1000.0, 250000.0, 36000.0,
-                    key="m3_ext", label_visibility="collapsed",
-                ),
-            )
-
-            if chrom_mode == "Gradient Elution":
-                st.subheader("Gradient")
-                grad_start = _lw_m3(
-                    "Gradient start",
-                    help="Salt / modifier concentration at gradient start. Linear ramp from start to end over the gradient duration.",
-                    unit="mM",
+            with st.container(border=True):
+                st.html(
+                    _chrome_top.card_header_strip(
+                        eyebrow_text="Feed",
+                        title="Inlet stream",
+                    )
+                )
+                # v0.4.3: feed + isotherm migrated to labeled_widget.
+                from dpsim.visualization.help import labeled_widget as _lw_m3
+                C_feed_mg = _lw_m3(
+                    "Feed concentration",
+                    help=(
+                        "Total target concentration in the feed stream. "
+                        "Drives load-step mass balance and DBC10 calculation."
+                    ),
+                    unit="mg/mL",
                     widget=lambda: st.number_input(
-                        "Start (mM)", 0.0, 1000.0, 0.0,
-                        key="m3_grad_start", label_visibility="collapsed",
+                        "Feed conc. (mg/mL)", 0.01, 50.0, 1.0,
+                        key="m3_Cfeed", label_visibility="collapsed",
                     ),
                 )
-                grad_end = _lw_m3(
-                    "Gradient end",
-                    help="Salt / modifier concentration at gradient end. Higher end = harsher elution = sharper peaks but worse selectivity.",
-                    unit="mM",
-                    widget=lambda: st.number_input(
-                        "End (mM)", 0.0, 1000.0, 500.0,
-                        key="m3_grad_end", label_visibility="collapsed",
-                    ),
-                )
-                grad_dur_min = _lw_m3(
-                    "Gradient duration",
-                    help="Time over which the salt ramp runs. Longer gradients give better resolution at the cost of process time.",
+                feed_dur_min = _lw_m3(
+                    "Feed duration",
+                    help="Duration of the load step. Sets the integral mass loaded onto the bed.",
                     unit="min",
                     widget=lambda: st.number_input(
-                        "Duration (min)", 1.0, 60.0, 10.0,
-                        key="m3_grad_dur", label_visibility="collapsed",
+                        "Feed duration (min)", 1.0, 60.0, 10.0,
+                        key="m3_feed_dur", label_visibility="collapsed",
                     ),
                 )
+                total_time_min = _lw_m3(
+                    "Total time",
+                    help="Total simulation time, including post-load tail. Must exceed feed duration.",
+                    unit="min",
+                    widget=lambda: st.number_input(
+                        "Total time (min)", 5.0, 120.0, 20.0,
+                        key="m3_total_t", label_visibility="collapsed",
+                    ),
+                )
+
+            with st.container(border=True):
+                st.html(
+                    _chrome_top.card_header_strip(
+                        eyebrow_text="Isotherm",
+                        title="Binding model",
+                    )
+                )
+                q_max = _lw_m3(
+                    "q_max",
+                    help=(
+                        "Langmuir saturation capacity in mol/m\u00b3. "
+                        "Drives the high-load asymptote of binding capacity."
+                    ),
+                    unit="mol/m\u00b3",
+                    widget=lambda: st.number_input(
+                        "q_max (mol/m\u00b3)", 1.0, 500.0, 100.0,
+                        key="m3_qmax", label_visibility="collapsed",
+                    ),
+                )
+                K_L_m3 = _lw_m3(
+                    "K_L",
+                    help=(
+                        "Langmuir affinity constant in m\u00b3/mol. "
+                        "Higher K_L = sharper breakthrough; the DBC\u2081\u2080 "
+                        "metric depends on K_L \u00d7 q_max."
+                    ),
+                    unit="m\u00b3/mol",
+                    widget=lambda: st.number_input(
+                        "K_L (m\u00b3/mol)", 10.0, 1e5, 1000.0,
+                        key="m3_KL", label_visibility="collapsed",
+                    ),
+                )
+                st.caption("Default isotherm parameters are illustrative \u2014 user calibration required.")
+
+                # v0.4.5: \u03b5\u2082\u2088\u2080 + gradient + Protein A + catalysis migrated.
+                ext_coeff = _lw_m3(
+                    "\u03b5\u2082\u2088\u2080",
+                    help=(
+                        "Molar extinction coefficient of the target at 280 nm "
+                        "in M\u207b\u00b9\u00b7cm\u207b\u00b9. Used to convert absorbance traces to "
+                        "concentration. **Default 36 000 fits ~50 kDa "
+                        "proteins (e.g. BSA \u2248 43 800)**. For IgG use \u2248 "
+                        "210 000 (Pace 1995, \u03b5^1% \u2248 1.4 mL\u00b7mg\u207b\u00b9\u00b7cm\u207b\u00b9 \u00d7 "
+                        "MW 150 kDa); for sdAb / nanobody use \u2248 28 000. "
+                        "Mismatched \u03b5 scales the C\u2082\u2088\u2080 trace linearly, so "
+                        "DBC\u2081\u2080 scales the same way \u2014 set this correctly "
+                        "before reading binding capacities."
+                    ),
+                    unit="1/(M\u00b7cm)",
+                    widget=lambda: st.number_input(
+                        "\u03b5\u2082\u2088\u2080 (1/(M\u00b7cm))", 1000.0, 250000.0, 36000.0,
+                        key="m3_ext", label_visibility="collapsed",
+                    ),
+                )
+
+            if chrom_mode == "Gradient Elution":
+                with st.container(border=True):
+                    st.html(
+                        _chrome_top.card_header_strip(
+                            eyebrow_text="Gradient",
+                            title="Salt / pH ramp",
+                        )
+                    )
+                    grad_start = _lw_m3(
+                        "Gradient start",
+                        help="Salt / modifier concentration at gradient start. Linear ramp from start to end over the gradient duration.",
+                        unit="mM",
+                        widget=lambda: st.number_input(
+                            "Start (mM)", 0.0, 1000.0, 0.0,
+                            key="m3_grad_start", label_visibility="collapsed",
+                        ),
+                    )
+                    grad_end = _lw_m3(
+                        "Gradient end",
+                        help="Salt / modifier concentration at gradient end. Higher end = harsher elution = sharper peaks but worse selectivity.",
+                        unit="mM",
+                        widget=lambda: st.number_input(
+                            "End (mM)", 0.0, 1000.0, 500.0,
+                            key="m3_grad_end", label_visibility="collapsed",
+                        ),
+                    )
+                    grad_dur_min = _lw_m3(
+                        "Gradient duration",
+                        help="Time over which the salt ramp runs. Longer gradients give better resolution at the cost of process time.",
+                        unit="min",
+                        widget=lambda: st.number_input(
+                            "Duration (min)", 1.0, 60.0, 10.0,
+                            key="m3_grad_dur", label_visibility="collapsed",
+                        ),
+                    )
             elif chrom_mode == "Protein A Method":
-                st.subheader("Method Buffers")
-                _m3m1, _m3m2 = st.columns(2)
-                with _m3m1:
-                    from dpsim.visualization.help import get_help as _gh3
-                    bind_pH = _lw_m3(
-                        "Bind/wash pH",
-                        help=_gh3("m3.bind_pH"),
-                        widget=lambda: st.number_input(
-                            "Bind/wash pH", 5.0, 9.5, 7.4, step=0.1,
-                            key="m3_bind_pH", label_visibility="collapsed",
-                        ),
+                with st.container(border=True):
+                    st.html(
+                        _chrome_top.card_header_strip(
+                            eyebrow_text="Method buffers",
+                            title="Bind · wash · elute",
+                        )
                     )
-                    bind_cond = _lw_m3(
-                        "Bind/wash conductivity",
-                        help="Salt-equivalent conductivity of the load + wash buffers. Typical Protein A: 10\u201320 mS/cm.",
-                        unit="mS/cm",
-                        widget=lambda: st.number_input(
-                            "Bind/wash conductivity (mS/cm)", 1.0, 40.0, 15.0, step=0.5,
-                            key="m3_bind_cond", label_visibility="collapsed",
-                        ),
-                    )
-                    wash_dur_min = _lw_m3(
-                        "Wash duration",
-                        help="Wash-step duration (post-load, pre-elute). Longer washes flush more impurities at the cost of process time.",
-                        unit="min",
-                        widget=lambda: st.number_input(
-                            "Wash duration (min)", 1.0, 60.0, 5.0,
-                            key="m3_wash_dur", label_visibility="collapsed",
-                        ),
-                    )
-                with _m3m2:
-                    elute_pH = _lw_m3(
-                        "Elution pH",
-                        help=_gh3("m3.elute_pH"),
-                        widget=lambda: st.number_input(
-                            "Elution pH", 2.5, 5.0, 3.5, step=0.1,
-                            key="m3_elute_pH", label_visibility="collapsed",
-                        ),
-                    )
-                    elute_cond = _lw_m3(
-                        "Elution conductivity",
-                        help="Salt-equivalent conductivity of the elute buffer. Typical Protein A elute: 5\u201310 mS/cm.",
-                        unit="mS/cm",
-                        widget=lambda: st.number_input(
-                            "Elution conductivity (mS/cm)", 1.0, 40.0, 5.0, step=0.5,
-                            key="m3_elute_cond", label_visibility="collapsed",
-                        ),
-                    )
-                    elute_dur_min = _lw_m3(
-                        "Elution duration",
-                        help="Elution-step duration. Long enough to sweep one bed volume of elute through the bed.",
-                        unit="min",
-                        widget=lambda: st.number_input(
-                            "Elution duration (min)", 1.0, 60.0, 5.0,
-                            key="m3_elute_dur", label_visibility="collapsed",
-                        ),
-                    )
-
+                    _m3m1, _m3m2 = st.columns(2)
+                    with _m3m1:
+                        from dpsim.visualization.help import get_help as _gh3
+                        bind_pH = _lw_m3(
+                            "Bind/wash pH",
+                            help=_gh3("m3.bind_pH"),
+                            widget=lambda: st.number_input(
+                                "Bind/wash pH", 5.0, 9.5, 7.4, step=0.1,
+                                key="m3_bind_pH", label_visibility="collapsed",
+                            ),
+                        )
+                        bind_cond = _lw_m3(
+                            "Bind/wash conductivity",
+                            help="Salt-equivalent conductivity of the load + wash buffers. Typical Protein A: 10–20 mS/cm.",
+                            unit="mS/cm",
+                            widget=lambda: st.number_input(
+                                "Bind/wash conductivity (mS/cm)", 1.0, 40.0, 15.0, step=0.5,
+                                key="m3_bind_cond", label_visibility="collapsed",
+                            ),
+                        )
+                        wash_dur_min = _lw_m3(
+                            "Wash duration",
+                            help="Wash-step duration (post-load, pre-elute). Longer washes flush more impurities at the cost of process time.",
+                            unit="min",
+                            widget=lambda: st.number_input(
+                                "Wash duration (min)", 1.0, 60.0, 5.0,
+                                key="m3_wash_dur", label_visibility="collapsed",
+                            ),
+                        )
+                    with _m3m2:
+                        elute_pH = _lw_m3(
+                            "Elution pH",
+                            help=_gh3("m3.elute_pH"),
+                            widget=lambda: st.number_input(
+                                "Elution pH", 2.5, 5.0, 3.5, step=0.1,
+                                key="m3_elute_pH", label_visibility="collapsed",
+                            ),
+                        )
+                        elute_cond = _lw_m3(
+                            "Elution conductivity",
+                            help="Salt-equivalent conductivity of the elute buffer. Typical Protein A elute: 5–10 mS/cm.",
+                            unit="mS/cm",
+                            widget=lambda: st.number_input(
+                                "Elution conductivity (mS/cm)", 1.0, 40.0, 5.0, step=0.5,
+                                key="m3_elute_cond", label_visibility="collapsed",
+                            ),
+                        )
+                        elute_dur_min = _lw_m3(
+                            "Elution duration",
+                            help="Elution-step duration. Long enough to sweep one bed volume of elute through the bed.",
+                            unit="min",
+                            widget=lambda: st.number_input(
+                                "Elution duration (min)", 1.0, 60.0, 5.0,
+                                key="m3_elute_dur", label_visibility="collapsed",
+                            ),
+                        )
         elif m3_app_mode == "Catalysis":
-            st.subheader("Enzyme Kinetics")
-            V_max = _lw_m3(
-                "V_max",
-                help="Maximum specific reaction rate at saturating substrate. Drives the high-substrate plateau in the Michaelis\u2013Menten kinetics.",
-                unit="mol/(m\u00b3\u00b7s)",
-                widget=lambda: st.number_input(
-                    "V_max (mol/(m\u00b3\u00b7s))", 0.001, 100.0, 1.0,
-                    key="m3_Vmax", label_visibility="collapsed",
-                ),
-            )
-            K_m = _lw_m3(
-                "K_m",
-                help="Michaelis constant \u2014 substrate concentration at which the reaction rate is V_max/2. Lower K_m = higher apparent affinity.",
-                unit="mM",
-                widget=lambda: st.number_input(
-                    "K_m (mM)", 0.01, 100.0, 1.0,
-                    key="m3_Km", label_visibility="collapsed",
-                ),
-            )
-            S_feed = _lw_m3(
-                "Substrate feed",
-                help="Substrate concentration at the reactor inlet. Drives both conversion and effective rate (saturation behaviour).",
-                unit="mM",
-                widget=lambda: st.number_input(
-                    "Substrate feed (mM)", 0.1, 100.0, 10.0,
-                    key="m3_Sfeed", label_visibility="collapsed",
-                ),
-            )
-            D_eff = _lw_m3(
-                "Effective diffusivity",
-                help="Intra-particle effective diffusivity of substrate. Drives the Thiele modulus and internal effectiveness factor.",
-                unit="m\u00b2/s",
-                widget=lambda: st.number_input(
-                    "D_eff (m\u00b2/s)", 1e-12, 1e-8, 1e-10, format="%.1e",
-                    key="m3_Deff", label_visibility="collapsed",
-                ),
-            )
-            k_deact = _lw_m3(
-                "Deactivation rate k_d",
-                help="First-order enzyme deactivation rate constant. 0 \u2192 no decay (idealised).",
-                unit="1/s",
-                widget=lambda: st.number_input(
-                    "k_d (1/s)", 0.0, 1e-3, 0.0, format="%.1e",
-                    key="m3_kd", label_visibility="collapsed",
-                ),
-            )
-            cat_time_h = _lw_m3(
-                "Simulation time",
-                help="Total reaction time horizon for the catalysis simulation.",
-                unit="h",
-                widget=lambda: st.number_input(
-                    "Sim. time (h)", 0.1, 48.0, 1.0,
-                    key="m3_cat_t", label_visibility="collapsed",
-                ),
-            )
-
+            from dpsim.visualization.help import labeled_widget as _lw_m3
+            with st.container(border=True):
+                st.html(
+                    _chrome_top.card_header_strip(
+                        eyebrow_text="Enzyme kinetics",
+                        title="Michaelis–Menten parameters",
+                    )
+                )
+                V_max = _lw_m3(
+                    "V_max",
+                    help="Maximum specific reaction rate at saturating substrate. Drives the high-substrate plateau in the Michaelis–Menten kinetics.",
+                    unit="mol/(m³·s)",
+                    widget=lambda: st.number_input(
+                        "V_max (mol/(m³·s))", 0.001, 100.0, 1.0,
+                        key="m3_Vmax", label_visibility="collapsed",
+                    ),
+                )
+                K_m = _lw_m3(
+                    "K_m",
+                    help="Michaelis constant — substrate concentration at which the reaction rate is V_max/2. Lower K_m = higher apparent affinity.",
+                    unit="mM",
+                    widget=lambda: st.number_input(
+                        "K_m (mM)", 0.01, 100.0, 1.0,
+                        key="m3_Km", label_visibility="collapsed",
+                    ),
+                )
+                S_feed = _lw_m3(
+                    "Substrate feed",
+                    help="Substrate concentration at the reactor inlet. Drives both conversion and effective rate (saturation behaviour).",
+                    unit="mM",
+                    widget=lambda: st.number_input(
+                        "Substrate feed (mM)", 0.1, 100.0, 10.0,
+                        key="m3_Sfeed", label_visibility="collapsed",
+                    ),
+                )
+                D_eff = _lw_m3(
+                    "Effective diffusivity",
+                    help="Intra-particle effective diffusivity of substrate. Drives the Thiele modulus and internal effectiveness factor.",
+                    unit="m²/s",
+                    widget=lambda: st.number_input(
+                        "D_eff (m²/s)", 1e-12, 1e-8, 1e-10, format="%.1e",
+                        key="m3_Deff", label_visibility="collapsed",
+                    ),
+                )
+                k_deact = _lw_m3(
+                    "Deactivation rate k_d",
+                    help="First-order enzyme deactivation rate constant. 0 → no decay (idealised).",
+                    unit="1/s",
+                    widget=lambda: st.number_input(
+                        "k_d (1/s)", 0.0, 1e-3, 0.0, format="%.1e",
+                        key="m3_kd", label_visibility="collapsed",
+                    ),
+                )
+                cat_time_h = _lw_m3(
+                    "Simulation time",
+                    help="Total reaction time horizon for the catalysis simulation.",
+                    unit="h",
+                    widget=lambda: st.number_input(
+                        "Sim. time (h)", 0.1, 48.0, 1.0,
+                        key="m3_cat_t", label_visibility="collapsed",
+                    ),
+                )
         _recipe = ensure_process_recipe_state(st.session_state)
         _recipe = sync_m3_ui_to_recipe(
             _recipe,
@@ -635,14 +726,14 @@ def render_tab_m3(tab_container) -> None:
 
         if _show_m3_bt or _show_m3_ge or _show_m3_method or _show_m3_cat:
             st.divider()
-            st.header("\U0001f4ca M3 Results")
+            st.header("M3 Results")
 
             # Build sub-tabs for M3 results
             _m3_sub_labels = []
             if _show_m3_bt:
-                _m3_sub_labels.append("\U0001f4ca Breakthrough")
+                _m3_sub_labels.append("Breakthrough")
             if _show_m3_ge:
-                _m3_sub_labels.append("\U0001f4ca Gradient Elution")
+                _m3_sub_labels.append("Gradient Elution")
             if _show_m3_method:
                 _m3_sub_labels.append("Protein A Method")
             if _show_m3_cat:

@@ -208,7 +208,10 @@ def render_tab_m2(tab_container, _smgr) -> None:
         _smgr: SessionStateManager instance.
     """
     with tab_container:
-        st.header("Module 2: Surface Functionalization")
+        # v0.4.14: Direction-A page-header pair replacing legacy st.header.
+        from dpsim.visualization.design import chrome as _chrome
+        st.html(_chrome.eyebrow("Stage 03 · M2", accent=True))
+        st.html('<h1 style="margin:0 0 12px 0;">Functionalisation</h1>')
 
         # ── Upstream M1 Status Banner ────────────────────────────────────
         if "result" not in st.session_state:
@@ -223,13 +226,74 @@ def render_tab_m2(tab_container, _smgr) -> None:
                 f"porosity={_m1g.porosity:.1%} | G_DN={_m1m.G_DN/1000:.1f} kPa"
             )
 
-        # ── M2 Inputs ───────────────────────────────────────────────────
+        # ── M2 Inputs (Reagent buckets card) ─────────────────────────────
         from dpsim.module2_functionalization.reagent_profiles import REAGENT_PROFILES as _REAGENT_PROFILES
         from dpsim.module2_functionalization import ModificationStep, ModificationStepType, ACSSiteType
 
         m2_steps = []
         # v0.4.3: modification-step header migrated to labeled_widget.
         from dpsim.visualization.help import labeled_widget as _lw_m2
+
+        # v0.4.17 (P9): Reagent-bucket overview grid — matches the
+        # canonical Direction-A reference's 9-bucket grid (extended to
+        # 17 here for full v0.3.4 taxonomy coverage). Buckets currently
+        # used by the configured steps are highlighted with the accent
+        # ring; clicking is informational-only — actual reagent
+        # selection happens in the per-step expanders below.
+        with st.container(border=True):
+            _bucket_counts = {
+                _b: len(_reagent_options_for_bucket(_b))
+                for _b in _BUCKET_DISPLAY_ORDER
+            }
+            _reagent_total = sum(_bucket_counts.values())
+            st.html(
+                _chrome.card_header_strip(
+                    eyebrow_text=(
+                        f"Reagent buckets · {_reagent_total} reagents · "
+                        f"{len(_BUCKET_DISPLAY_ORDER)} chemistry buckets"
+                    ),
+                    title="Modification protocol",
+                )
+            )
+            _active_buckets = {
+                str(st.session_state.get(f"m2_type_{i}", ""))
+                for i in range(int(st.session_state.get("m2_n_steps", 1)))
+            }
+            _bucket_cells = []
+            for _b in _BUCKET_DISPLAY_ORDER:
+                _count = _bucket_counts[_b]
+                _is_active = _b in _active_buckets
+                _bucket_cells.append(
+                    '<div style="padding:10px 12px;'
+                    + (
+                        "background:var(--dps-accent-soft);"
+                        "border-left:2px solid var(--dps-accent);"
+                        if _is_active
+                        else "background:var(--dps-surface);"
+                        "border-left:2px solid transparent;"
+                    )
+                    + "border-top:1px solid var(--dps-border);"
+                    "display:flex;justify-content:space-between;"
+                    'align-items:center;gap:6px;">'
+                    '<span style="font-size:12px;font-weight:500;'
+                    + (
+                        "color:var(--dps-text);"
+                        if _is_active
+                        else "color:var(--dps-text-muted);"
+                    )
+                    + f'">{_b}</span>'
+                    '<span class="dps-mono" style="font-size:11px;'
+                    f'color:var(--dps-text-dim);">{_count}</span>'
+                    "</div>"
+                )
+            st.html(
+                '<div style="display:grid;'
+                "grid-template-columns:repeat(auto-fill,minmax(180px,1fr));"
+                "gap:0;border:1px solid var(--dps-border);"
+                'border-radius:3px;overflow:hidden;margin-top:6px;">'
+                + "".join(_bucket_cells)
+                + "</div>"
+            )
         n_m2_steps = _lw_m2(
             "Modification steps",
             help=(
@@ -471,9 +535,116 @@ def render_tab_m2(tab_container, _smgr) -> None:
         _recipe = sync_m2_steps_to_recipe(_recipe, m2_steps)
         save_process_recipe_state(st.session_state, _recipe)
 
+        # ── ACS state — pre-Run preview / live result (v0.4.17 P8) ──────
+        # Always-visible card matching the canonical Direction-A
+        # reference's "ACS state — predicted" card. Pre-Run renders
+        # placeholder cells; post-Run pulls live values from m2_result.
+        _m2_post = st.session_state.get("m2_result")
+        with st.container(border=True):
+            if _m2_post is not None:
+                _acs_eyebrow = (
+                    f"ACS state · live · "
+                    f"{len(_m2_post.acs_profiles)} site-types tracked"
+                )
+                _acs_evidence = _chrome.evidence_badge(
+                    "semi_quantitative", compact=True,
+                )
+            else:
+                _acs_eyebrow = "ACS state · pre-run preview"
+                _acs_evidence = _chrome.evidence_badge(
+                    "unsupported", compact=True,
+                )
+            st.html(
+                _chrome.card_header_strip(
+                    eyebrow_text=_acs_eyebrow,
+                    title="25 site-types tracked",
+                    right_html=_acs_evidence,
+                )
+            )
+            if _m2_post is not None:
+                _g_dn_kpa = _m2_post.G_DN_updated / 1000.0
+                _e_star_kpa = _m2_post.E_star_updated / 1000.0
+                _n_steps_run = len(_m2_post.modification_history)
+                _acs_cells = [
+                    ("steps", str(_n_steps_run), "executed",
+                     "calibrated_local"),
+                    ("G_DN", f"{_g_dn_kpa:.1f}", "kPa",
+                     "semi_quantitative"),
+                    ("E*", f"{_e_star_kpa:.1f}", "kPa",
+                     "semi_quantitative"),
+                    ("ligands", f"{len(_m2_post.acs_profiles)}", "types",
+                     "qualitative_trend"),
+                ]
+            else:
+                _acs_cells = [
+                    ("steps", "—", "configured", "unsupported"),
+                    ("G_DN", "—", "kPa", "unsupported"),
+                    ("E*", "—", "kPa", "unsupported"),
+                    ("ligands", "—", "types", "unsupported"),
+                ]
+            _acs_grid_cells = []
+            for _label, _val, _unit, _tier in _acs_cells:
+                _acs_grid_cells.append(
+                    '<div style="padding:8px 10px;'
+                    "background:var(--dps-surface-2);"
+                    "border:1px solid var(--dps-border);"
+                    'border-radius:4px;display:flex;flex-direction:column;'
+                    'gap:4px;">'
+                    '<div style="display:flex;align-items:center;'
+                    'justify-content:space-between;gap:6px;">'
+                    + _chrome.eyebrow(_label)
+                    + _chrome.evidence_badge(_tier, compact=True)
+                    + "</div>"
+                    + _chrome.metric_value(value=_val, unit=_unit, size=16)
+                    + "</div>"
+                )
+            st.html(
+                '<div style="display:grid;'
+                'grid-template-columns:repeat(4,1fr);gap:8px;'
+                'margin-top:4px;">'
+                + "".join(_acs_grid_cells)
+                + "</div>"
+            )
+            if _m2_post is None:
+                st.caption(
+                    "Run M2 to populate the ACS profile · 25 site-types "
+                    "tracked across the 17 chemistry buckets."
+                )
+
         # ── Run M2 Button ────────────────────────────────────────────────
         st.divider()
         _m2_can_run = "result" in st.session_state and len(m2_steps) > 0
+        # v0.4.17 (P4): pre-Run status strip \u2014 shows step count, blocker
+        # state, and family-filter context before the user clicks Run.
+        # Colour follows the canonical Direction-A semantic palette:
+        # green = ready, amber = warnings only, red = recipe blockers.
+        _m2_n_steps = len(m2_steps)
+        if "result" not in st.session_state:
+            _m2_status_color = "var(--dps-amber-500)"
+            _m2_status_text = "M1 not yet run \u00b7 run M1 first"
+        elif _m2_n_steps == 0:
+            _m2_status_color = "var(--dps-amber-500)"
+            _m2_status_text = "no modification steps configured"
+        else:
+            _m2_status_color = "var(--dps-green-500)"
+            _m2_status_text = (
+                f"{_m2_n_steps} step{'s' if _m2_n_steps != 1 else ''} configured \u00b7 "
+                "ready to run"
+            )
+        st.html(
+            '<div style="display:flex;align-items:center;gap:10px;'
+            "padding:8px 12px;margin-bottom:8px;"
+            "background:var(--dps-surface-2);"
+            f'border:1px solid {_m2_status_color};border-radius:4px;">'
+            f'<span style="width:8px;height:8px;border-radius:50%;'
+            f'background:{_m2_status_color};display:inline-block;"></span>'
+            '<span class="dps-mono" style="font-size:11.5px;'
+            f'color:{_m2_status_color};font-weight:600;'
+            'letter-spacing:0.04em;text-transform:uppercase;">M2</span>'
+            f'<span style="font-size:12.5px;color:var(--dps-text);">'
+            f"{_m2_status_text}</span>"
+            "</div>"
+        )
         m2_run_btn = st.button("\u25b6 Run M2: Functionalization", type="primary",
                                 use_container_width=True, disabled=not _m2_can_run)
 
@@ -533,49 +704,67 @@ def render_tab_m2(tab_container, _smgr) -> None:
             _m2 = st.session_state["m2_result"]
 
             st.divider()
-            st.header("\U0001f4ca M2 Results")
 
-            _mc1, _mc2, _mc3 = st.columns(3)
-            _mc1.metric("Steps Executed", len(_m2.modification_history))
-            _mc2.metric("G_DN Updated", f"{_m2.G_DN_updated / 1000:.1f} kPa")
-            _mc3.metric("E* Updated", f"{_m2.E_star_updated / 1000:.1f} kPa")
-
-            st.divider()
-
-            st.markdown("**ACS Site Inventory (remaining after all steps)**")
-            for _site_type, _profile in _m2.acs_profiles.items():
-                st.write(f"**{_site_type.value}**: remaining = {_profile.remaining_sites:.2e} mol/particle")
-
-            st.divider()
-
-            st.markdown("**Modification History**")
-            for _i, _mr in enumerate(_m2.modification_history):
-                _tgt = _mr.step.target_acs
-                _sites_before = _mr.acs_before.get(_tgt)
-                _consumed_str = ""
-                if _sites_before is not None:
-                    _consumed = _mr.conversion * _sites_before.remaining_sites
-                    _consumed_str = f" | sites consumed: {_consumed:.2e} mol/particle"
-                st.write(
-                    f"Step {_i + 1}: {_mr.step.reagent_key} \u2014 "
-                    f"conversion {_mr.conversion:.1%}{_consumed_str}"
+            # ── ACS state card ───────────────────────────────────────────
+            with st.container(border=True):
+                st.html(
+                    _chrome.card_header_strip(
+                        eyebrow_text=(
+                            f"ACS state — predicted / "
+                            f"{len(_m2.acs_profiles)} site-types tracked"
+                        ),
+                        title="M2 Results",
+                    )
                 )
-                # v0.3.0 (B3): per-step evidence-tier badge.
-                _step_badge = _m2_evidence_tier_badge(_mr)
-                if _step_badge:
-                    st.caption(_step_badge)
+                _mc1, _mc2, _mc3 = st.columns(3)
+                _mc1.metric("Steps Executed", len(_m2.modification_history))
+                _mc2.metric("G_DN Updated", f"{_m2.G_DN_updated / 1000:.1f} kPa")
+                _mc3.metric("E* Updated", f"{_m2.E_star_updated / 1000:.1f} kPa")
 
-            st.divider()
+                st.divider()
 
-            _fig_wf = plot_acs_waterfall(_m2.modification_history)
-            if _fig_wf is not None:
-                st.plotly_chart(_fig_wf, use_container_width=True)
-            _fig_sa = plot_surface_area_comparison(_m2.surface_model)
-            if _fig_sa is not None:
-                st.plotly_chart(_fig_sa, use_container_width=True)
+                st.markdown("**ACS Site Inventory (remaining after all steps)**")
+                for _site_type, _profile in _m2.acs_profiles.items():
+                    st.write(f"**{_site_type.value}**: remaining = {_profile.remaining_sites:.2e} mol/particle")
 
-            st.caption(
-                "[!] semi_quantitative \u2014 ACS inventory uses simplified site-density model. "
-                "Default rate constants are illustrative \u2014 user calibration required."
-            )
+                st.divider()
+
+                st.markdown("**Modification History**")
+                for _i, _mr in enumerate(_m2.modification_history):
+                    _tgt = _mr.step.target_acs
+                    _sites_before = _mr.acs_before.get(_tgt)
+                    _consumed_str = ""
+                    if _sites_before is not None:
+                        _consumed = _mr.conversion * _sites_before.remaining_sites
+                        _consumed_str = f" | sites consumed: {_consumed:.2e} mol/particle"
+                    st.write(
+                        f"Step {_i + 1}: {_mr.step.reagent_key} — "
+                        f"conversion {_mr.conversion:.1%}{_consumed_str}"
+                    )
+                    # v0.3.0 (B3): per-step evidence-tier badge.
+                    _step_badge = _m2_evidence_tier_badge(_mr)
+                    if _step_badge:
+                        st.caption(_step_badge)
+
+                st.divider()
+
+                _fig_wf = plot_acs_waterfall(_m2.modification_history)
+                if _fig_wf is not None:
+                    st.plotly_chart(_fig_wf, use_container_width=True)
+                _fig_sa = plot_surface_area_comparison(_m2.surface_model)
+                if _fig_sa is not None:
+                    st.plotly_chart(_fig_sa, use_container_width=True)
+
+            # ── Wet-lab caveats card ─────────────────────────────────────
+            with st.container(border=True):
+                st.html(
+                    _chrome.card_header_strip(
+                        eyebrow_text="Wet-lab caveats / Validation report",
+                        title="Model limitations",
+                    )
+                )
+                st.caption(
+                    "[!] semi_quantitative — ACS inventory uses simplified site-density model. "
+                    "Default rate constants are illustrative — user calibration required."
+                )
 

@@ -2,8 +2,9 @@
 
 M1 / M2 / M3 always co-visible as three side-by-side columns. The
 focused column expands to show the full editor; the other two collapse
-to summary chips. A bottom dock holds the run controls, breakthrough
-preview, evidence ladder, and last-run metrics.
+to summary chips. A bottom dock holds: pending edits · evidence-min
+stacked bar · last-run KPIs + Run lifecycle CTA — laid out as three
+inline panes per the Direction-B reference.
 
 This is a Streamlit-native rendition of `direction-b.jsx` from the
 design handoff. Direction switching is via the top-bar A/B button (see
@@ -19,12 +20,30 @@ import streamlit as st
 
 from dpsim.datatypes import ModelEvidenceTier
 from dpsim.visualization.design import chrome
-from dpsim.visualization.evidence.rollup import StageEvidence
+from dpsim.visualization.evidence.rollup import StageEvidence, aggregate_min_tier
 
 TriptychFocus = Literal["m1", "m2", "m3"]
 
 DIRECTION_KEY: Final[str] = "_dpsim_shell_direction"
 TRIPTYCH_FOCUS_KEY: Final[str] = "_dpsim_triptych_focus"
+
+# Local tier→{color, short-label} mappings for the dock evidence bar.
+# Mirrors the same data in chrome.py without reaching into its private
+# globals (chrome.py exposes the badge primitive, not the raw dicts).
+_DOCK_TIER_COLOR: Final[dict[str, str]] = {
+    ModelEvidenceTier.VALIDATED_QUANTITATIVE.value: "var(--dps-green-600)",
+    ModelEvidenceTier.CALIBRATED_LOCAL.value: "var(--dps-green-500)",
+    ModelEvidenceTier.SEMI_QUANTITATIVE.value: "var(--dps-amber-500)",
+    ModelEvidenceTier.QUALITATIVE_TREND.value: "var(--dps-orange-500)",
+    ModelEvidenceTier.UNSUPPORTED.value: "var(--dps-red-600)",
+}
+_DOCK_TIER_SHORT: Final[dict[str, str]] = {
+    ModelEvidenceTier.VALIDATED_QUANTITATIVE.value: "VAL",
+    ModelEvidenceTier.CALIBRATED_LOCAL.value: "CAL",
+    ModelEvidenceTier.SEMI_QUANTITATIVE.value: "SEMI",
+    ModelEvidenceTier.QUALITATIVE_TREND.value: "QUAL",
+    ModelEvidenceTier.UNSUPPORTED.value: "UNS",
+}
 
 ShellDirection = Literal["a", "b"]
 
@@ -362,9 +381,115 @@ def render_triptych(
         )
 
     if dock_renderer is not None:
-        st.html('<div class="dps-divider" style="margin:16px 0;"></div>')
-        st.html(chrome.eyebrow("Dock — run · evidence · breakthrough", accent=True))
-        dock_renderer()
+        # Triptych dock — horizontal 3-pane fixed at the bottom of the
+        # workbench per the Direction-B reference. Pane 1: pending
+        # edits. Pane 2: lifecycle-min evidence stacked bar. Pane 3:
+        # last-run KPIs + ▶ Run lifecycle CTA.
+        st.html('<div class="dps-divider" style="margin:16px 0 8px 0;"></div>')
+        render_triptych_dock(
+            evidence_stages=evidence_stages,
+            dock_renderer=dock_renderer,
+        )
+
+
+def _render_dock_pending_edits() -> None:
+    """Dock pane 1: pending recipe edits (compact)."""
+    from dpsim.visualization.diff.render import render_diff_panel
+    from dpsim.visualization.ui_recipe import ensure_process_recipe_state
+
+    try:
+        recipe = ensure_process_recipe_state(st.session_state)
+    except Exception:  # pragma: no cover — defensive
+        st.html(
+            chrome.eyebrow("Pending edits")
+            + '<div class="dps-mono" style="font-size:11px;'
+            'color:var(--dps-text-dim);">'
+            "no recipe in session</div>"
+        )
+        return
+    baseline_name = st.session_state.get(
+        "_dpsim_diff_baseline_name", "last_run"
+    )
+    render_diff_panel(
+        current_recipe=recipe,
+        baseline_name=baseline_name,
+    )
+
+
+def _render_dock_evidence_bar(evidence_stages: list[StageEvidence]) -> None:
+    """Dock pane 2: lifecycle-min evidence as a horizontal stacked bar.
+
+    Three equal-width segments (M1 / M2 / M3) tinted by each stage's
+    own tier; below them, a "Lifecycle min" label + the aggregated
+    badge. Matches the bar visualization shown along the dock in the
+    Direction-B reference screenshots.
+    """
+    tier_map = {s.stage_id: s.tier for s in evidence_stages}
+    seg_html = []
+    for sid, label in (("m1", "M1"), ("m2", "M2"), ("m3", "M3")):
+        tier = tier_map.get(sid, ModelEvidenceTier.UNSUPPORTED.value)
+        color = _DOCK_TIER_COLOR.get(tier, "var(--dps-text-dim)")
+        short = _DOCK_TIER_SHORT.get(tier, tier.upper()[:4])
+        seg_html.append(
+            '<div style="flex:1;padding:6px 8px;'
+            f"background:color-mix(in oklab, {color} 22%, transparent);"
+            f"border:1px solid {color};border-radius:3px;"
+            'display:flex;align-items:center;'
+            'justify-content:space-between;gap:6px;">'
+            f'<span class="dps-mono" style="font-size:10.5px;'
+            f'color:var(--dps-text-muted);font-weight:600;">{label}</span>'
+            f'<span class="dps-mono" style="font-size:10.5px;'
+            f'color:{color};font-weight:600;">{short}</span></div>'
+        )
+    min_tier = aggregate_min_tier(evidence_stages or [])
+    min_badge = chrome.evidence_badge(min_tier)
+    st.html(
+        chrome.eyebrow("Evidence · lifecycle min", accent=True)
+        + '<div style="display:flex;gap:4px;margin-top:6px;">'
+        + "".join(seg_html)
+        + '</div>'
+        + '<div style="display:flex;align-items:center;'
+        'justify-content:space-between;gap:8px;margin-top:8px;">'
+        '<span class="dps-mono" style="font-size:11px;'
+        'color:var(--dps-text-muted);text-transform:uppercase;'
+        'letter-spacing:0.06em;">Lifecycle min</span>'
+        f"{min_badge}</div>"
+    )
+
+
+def _render_dock_run_pane(dock_renderer: Callable[[], None]) -> None:
+    """Dock pane 3: last-run KPI strip + Run lifecycle CTA.
+
+    Reuses the rail's KPI grid + run-controls rendering by invoking
+    ``dock_renderer`` (which the caller wires to ``render_run_rail``).
+    The result here visually compresses the rail into a horizontal
+    pane the dock width can accommodate.
+    """
+    st.html(chrome.eyebrow("Last run · KPIs · run controls", accent=True))
+    dock_renderer()
+
+
+def render_triptych_dock(
+    *,
+    evidence_stages: list[StageEvidence],
+    dock_renderer: Callable[[], None],
+) -> None:
+    """Render the 3-pane horizontal dock at the foot of the triptych.
+
+    Composition: [pending edits] · [evidence-min bar] · [last-run + CTA]
+
+    Args:
+        evidence_stages: Per-stage evidence summaries used by pane 2.
+        dock_renderer: The rail callable used by pane 3 to render
+            last-run KPIs + run controls.
+    """
+    cols = st.columns([1.2, 1.0, 1.6])
+    with cols[0]:
+        _render_dock_pending_edits()
+    with cols[1]:
+        _render_dock_evidence_bar(evidence_stages)
+    with cols[2]:
+        _render_dock_run_pane(dock_renderer)
 
 
 __all__ = [
@@ -376,6 +501,7 @@ __all__ = [
     "get_triptych_focus",
     "render_direction_switch",
     "render_triptych",
+    "render_triptych_dock",
     "set_direction",
     "set_triptych_focus",
 ]

@@ -128,10 +128,18 @@ def load_css() -> str:
 def inject_global_css() -> None:
     """Inject ``tokens.css`` as a single ``<style>`` block.
 
-    Use ``st.html``, NOT ``st.markdown(unsafe_allow_html=True)`` — the
-    Markdown parser eats ``*`` characters inside CSS attribute selectors
-    like ``[class*="…"]`` and corrupts the output (see ``app.py:73-78``
-    for the canonical explanation of this trap).
+    v0.4.18 (P10): switched from ``st.html`` to
+    ``st.markdown(unsafe_allow_html=True)``. Streamlit 1.55 sanitises
+    ``<style>`` tags out of ``st.html`` output (verified empirically:
+    the injected ``<style>`` element is dropped before reaching the
+    DOM, leaving the page unstyled). Markdown's ``unsafe_allow_html``
+    path preserves ``<style>`` blocks intact.
+
+    Markdown does process the inner text for italics/bold, but Python-
+    Markdown and Streamlit's renderer skip that inside raw ``<style>``
+    blocks, so ``*=`` attribute selectors survive. The single such
+    selector in tokens.css (``div[style*="border: 1px solid"]``) has
+    been verified to round-trip correctly.
     """
     css = load_css()
-    st.html(f"<style>\n{css}\n</style>")
+    st.markdown(f"<style>\n{css}\n</style>", unsafe_allow_html=True)

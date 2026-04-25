@@ -29,7 +29,7 @@ class PLGAContext:
 
 def render_formulation_plga(*, is_stirred: bool) -> PLGAContext:
     """Render PLGA inputs."""
-    st.subheader("Formulation — PLGA (solvent evaporation)")
+    # v0.4.14: subheader removed — wrapping card supplies the header.
 
     grade_keys = list(PLGA_GRADE_PRESETS.keys())
     grade_display = {
@@ -72,8 +72,13 @@ def render_formulation_plga(*, is_stirred: bool) -> PLGAContext:
     )
     phi_PLGA_0 = phi_PLGA_pct / 100.0
 
-    st.markdown("---")
-    st.subheader("Surfactant (PVA / Span / etc. in continuous phase)")
+    # v0.4.14: surfactant sub-section as a chrome eyebrow.
+    from dpsim.visualization.design import chrome as _chrome
+    st.html(
+        '<div style="margin-top:12px;">'
+        + _chrome.eyebrow("Surfactant · PVA / Span (continuous phase)")
+        + '</div>'
+    )
     surf_keys = list(SURFACTANTS.keys())
     surf_names = [SURFACTANTS[k].name for k in surf_keys]
     surf_sel_name = labeled_widget(

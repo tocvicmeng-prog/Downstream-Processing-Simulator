@@ -47,7 +47,8 @@ def render_targets_section(*, family: PolymerFamily, is_stirred: bool) -> Target
     # v0.4.4: targets section migrated to labeled_widget.
     from dpsim.visualization.help import labeled_widget
 
-    st.subheader("Optimization Targets")
+    # v0.4.13: subheader removed — wrapping section card supplies the
+    # eyebrow + title via chrome.section_card_header.
     pore_help = _PORE_HELP.get(family, "Characteristic pore / mesh size.")
     if is_stirred:
         target_d_mode = labeled_widget(

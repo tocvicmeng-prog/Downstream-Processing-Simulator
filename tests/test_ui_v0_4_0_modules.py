@@ -358,7 +358,12 @@ def test_v041_theme_module_api() -> None:
 
 
 def test_v041_tab_m1_imports_impeller_xsec_lazily() -> None:
-    """Verify the M1 hardware-card animation placement is wired."""
+    """Verify the M1 hardware-card animation placement is wired.
+
+    v0.4.11: the visualization is now rendered inline (no expander) per
+    the Direction-A reference. The gate verifies the wiring + that the
+    module discusses Rushton geometry — not a specific UI string.
+    """
     from pathlib import Path
 
     src = (
@@ -366,7 +371,7 @@ def test_v041_tab_m1_imports_impeller_xsec_lazily() -> None:
         / "src" / "dpsim" / "visualization" / "tabs" / "tab_m1.py"
     ).read_text(encoding="utf-8")
     assert "render_impeller_xsec" in src
-    assert "Rushton reference" in src
+    assert "Rushton" in src
 
 
 def test_v041_tab_m3_imports_column_xsec_and_labeled_widget() -> None:

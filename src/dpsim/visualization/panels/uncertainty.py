@@ -102,15 +102,29 @@ def count_store_posteriors(store) -> int:
 # ─── Streamlit panel ──────────────────────────────────────────────────────
 
 
-def render_uncertainty_panel() -> Optional[UnifiedUncertaintySpec]:
+def render_uncertainty_panel(*, as_card: bool = False) -> Optional[UnifiedUncertaintySpec]:
     """Render the uncertainty panel and return the configured spec.
+
+    Args:
+        as_card: When ``False`` (default), wraps the body in an
+            ``st.expander`` — the legacy sidebar-popover layout. When
+            ``True``, skips the expander wrap so the caller can place
+            the panel inside its own ``st.container(border=True)``
+            chrome (used by tab_m3 to promote the MC controls into
+            a primary card per the canonical Direction-A reference).
 
     Side effects:
       - writes ``st.session_state["_unc_spec"]`` with the built spec
       - writes ``st.session_state["_unc_n_jobs"]`` with the selected
         parallel-workers value (integer; -1 means "all cores")
     """
-    with st.expander("\U0001f4ca Uncertainty (MC sampling)", expanded=False):
+    import contextlib as _cl
+    _outer = (
+        _cl.nullcontext()
+        if as_card
+        else st.expander("\U0001f4ca Uncertainty (MC sampling)", expanded=False)
+    )
+    with _outer:
         st.caption(
             "Configure Monte Carlo propagation for the M1\u2192L4 pipeline. "
             "The engine's built-in MaterialProperties perturbations are "
