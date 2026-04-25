@@ -1,6 +1,6 @@
 @echo off
 REM ---------------------------------------------------------------------
-REM DPSim 0.1.0 -- Open a Command Prompt with dpsim on PATH (self-heal)
+REM DPSim __DPSIM_VERSION__ -- Open a Command Prompt with dpsim on PATH (self-heal)
 REM Drops into an interactive cmd.exe with the .venv activated, so you
 REM can run dpsim subcommands directly:
 REM     dpsim run configs\default.toml
@@ -42,7 +42,7 @@ if not exist ".venv\Scripts\python.exe"  goto setup
 if errorlevel 1 goto setup
 
 :launch
-echo [DPSim 0.1.0] Command-line shell. Type 'exit' to close.
+echo [DPSim __DPSIM_VERSION__] Command-line shell. Type 'exit' to close.
 echo                 Example: dpsim run configs\default.toml
 echo.
 cmd /k ".venv\Scripts\activate.bat && cd /d %~dp0"
@@ -50,7 +50,7 @@ endlocal
 exit /b %ERRORLEVEL%
 
 :setup
-echo [DPSim 0.1.0] Virtual environment not found at:
+echo [DPSim __DPSIM_VERSION__] Virtual environment not found at:
 echo                 %CD%\.venv
 echo.
 echo The installer's post-install step appears not to have completed.

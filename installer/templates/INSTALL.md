@@ -1,4 +1,4 @@
-# DPSim 0.1.0 — Windows 11 x64 Installation Guide
+# DPSim __DPSIM_VERSION__ — Windows 11 x64 Installation Guide
 
 ## 1. System Requirements
 
@@ -66,7 +66,7 @@ Flags can be combined: `install.bat --no-opt --no-test`.
 Double-click `launch_ui.bat`. A command window opens and reports
 
 ```
-[DPSim 0.1.0] Launching web UI at http://localhost:8501
+[DPSim __DPSIM_VERSION__] Launching web UI at http://localhost:8501
 ```
 
 Your default browser should open automatically at that URL. Close
@@ -96,7 +96,7 @@ dpsim info
 .venv\Scripts\python.exe
 >>> import dpsim
 >>> dpsim.__version__
-'0.1.0'
+'__DPSIM_VERSION__'
 >>> r = dpsim.run_pipeline()
 >>> r.emulsification.d32
 ```
@@ -108,7 +108,7 @@ the rest of the release tree (wheel, configs, docs) is left in place
 so you can reinstall later without re-downloading.
 
 If you also want to remove the release tree, just delete the
-`DPSim-0.1.0-Windows-x64` folder. No other files are touched.
+`DPSim-__DPSIM_VERSION__-Windows-x64` folder. No other files are touched.
 
 ## 6. Troubleshooting
 
@@ -120,7 +120,7 @@ Python and start over.
 
 ### "Python 3.10 is below the required 3.11" / "Python 3.13 is above the supported range"
 
-DPSim 0.1.0 requires Python **3.11 or 3.12** (pinned by `requires-python =
+DPSim __DPSIM_VERSION__ requires Python **3.11 or 3.12** (pinned by `requires-python =
 ">=3.11,<3.13"` in pyproject.toml; see `docs/decisions/ADR-001-python-version-policy.md`
 for the why). Install a supported version alongside your existing one. If
 multiple versions are on PATH the installer picks the first one — verify with

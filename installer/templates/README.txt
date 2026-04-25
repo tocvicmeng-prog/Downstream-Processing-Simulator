@@ -1,4 +1,4 @@
-DPSim 0.1.0 -- Downstream Processing Simulator
+DPSim __DPSIM_VERSION__ -- Downstream Processing Simulator
 Windows 11 x64 Release -- First Edition
 =====================================================================
 
@@ -25,7 +25,7 @@ WHAT IS IN THIS PACKAGE
   uninstall.bat            Remove the local .venv
   INSTALL.md               Detailed install and troubleshooting guide
   LICENSE.txt              Software license
-  RELEASE_NOTES.md         What's new in 0.1.0
+  RELEASE_NOTES.md         What's new in __DPSIM_VERSION__
   wheels/                  The downstream_processing_simulator Python wheel
   configs/                 Example TOML configurations
   docs/                    User manual (PDF + Markdown)

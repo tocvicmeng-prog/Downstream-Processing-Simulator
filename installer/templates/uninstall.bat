@@ -1,6 +1,6 @@
 @echo off
 REM ---------------------------------------------------------------------
-REM DPSim 0.1.0 -- Uninstall
+REM DPSim __DPSIM_VERSION__ -- Uninstall
 REM Removes the local .venv directory. Leaves installed Python, configs,
 REM manual, and the wheel archive alone so you can re-install later.
 REM ---------------------------------------------------------------------
@@ -8,7 +8,7 @@ REM ---------------------------------------------------------------------
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-echo [DPSim 0.1.0] Uninstaller
+echo [DPSim __DPSIM_VERSION__] Uninstaller
 echo.
 
 if not exist ".venv" (

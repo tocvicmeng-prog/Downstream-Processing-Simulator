@@ -1,5 +1,94 @@
 # Changelog
 
+## v0.3.8 — Release Tooling Refresh (Installer + Portable ZIP) (2026-04-25)
+
+Refreshes the Windows release-build pipeline to match the v0.3.x state
+and adds a portable ZIP artifact alongside the existing one-click
+installer. The intellectual-property + GPL-3.0 + GitHub-source EULA
+already in place from v0.1.0 is unchanged (it already states what the
+user requires).
+
+### Two release artifacts per release
+
+| Artifact | Use case |
+|---|---|
+| `release/DPSim-X.Y.Z-Setup.exe` | One-click installer with EULA wizard, Start-Menu shortcut, post-install hook, clean uninstaller. |
+| `release/DPSim-X.Y.Z-Windows-x64-portable.zip` | Unzip-and-run package for users who prefer no installation, no admin, no registry footprint. |
+
+Both artifacts share the **same payload** (wheel + configs + PDFs +
+launcher batch files + EULA + LICENSE). The only difference is the
+delivery wrapper. The portable ZIP is produced by the same
+`installer\build_installer.bat` invocation as the installer — one
+build command, two artifacts.
+
+### Version-banner discipline
+
+Replaced the v0.1.0 hardcoded version strings across all 8 staged
+templates with an `__DPSIM_VERSION__` placeholder. The build script
+now derives the version from `pyproject.toml` and substitutes the
+placeholder in every staged template before compiling. Files
+touched: `install.bat`, `launch_ui.bat`, `launch_cli.bat`,
+`uninstall.bat`, `README.txt`, `INSTALL.md`, `RELEASE_NOTES.md`,
+`WHERE_ARE_THE_PROGRAM_FILES.txt`. Result: 22 placeholder
+substitutions per build; future version bumps no longer require
+touching templates.
+
+### Build pipeline (`installer\build_installer.bat`)
+
+Five steps:
+
+1. Build wheel + sdist via `python -m build`.
+2. Stage runtime assets into `installer\stage\` (wheel, configs,
+   docs PDFs, launcher templates, LICENSE, EULA). Substitute
+   `__DPSIM_VERSION__` placeholders in every staged `.bat` /
+   `.txt` / `.md`.
+3. Locate `ISCC.exe` (Inno Setup compiler).
+4. Compile installer to `release\DPSim-<version>-Setup.exe`.
+5. Pack portable ZIP to
+   `release\DPSim-<version>-Windows-x64-portable.zip` via
+   PowerShell `Compress-Archive` (built into Windows 10/11; no
+   external 7-Zip dependency).
+
+Build wall-time: ≈ 30 s on a typical Windows 11 box.
+
+### Refreshed RELEASE_NOTES.md
+
+`installer/templates/RELEASE_NOTES.md` rewritten from the v0.1.0
+baseline to summarise the cumulative v0.2.0 → v0.3.7 cycle in
+release-note form for the GitHub release page. Covers each minor
+release's key contribution (P5++ MC-LRM driver, Bayesian fit, UI
+bands, v9.5 composites, M2 dropdown rewrite, audit closures,
+manual refresh) plus installer + portable ZIP feature lists and
+system requirements.
+
+### Updated `installer/README.md`
+
+Added a **Portable ZIP** section explaining the unzip-and-run
+flow. Documented:
+
+- The 5-step build pipeline.
+- The "clean" guarantee (explicit list of what is excluded from
+  both artifacts; staging is via named-file `copy /y` only — no
+  recursive source-tree copy that could leak dev artifacts).
+- The version-banner discipline (`__DPSIM_VERSION__` placeholder
+  pattern).
+- The release process steps including the portable ZIP smoke test.
+
+### EULA (unchanged from v0.1.0; verified to meet requirements)
+
+`installer/LICENSE_AND_IP.txt` already states all three required
+points and is shown as the very first installer page:
+
+- Intellectual property in this software belongs to **Holocyte Pty Ltd**.
+- Software is distributed under **GPL-3.0**.
+- The latest source code is published on GitHub at
+  <https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator>.
+
+### `.gitignore` update
+
+Added `installer/stage_portable/` (transient ZIP-staging directory)
+to the gitignore alongside the existing `installer/stage/` entry.
+
 ## v0.3.7 — First Edition Manual Refresh + Appendix J v0.3.x Addendum (2026-04-25)
 
 Documentation refresh covering the v0.3.x cycle. The user-facing instruction

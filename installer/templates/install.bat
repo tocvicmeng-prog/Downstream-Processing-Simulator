@@ -1,6 +1,6 @@
 @echo off
 REM ---------------------------------------------------------------------
-REM DPSim 0.1.0 -- Windows 11 x64 installer
+REM DPSim __DPSIM_VERSION__ -- Windows 11 x64 installer
 REM
 REM Creates a self-contained Python virtual environment in .venv\ next to
 REM this script, installs the DPSim wheel plus the UI and optimisation
@@ -36,7 +36,7 @@ set "MPLCONFIGDIR=%DPSIM_CACHE_DIR%\matplotlib"
 if not exist "%PIP_CACHE_DIR%" mkdir "%PIP_CACHE_DIR%"
 if not exist "%MPLCONFIGDIR%" mkdir "%MPLCONFIGDIR%"
 
-echo [DPSim 0.1.0] Installer -- Windows 11 x64
+echo [DPSim __DPSIM_VERSION__] Installer -- Windows 11 x64
 echo [install] Step 1: locating Python.
 echo.
 
@@ -196,7 +196,7 @@ echo [install]          Install is usable but the pipeline did not complete clea
 
 echo.
 echo =====================================================================
-echo [install] DONE. DPSim 0.1.0 is installed.
+echo [install] DONE. DPSim __DPSIM_VERSION__ is installed.
 echo.
 echo Program files were extracted from the wheel into:
 echo     %CD%\.venv\Lib\site-packages\dpsim\

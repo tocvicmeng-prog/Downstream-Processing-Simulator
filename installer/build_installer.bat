@@ -16,14 +16,14 @@ REM ---------------------------------------------------------------------
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0\.."
 
-echo [build-installer] 1/4  Building wheel + sdist
+echo [build-installer] 1/5  Building wheel + sdist
 python -m pip install --quiet --upgrade build wheel || exit /b 1
 if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 if exist src\downstream_processing_simulator.egg-info rmdir /s /q src\downstream_processing_simulator.egg-info
 python -m build --wheel --sdist || exit /b 2
 
-echo [build-installer] 2/4  Staging runtime assets
+echo [build-installer] 2/5  Staging runtime assets
 if exist installer\stage rmdir /s /q installer\stage
 mkdir installer\stage\wheels
 mkdir installer\stage\configs
@@ -51,10 +51,26 @@ REM Bundled launcher + docs from the tracked template directory.
 REM These live under installer\templates\ so the build is reproducible
 REM from a fresh clone (release\ is gitignored and would be missing).
 for %%F in (install.bat launch_ui.bat launch_cli.bat uninstall.bat
-            README.txt INSTALL.md RELEASE_NOTES.md) do (
+            README.txt INSTALL.md RELEASE_NOTES.md WHERE_ARE_THE_PROGRAM_FILES.txt) do (
     copy /y installer\templates\%%F installer\stage\ > nul
 )
 copy /y LICENSE installer\stage\LICENSE.txt > nul
+
+REM v0.3.8 release-tooling refresh: derive version from pyproject.toml
+REM and substitute __DPSIM_VERSION__ placeholders in every staged
+REM template. This keeps install.bat / launch_*.bat / README.txt /
+REM RELEASE_NOTES.md banners truthful without hardcoding a version
+REM string in each file (the v0.1.0 templates went stale by v0.3.x).
+python -c "from pathlib import Path; import sys, re;^
+ ver = re.search(r'^version = \"([^\"]+)\"', Path('pyproject.toml').read_text(encoding='utf-8'), re.M).group(1);^
+ [p.write_text(p.read_text(encoding='utf-8').replace('__DPSIM_VERSION__', ver), encoding='utf-8')^
+  for p in Path('installer/stage').rglob('*')^
+  if p.is_file() and p.suffix in ('.bat', '.txt', '.md')];^
+ print(f'[build-installer] Substituted __DPSIM_VERSION__ -> {ver} in staged templates')"
+if errorlevel 1 (
+    echo [build-installer] ERROR: version substitution failed.
+    exit /b 6
+)
 
 REM Defensive: force CRLF line endings on all .bat files before
 REM bundling. A previous release shipped LF-terminated .bat files
@@ -68,7 +84,7 @@ if errorlevel 1 (
     echo [build-installer] WARNING: CRLF normalisation failed.
 )
 
-echo [build-installer] 3/4  Locating ISCC.exe
+echo [build-installer] 3/5  Locating ISCC.exe
 set "ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
 if not exist "%ISCC%" set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 if not exist "%ISCC%" set "ISCC=C:\Program Files\Inno Setup 6\ISCC.exe"
@@ -94,11 +110,42 @@ if not defined VERSION (
 )
 echo [build-installer] Building installer for DPSim %VERSION%.
 
-echo [build-installer] 4/4  Compiling installer
+echo [build-installer] 4/5  Compiling installer
 "%ISCC%" /DMyAppVersion=%VERSION% installer\DPSim.iss || exit /b 4
+
+echo [build-installer] 5/5  Building portable ZIP
+REM v0.3.8 release-tooling: ship a portable ZIP alongside the .exe
+REM installer for users who prefer unzip-and-run (no admin, no Start
+REM Menu shortcut, no uninstaller record). Same staged contents as
+REM the installer payload — just packed into a ZIP that extracts to a
+REM single self-contained DPSim-X.Y.Z-Windows-x64\ folder. The user
+REM runs install.bat once inside the unzipped folder to create the
+REM .venv and pip-install the bundled wheel; subsequent runs of
+REM launch_ui.bat skip straight to the UI.
+set "PORTABLE_ROOT=installer\stage_portable"
+set "PORTABLE_FOLDER=DPSim-%VERSION%-Windows-x64"
+if exist "%PORTABLE_ROOT%" rmdir /s /q "%PORTABLE_ROOT%"
+mkdir "%PORTABLE_ROOT%\%PORTABLE_FOLDER%"
+xcopy /e /i /q /y installer\stage\* "%PORTABLE_ROOT%\%PORTABLE_FOLDER%\" > nul
+copy /y installer\LICENSE_AND_IP.txt "%PORTABLE_ROOT%\%PORTABLE_FOLDER%\" > nul
+
+REM Build the ZIP with PowerShell's Compress-Archive (built into
+REM Windows 10+); avoids requiring 7-Zip on the build machine.
+set "PORTABLE_ZIP=release\DPSim-%VERSION%-Windows-x64-portable.zip"
+if not exist release mkdir release
+if exist "%PORTABLE_ZIP%" del /q "%PORTABLE_ZIP%"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "Compress-Archive -Path '%PORTABLE_ROOT%\%PORTABLE_FOLDER%' -DestinationPath '%PORTABLE_ZIP%' -CompressionLevel Optimal -Force"
+if errorlevel 1 (
+    echo [build-installer] ERROR: portable ZIP build failed.
+    exit /b 7
+)
+rmdir /s /q "%PORTABLE_ROOT%"
 
 echo.
 echo [build-installer] DONE.
-echo Output: release\DPSim-%VERSION%-Setup.exe
+echo Output:
+echo     release\DPSim-%VERSION%-Setup.exe
+echo     release\DPSim-%VERSION%-Windows-x64-portable.zip
 endlocal
 exit /b 0

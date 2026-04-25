@@ -1,4 +1,6 @@
-; DPSim 0.1.0 -- Windows 11 x64 Inno Setup installer
+; DPSim Windows 11 x64 Inno Setup installer
+; (AppVersion is set via /DMyAppVersion=X.Y.Z on the command line by
+; build_installer.bat, which derives the value from pyproject.toml.)
 ; Build with: ISCC.exe installer\DPSim.iss
 ; Produces:  release\DPSim-0.1.0-Setup.exe
 
