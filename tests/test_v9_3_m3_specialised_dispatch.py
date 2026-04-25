@@ -22,12 +22,16 @@ import pytest
 from dpsim.module2_functionalization.reagent_profiles import REAGENT_PROFILES
 
 
-# Direct mapping per the v9.2 _mode_map block in orchestrator.py
+# Direct mapping per the v9.2 / v9.4 _mode_map block in orchestrator.py.
+# v9.2 Q-015 added the first 4; v9.4 follow-on added the last 3.
 EXPECTED_LIGAND_TYPE_PER_MODE = {
     "dye_pseudo_affinity": "dye_pseudo_affinity",
     "mixed_mode_hcic": "mixed_mode_hcic",
     "thiophilic": "thiophilic",
     "boronate": "boronate",
+    "peptide_affinity": "peptide_affinity",
+    "oligonucleotide": "oligonucleotide",
+    "material_as_ligand": "material_as_ligand",
 }
 
 
@@ -84,10 +88,15 @@ def test_specialised_type_in_ranking_only_set(ligand_type):
 # functional_mode that the orchestrator can dispatch ──────────────────
 
 V9_2_SPECIALISED_PROFILE_KEYS = [
-    "cibacron_blue_f3ga_coupling",   # dye_pseudo_affinity
-    "mep_hcic_coupling",              # mixed_mode_hcic
-    "thiophilic_2me_coupling",        # thiophilic
-    "apba_boronate_coupling",         # boronate
+    "cibacron_blue_f3ga_coupling",     # dye_pseudo_affinity
+    "mep_hcic_coupling",                # mixed_mode_hcic
+    "thiophilic_2me_coupling",          # thiophilic
+    "apba_boronate_coupling",           # boronate
+    # v9.4 follow-on specialised profiles
+    "peptide_affinity_hwrgwv",          # peptide_affinity
+    "oligonucleotide_dna_coupling",     # oligonucleotide
+    "amylose_mbp_affinity",             # material_as_ligand
+    "chitin_cbd_intein",                # material_as_ligand
 ]
 
 

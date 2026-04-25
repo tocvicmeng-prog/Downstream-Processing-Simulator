@@ -351,25 +351,21 @@ def build_functional_media_contract(
                     "biotin_affinity": "biotin_affinity",
                     "heparin_affinity": "heparin_affinity",
                     # v9.2 specialised M3 ligand_types (Q-015 resolution).
-                    # Each new mode now routes to its own ligand_type
-                    # branch in the q_max-computation block below.
+                    # Each mode routes to its own ligand_type branch in
+                    # the q_max-computation block below.
                     "dye_pseudo_affinity": "dye_pseudo_affinity",  # B3 — Cibacron Blue
                     "mixed_mode_hcic": "mixed_mode_hcic",          # B4 — MEP
                     "thiophilic": "thiophilic",                    # B4 — T-Sorb
                     "boronate": "boronate",                        # B10 — boronate
-                    # Tier-2 (v9.3) modes still map to generic affinity
-                    # until their dedicated branches land:
-                    "peptide_affinity": "affinity",      # B-future — HWRGWV
-                    "oligonucleotide": "affinity",       # B-future — DNA ligand
+                    # v9.4 follow-on specialised dispatches for the
+                    # remaining Tier-2 specialty modes.
+                    "peptide_affinity": "peptide_affinity",  # HWRGWV / Protein-A mimetic
+                    "oligonucleotide": "oligonucleotide",    # sequence-specific DNA ligand
+                    "material_as_ligand": "material_as_ligand",  # amylose-MBP / chitin-CBD
                     # `click_handle` is an intermediate (not a final ligand);
                     # map to "none" so M3 ignores until the click ligand
                     # itself is coupled in a subsequent step.
                     "click_handle": "none",              # B7 — CuAAC/SPAAC
-                    # `material_as_ligand` is the B9 amylose/chitin pattern
-                    # — bound by the polymer matrix itself. M3 currently
-                    # routes through "affinity" isotherms; matrix-as-ligand
-                    # specialisation is wet-lab calibration follow-on.
-                    "material_as_ligand": "affinity",    # B9 — amylose-MBP, chitin-CBD
                 }
                 ligand_type = _mode_map.get(fm, "none")
                 _last_coupling_rp = rp  # carry for density area selection
@@ -536,6 +532,60 @@ def build_functional_media_contract(
                 f"Process state: requires pH 8.5 + sorbitol/fructose elution. "
                 f"{_q_max_area_note}"
             )
+        elif ligand_type == "peptide_affinity":
+            # v9.4 follow-on: Protein-A-mimetic peptide ligands (HWRGWV
+            # class). Stoichiometry: ~1 IgG per peptide ligand at saturating
+            # loading (Yang 2009). pH-switchable like Protein-A: loads at
+            # neutral pH, elutes at low pH (acetate pH 3-4).
+            binding_stoich = 1.0
+            q_max_est = functional_density * a_v_for_qmax * binding_stoich
+            confidence = "ranking_only"
+            q_max_notes = (
+                f"Peptide affinity (HWRGWV-class): q_max = density × "
+                f"stoich(1.0 IgG/peptide). Protein-A-mimetic; loads at "
+                f"pH 7-8, elutes at pH 3-4 (acetate). Cheaper, lower-"
+                f"leachable than Protein A; sterilisation-friendly. "
+                f"Process state: requires acidic-elution buffer. "
+                f"{_q_max_area_note}"
+            )
+        elif ligand_type == "oligonucleotide":
+            # v9.4 follow-on: sequence-specific DNA affinity. Stoichiometry
+            # is target-dependent (1:1 for simple TF-DNA recognition;
+            # higher for oligomeric DNA-binding complexes). Conservative
+            # 1.0 binding site per oligo; ranking_only confidence
+            # acknowledges the target-dependent variance.
+            binding_stoich = 1.0
+            q_max_est = functional_density * a_v_for_qmax * binding_stoich
+            confidence = "ranking_only"
+            q_max_notes = (
+                f"Sequence-specific DNA: q_max = density × stoich(1.0 "
+                f"target/oligo). Target-dependent variance — single "
+                f"transcription factors ~1:1, oligomeric complexes "
+                f"higher. Eluted by salt gradient or competing oligo-"
+                f"DNA. Nuclease-stability warning for crude lysate. "
+                f"Process state: requires salt gradient (descending). "
+                f"{_q_max_area_note}"
+            )
+        elif ligand_type == "material_as_ligand":
+            # v9.4 follow-on: B9 material-as-ligand pattern (amylose-MBP,
+            # chitin-CBD). The polymer matrix IS the affinity ligand; no
+            # coupled discrete ligand exists. Stoichiometry is per binding
+            # site on the polymer surface — assume 1:1 fusion-protein per
+            # accessible binding site (Kellermann 1982 for amylose-MBP).
+            # Functional density approximates the matrix's intrinsic
+            # binding-site density rather than a coupled-ligand density.
+            binding_stoich = 1.0
+            q_max_est = functional_density * a_v_for_qmax * binding_stoich
+            confidence = "ranking_only"
+            q_max_notes = (
+                f"Material-as-ligand (amylose-MBP / chitin-CBD): q_max = "
+                f"matrix_binding_site_density × a_v × stoich(1.0). The "
+                f"polymer matrix itself is the affinity ligand; no coupled "
+                f"ligand exists. Eluted by tag-specific competitor "
+                f"(10 mM maltose for amylose; thiol or pH/T for chitin "
+                f"CBD-intein). Process state: requires tag-specific "
+                f"eluent. {_q_max_area_note}"
+            )
         else:
             q_max_notes = f"Ligand type '{ligand_type}' — q_max mapping not implemented."
             if ligand_type != "none":
@@ -554,6 +604,9 @@ def build_functional_media_contract(
         # / salt-dependent adsorption all introduce variance that simple
         # ligand-density × stoich product does not capture.
         "dye_pseudo_affinity", "mixed_mode_hcic", "thiophilic", "boronate",
+        # v9.4 follow-on specialised modes — same ranking_only rationale
+        # (target-dependent peptide/oligo/material binding variance).
+        "peptide_affinity", "oligonucleotide", "material_as_ligand",
     }
     _conf_tier = "ranking_only" if ligand_type in _ranking_types else "semi_quantitative"
 
