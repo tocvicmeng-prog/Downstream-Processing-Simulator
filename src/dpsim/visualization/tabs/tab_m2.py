@@ -228,18 +228,34 @@ def render_tab_m2(tab_container, _smgr) -> None:
         from dpsim.module2_functionalization import ModificationStep, ModificationStepType, ACSSiteType
 
         m2_steps = []
-        n_m2_steps = st.number_input("Modification Steps", 0, 3, 1, key="m2_n_steps")
+        # v0.4.3: modification-step header migrated to labeled_widget.
+        from dpsim.visualization.help import labeled_widget as _lw_m2
+        n_m2_steps = _lw_m2(
+            "Modification steps",
+            help=(
+                "Number of M2 chemistry steps to apply in order. "
+                "Each step is one expander below; 0–3 supported."
+            ),
+            widget=lambda: st.number_input(
+                "Modification Steps", 0, 3, 1, key="m2_n_steps",
+                label_visibility="collapsed",
+            ),
+        )
         for i in range(int(n_m2_steps)):
             with st.expander(f"Step {i + 1}", expanded=(i == 0)):
-                step_type = st.selectbox(
-                    "Chemistry",
-                    list(_BUCKET_DISPLAY_ORDER),
-                    key=f"m2_type_{i}",
+                step_type = _lw_m2(
+                    "Chemistry bucket",
                     help=(
                         "Top 9 buckets are the v9.1 baseline categories; "
                         "the 8 below them surface v9.2/v9.3/v9.4 chemistry "
                         "classes (click, dye, mixed-mode, etc.) that were "
                         "previously dead UI."
+                    ),
+                    widget=lambda: st.selectbox(
+                        "Chemistry",
+                        list(_BUCKET_DISPLAY_ORDER),
+                        key=f"m2_type_{i}",
+                        label_visibility="collapsed",
                     ),
                 )
                 # v0.3.4: dropdown contents driven by REAGENT_PROFILES via
@@ -261,10 +277,19 @@ def render_tab_m2(tab_container, _smgr) -> None:
                 )
                 # Key includes step_type to reset selection when chemistry changes
                 _reagent_sel_key = f"m2_reagent_{i}_{step_type.replace(' ', '_').lower()}"
-                _reagent_label = st.selectbox(
+                _reagent_label = _lw_m2(
                     "Reagent",
-                    list(_reagent_options_filtered.keys()),
-                    key=_reagent_sel_key,
+                    help=(
+                        "Specific reagent within the selected bucket. "
+                        "Filtered by polymer-family compatibility; "
+                        "incompatible reagents are hidden."
+                    ),
+                    widget=lambda: st.selectbox(
+                        "Reagent",
+                        list(_reagent_options_filtered.keys()),
+                        key=_reagent_sel_key,
+                        label_visibility="collapsed",
+                    ),
                 )
                 # Defensive: if Streamlit returns a stale label from session state, fall back to first option
                 _reagent_key = _reagent_options_filtered.get(
@@ -317,26 +342,89 @@ def render_tab_m2(tab_container, _smgr) -> None:
                         "AHA (10 A, NHS-standard)": "aha_spacer",
                         "DAH (9 A, AH-standard)": "dah_spacer",
                     }
-                    _spacer_label = st.selectbox(
-                        "Spacer Arm (optional)",
-                        list(_spacer_options.keys()),
-                        key=f"m2_spacer_{i}_{step_type.replace(' ', '_').lower()}",
+                    # v0.4.5: spacer arm migrated to labeled_widget.
+                    _spacer_label = _lw_m2(
+                        "Spacer arm",
+                        help=(
+                            "Spacer arm between the bead surface and the "
+                            "ligand. Reduces steric hindrance for large "
+                            "analytes. Length-class encoded in the option "
+                            "label (e.g. 'C6 hexyl' = 6 atoms)."
+                        ),
+                        widget=lambda: st.selectbox(
+                            "Spacer Arm (optional)",
+                            list(_spacer_options.keys()),
+                            key=f"m2_spacer_{i}_{step_type.replace(' ', '_').lower()}",
+                            label_visibility="collapsed",
+                        ),
                     )
                     _selected_spacer = _spacer_options.get(_spacer_label, "")
 
                 # Keys include step_type AND reagent so switching either resets defaults (Codex R3-F4)
                 _wk = f"{step_type.replace(' ', '_').lower()}_{_reagent_key}"
-                _conc = st.number_input("Concentration (mM)", 0.5, 200.0, 10.0, key=f"m2_conc_{i}_{_wk}")
-                _temp_C = st.slider("Temperature (C)", 4, 80,
-                                     int(_profile.temperature_default - 273.15), key=f"m2_temp_{i}_{_wk}")
+                # v0.4.2: migrated to labeled_widget for inline help on every
+                # reagent-step parameter. Help text is per-parameter rather
+                # than per-reagent — the per-reagent context is already in
+                # the linked mechanism page below.
+                from dpsim.visualization.help import labeled_widget
+                _conc = labeled_widget(
+                    "Concentration",
+                    help=(
+                        "Reagent concentration in mM. Drives both reaction "
+                        "rate and side-product load. Stay within the "
+                        "reagent's calibrated range (see protocol link)."
+                    ),
+                    unit="mM",
+                    widget=lambda: st.number_input(
+                        "Concentration (mM)", 0.5, 200.0, 10.0,
+                        key=f"m2_conc_{i}_{_wk}", label_visibility="collapsed",
+                    ),
+                )
+                _temp_C = labeled_widget(
+                    "Temperature",
+                    help=(
+                        "Reaction temperature in °C. Default is the "
+                        "reagent profile's calibrated temperature; "
+                        "deviations affect both rate and selectivity."
+                    ),
+                    unit="°C",
+                    widget=lambda: st.slider(
+                        "Temperature (C)", 4, 80,
+                        int(_profile.temperature_default - 273.15),
+                        key=f"m2_temp_{i}_{_wk}", label_visibility="collapsed",
+                    ),
+                )
                 # v0.3.7 (UI run-fix): minimum lowered from 0.25 h to 0.05 h
                 # to accommodate v9.x reagents with shorter time_default
                 # (cnbr / hrp / tresyl / alcl3 at 600 s = 0.167 h; borax at
-                # 300 s = 0.083 h). The 0.25 h floor was tuned for the v9.1
-                # reagent set only.
-                _time_h = st.number_input("Time (h)", 0.05, 48.0,
-                                           float(_profile.time_default / 3600), key=f"m2_time_{i}_{_wk}")
-                _ph = st.slider("pH", 3.0, 14.0, float(_profile.ph_optimum), step=0.5, key=f"m2_ph_{i}_{_wk}")
+                # 300 s = 0.083 h).
+                _time_h = labeled_widget(
+                    "Reaction time",
+                    help=(
+                        "Hold time in hours. Below the reagent's calibrated "
+                        "minimum the conversion is incomplete; well above "
+                        "it side-reactions accumulate."
+                    ),
+                    unit="h",
+                    widget=lambda: st.number_input(
+                        "Time (h)", 0.05, 48.0,
+                        float(_profile.time_default / 3600),
+                        key=f"m2_time_{i}_{_wk}", label_visibility="collapsed",
+                    ),
+                )
+                _ph = labeled_widget(
+                    "pH",
+                    help=(
+                        "Reaction pH. For coupling chemistries this must "
+                        "keep both the activated bead group AND the ligand "
+                        "in their reactive ionisation state."
+                    ),
+                    widget=lambda: st.slider(
+                        "pH", 3.0, 14.0, float(_profile.ph_optimum),
+                        step=0.5, key=f"m2_ph_{i}_{_wk}",
+                        label_visibility="collapsed",
+                    ),
+                )
                 st.markdown(
                     f"[View mechanism & protocol (with your parameters)](/reagent_detail"
                     f"?key={_reagent_key}&source=reagent_profiles"

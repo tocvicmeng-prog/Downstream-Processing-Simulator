@@ -1,0 +1,128 @@
+/* DPSim v0.4.0 design tokens — sourced from DESIGN.md and the design
+ * handoff `.dpsim_tmp/design_handoff/project/tokens.css`. Names are
+ * prefixed `--dps-` to avoid colliding with Streamlit's own CSS
+ * variables and with the v0.3.x `--dps-*` block in app.py.
+ *
+ * One file, both themes. `.dps-light` scope flips neutrals; teal stays
+ * the sole accent.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    /* ── Slate scale (neutrals) ────────────────────────────────── */
+    --dps-slate-50:  #F8FAFC;
+    --dps-slate-100: #F1F5F9;
+    --dps-slate-200: #E2E8F0;
+    --dps-slate-300: #CBD5E1;
+    --dps-slate-400: #94A3B8;
+    --dps-slate-500: #64748B;
+    --dps-slate-600: #475569;
+    --dps-slate-700: #334155;
+    --dps-slate-800: #1E293B;
+    --dps-slate-900: #0F172A;
+    --dps-slate-950: #020617;
+
+    /* ── Teal (sole accent) ────────────────────────────────────── */
+    --dps-teal-300: #5EEAD4;
+    --dps-teal-400: #2DD4BF;
+    --dps-teal-500: #14B8A6;
+    --dps-teal-600: #0D9488;
+
+    /* ── Semantic / evidence-tier colours ──────────────────────── */
+    --dps-green-500: #22C55E;
+    --dps-green-600: #16A34A;
+    --dps-amber-500: #F59E0B;
+    --dps-orange-500: #F97316;
+    --dps-red-600:   #DC2626;
+    --dps-sky-600:   #0284C7;
+
+    /* ── Dark-theme surface assignments (default) ──────────────── */
+    --dps-bg:           var(--dps-slate-950);
+    --dps-surface:      var(--dps-slate-900);
+    --dps-surface-2:    var(--dps-slate-800);
+    --dps-surface-3:    var(--dps-slate-700);
+    --dps-border:       rgba(71, 85, 105, 0.55);
+    --dps-border-strong: rgba(148, 163, 184, 0.30);
+    --dps-text:         var(--dps-slate-50);
+    --dps-text-muted:   var(--dps-slate-400);
+    --dps-text-dim:     var(--dps-slate-500);
+    --dps-accent:       var(--dps-teal-400);
+    --dps-accent-hover: var(--dps-teal-300);
+    --dps-accent-soft:  rgba(45, 212, 191, 0.12);
+
+    /* ── Type stack ────────────────────────────────────────────── */
+    --dps-font-sans: "Geist", -apple-system, BlinkMacSystemFont,
+                     "Segoe UI", system-ui, sans-serif;
+    --dps-font-mono: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+    --dps-font-code: "JetBrains Mono", "Geist Mono", Menlo, monospace;
+
+    /* ── Radius scale ──────────────────────────────────────────── */
+    --dps-r-1: 2px;
+    --dps-r-2: 4px;
+    --dps-r-3: 6px;
+
+    /* ── Spacing scale (8px base, 4px half-unit) ───────────────── */
+    --dps-s-0:  2px;
+    --dps-s-1:  4px;
+    --dps-s-2:  8px;
+    --dps-s-3:  12px;
+    --dps-s-4:  16px;
+    --dps-s-5:  20px;
+    --dps-s-6:  24px;
+    --dps-s-8:  32px;
+    --dps-s-10: 40px;
+    --dps-s-12: 48px;
+}
+
+/* Light theme — invert neutrals, keep teal accent. */
+.dps-light {
+    --dps-bg:        #FAFBFC;
+    --dps-surface:   #FFFFFF;
+    --dps-surface-2: var(--dps-slate-50);
+    --dps-surface-3: var(--dps-slate-100);
+    --dps-border:    rgba(148, 163, 184, 0.35);
+    --dps-border-strong: rgba(100, 116, 139, 0.45);
+    --dps-text:      var(--dps-slate-900);
+    --dps-text-muted: var(--dps-slate-500);
+    --dps-text-dim:  var(--dps-slate-400);
+    --dps-accent:    var(--dps-teal-500);
+    --dps-accent-hover: var(--dps-teal-600);
+    --dps-accent-soft: rgba(20, 184, 166, 0.12);
+}
+
+/* Mono / code utility classes — used by chrome.* helpers. */
+.dps-mono {
+    font-family: var(--dps-font-mono);
+    font-feature-settings: "tnum", "zero";
+}
+.dps-code {
+    font-family: var(--dps-font-code);
+}
+
+/* Surface primitive — the base for cards, panels, frames. */
+.dps-surface {
+    background: var(--dps-surface);
+    border: 1px solid var(--dps-border);
+    border-radius: var(--dps-r-2);
+}
+
+/* Dividers. */
+.dps-divider {
+    height: 1px;
+    background: var(--dps-border);
+    border: 0;
+    margin: 0;
+}
+.dps-vdivider {
+    width: 1px;
+    background: var(--dps-border);
+    align-self: stretch;
+}
+
+/* Focus ring — teal, 2px, single-offset. */
+.dps-focus-ring:focus-visible,
+[role="button"].dps-focus-ring:focus-visible {
+    outline: 2px solid var(--dps-accent);
+    outline-offset: 1px;
+}

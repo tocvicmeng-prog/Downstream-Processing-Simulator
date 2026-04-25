@@ -417,10 +417,16 @@ def run_chromatography_method(
         _summarize_step(column, step)
         for step in steps
     ]
+    # v0.4.6: cancel poll between method-step solver calls. The LOAD,
+    # WASH, and ELUTE phases each fire an LRM solve; polling between
+    # them caps cancel latency at one phase's duration.
+    from dpsim.lifecycle.cancellation import check_cancel
+
     load_step = _first_step(steps, ChromatographyOperation.LOAD)
     wash_step = _first_step_after(steps, ChromatographyOperation.WASH, load_step)
     elute_step = _first_step(steps, ChromatographyOperation.ELUTE)
     load_breakthrough = None
+    check_cancel(stage="pre-LOAD-breakthrough")
     if load_step is not None:
         load_state = dict(_process_state_dict(process_state))
         load_state["ph"] = float(load_step.buffer.pH)

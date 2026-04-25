@@ -318,10 +318,19 @@ class DownstreamProcessOrchestrator:
                 recommendation="Move column geometry into ProcessRecipe for auditable production use.",
             )
 
+        # v0.4.3: cancellation checkpoint — clear the flag at run start,
+        # then poll at each major stage boundary. Stop-during-run from
+        # the UI sets the flag; the orchestrator honours it here.
+        from dpsim.lifecycle.cancellation import check_cancel, clear_cancel_flag
+
+        clear_cancel_flag()
+        check_cancel(stage="pre-M1")
+
         # M1: fabrication is delegated to the reused validated pipeline. The
         # clean architecture boundary is the M1ExportContract produced below.
         m1_orch = PipelineOrchestrator(db=self.db, output_dir=self.output_dir / "m1")
         m1_result = m1_orch.run_single(params, run_context=run_context)
+        check_cancel(stage="post-M1")
         # Use the parameter object returned by the M1 pipeline from here on.
         # It may include RunContext calibration overrides, including P2 M1 wash
         # retention factors, that must carry into DSD and downstream gates.
@@ -440,8 +449,10 @@ class DownstreamProcessOrchestrator:
 
         # M2: execute the post-fabrication chemistry sequence and build the
         # stable media contract that M3 should consume.
+        check_cancel(stage="pre-M2")
         m2_orch = ModificationOrchestrator()
         microsphere = m2_orch.run(m1_contract, functionalization_steps)
+        check_cancel(stage="post-M2")
         microsphere, m3_physical_qc_overrides, m3_physical_qc_diagnostics = (
             _apply_m3_physical_qc_to_microsphere(microsphere, calibration_store)
         )
@@ -741,6 +752,7 @@ class DownstreamProcessOrchestrator:
                 ),
             )
 
+        check_cancel(stage="pre-M3")
         m3_method = run_chromatography_method(
             column=m3_column,
             n_z=resolved_inputs.m3_n_z,
@@ -750,6 +762,7 @@ class DownstreamProcessOrchestrator:
             max_pressure_Pa=resolved_inputs.max_pressure_drop_Pa,
             pump_pressure_limit_Pa=resolved_inputs.pump_pressure_limit_Pa,
         )
+        check_cancel(stage="post-M3")
         for blocker in m3_method.operability.blockers:
             validation.add(
                 ValidationSeverity.BLOCKER,

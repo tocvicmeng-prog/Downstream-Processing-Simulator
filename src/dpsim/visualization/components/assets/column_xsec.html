@@ -1,0 +1,451 @@
+<!doctype html>
+<!--
+  ColumnCrossSection — packed-bed chromatography longitudinal cross-section.
+
+  Phase semantics (per SA Q2 sign-off):
+    load   teal liquid; bead recolour bound; no outflow streams (target captured)
+    wash   pale-blue liquid; bound retained; gray dots stream out (impurities)
+    elute  amber liquid; bound RELEASES; teal dots stream out (eluate target)
+    cip    magenta liquid; bead strips clean; magenta dots stream (residuals)
+
+  Template substitutions (filled by column_xsec.py):
+      __PHASE__              "load" | "wash" | "elute" | "cip"
+      __WIDTH__              int
+      __HEIGHT__             int
+      __COLUMN_LENGTH_MM__   float
+      __COLUMN_DIAMETER_MM__ float
+      __BED_FRACTION__       float in [0, 1]
+      __PARTICLE_COUNT__     int
+      __THEME__              "dark" | "light"
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --bg: #020617; --surface: #0F172A; --surface-2: #1E293B;
+    --surface-3: #334155;
+    --border: rgba(71,85,105,0.55); --border-strong: rgba(148,163,184,0.30);
+    --text: #F8FAFC; --text-muted: #94A3B8; --text-dim: #64748B;
+    --accent: #2DD4BF;
+    --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  body.light {
+    --bg: #FAFBFC; --surface: #FFFFFF; --surface-2: #F1F5F9;
+    --surface-3: #E2E8F0; --border: rgba(148,163,184,0.35);
+    --border-strong: rgba(100,116,139,0.45);
+    --text: #0F172A; --text-muted: #64748B; --text-dim: #94A3B8;
+    --accent: #14B8A6;
+  }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: var(--font-sans); -webkit-font-smoothing: antialiased;
+  }
+  .frame { display: block; margin: 0 auto; }
+  .legend {
+    margin-top: 6px; display: flex; align-items: center;
+    justify-content: space-between; gap: 8px;
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted);
+  }
+  .legend .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block; margin-right: 6px;
+  }
+  .legend .label { font-weight: 500; color: var(--text); }
+  .legend .desc {
+    color: var(--text-muted); font-family: var(--font-sans);
+    font-size: 11px; padding-left: 6px;
+  }
+  .legend .progress {
+    color: var(--text-dim); font-family: var(--font-mono);
+  }
+  .geometry {
+    margin-top: 2px; font-size: 9.5px; color: var(--text-dim);
+    font-family: var(--font-mono); letter-spacing: 0.04em;
+    text-align: center;
+  }
+</style>
+</head>
+<body class="__THEME__">
+<div class="frame">
+  <svg id="svg" width="__WIDTH__" height="__HEIGHT__"
+       viewBox="0 0 __WIDTH__ __HEIGHT__" style="display:block;"></svg>
+</div>
+<div class="legend" id="legend"></div>
+<div class="geometry" id="geometry"></div>
+
+<script>
+(function () {
+  const PHASE = "__PHASE__";
+  const W = parseInt("__WIDTH__", 10);
+  const H = parseInt("__HEIGHT__", 10);
+  const COL_LEN = parseFloat("__COLUMN_LENGTH_MM__");
+  const COL_D = parseFloat("__COLUMN_DIAMETER_MM__");
+  const BED_FRAC = parseFloat("__BED_FRACTION__");
+  const PCOUNT = parseInt("__PARTICLE_COUNT__", 10);
+
+  // ── Phase palette + semantics (SA Q2 sign-off) ─────────────────────
+  const PHASES = {
+    load:  { liquid: "#2DD4BF", liquidA: "rgba(45, 212, 191, 0.18)",
+             front: "#5EEAD4", payload: "#2DD4BF",
+             label: "Load · feed", desc: "Target binds Protein-A ligand on resin",
+             outflowColor: null,
+             outflowLegend: "" },
+    wash:  { liquid: "#7DD3FC", liquidA: "rgba(125, 211, 252, 0.18)",
+             front: "#BAE6FD", payload: "#2DD4BF",
+             label: "Wash · equilibrate", desc: "Impurities flushed; bound target retained",
+             outflowColor: "#94A3B8",
+             outflowLegend: "Outflow: flushed impurities" },
+    elute: { liquid: "#FBBF24", liquidA: "rgba(251, 191, 36, 0.20)",
+             front: "#FCD34D", payload: "#F59E0B",
+             label: "Elute · pH 3.5", desc: "Low pH releases target into eluate",
+             outflowColor: "#2DD4BF",
+             outflowLegend: "Outflow: eluate target" },
+    cip:   { liquid: "#E879F9", liquidA: "rgba(232, 121, 249, 0.18)",
+             front: "#F0ABFC", payload: "#A21CAF",
+             label: "CIP · 0.1 N NaOH", desc: "Strips residuals; sanitises resin",
+             outflowColor: "#A21CAF",
+             outflowLegend: "Outflow: stripped residuals" },
+  };
+  const C = PHASES[PHASE] || PHASES.load;
+
+  // ── Geometry ───────────────────────────────────────────────────────
+  const padX = 28;
+  const inletH = 22;
+  const outletH = 22;
+  const bedTop = inletH + 14;
+  const bedBottom = H - outletH - 14;
+  const bedH = bedBottom - bedTop;
+  const colLeft = padX;
+  const colRight = W - padX;
+  const colW = colRight - colLeft;
+  const cx = colLeft + colW / 2;
+
+  // Deterministic PRNG for particle placement.
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // Particle layout — quasi-jittered grid.
+  const partRng = mulberry32(20240417);
+  const cols = Math.max(2, Math.round(Math.sqrt(PCOUNT * (colW / bedH))));
+  const rows = Math.ceil(PCOUNT / cols);
+  const dx = colW / cols;
+  const dy = bedH / rows;
+  const r0 = Math.min(dx, dy) * 0.36;
+  const particles = [];
+  for (let row = 0; row < rows && particles.length < PCOUNT; row++) {
+    for (let col = 0; col < cols && particles.length < PCOUNT; col++) {
+      const offsetX = (row % 2) * dx * 0.5;
+      const jx = (partRng() - 0.5) * dx * 0.35;
+      const jy = (partRng() - 0.5) * dy * 0.35;
+      const cxp = colLeft + col * dx + dx * 0.5 + offsetX + jx;
+      if (cxp < colLeft + r0 || cxp > colRight - r0) continue;
+      particles.push({
+        cx: cxp,
+        cy: bedTop + row * dy + dy * 0.5 + jy,
+        r: r0 * (0.85 + partRng() * 0.3),
+      });
+    }
+  }
+
+  // Streamline lanes.
+  const slRng = mulberry32(7);
+  const N_LANES = 6;
+  const streamlines = [];
+  for (let i = 0; i < N_LANES; i++) {
+    streamlines.push(colLeft + (i + 0.5) * (colW / N_LANES) + (slRng() - 0.5) * 8);
+  }
+
+  // ── SVG construction ───────────────────────────────────────────────
+  const NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs) {
+    const e = document.createElementNS(NS, tag);
+    if (attrs) for (const k in attrs) e.setAttribute(k, String(attrs[k]));
+    return e;
+  }
+  const svg = document.getElementById("svg");
+
+  // <defs>
+  const defs = el("defs");
+  const grad = el("linearGradient", { id: "liquidGrad", x1: 0, y1: 0, x2: 0, y2: 1 });
+  grad.appendChild(el("stop", { offset: "0%", "stop-color": C.liquidA }));
+  grad.appendChild(el("stop", { offset: "100%", "stop-color": C.liquid, "stop-opacity": 0.35 }));
+  defs.appendChild(grad);
+  const fritPat = el("pattern", {
+    id: "fritPat", width: 6, height: 6, patternUnits: "userSpaceOnUse",
+  });
+  fritPat.appendChild(el("rect", { width: 6, height: 6, fill: "var(--surface-2)" }));
+  fritPat.appendChild(el("circle", { cx: 3, cy: 3, r: 0.7, fill: "var(--text-dim)", opacity: 0.6 }));
+  defs.appendChild(fritPat);
+  const clipPath = el("clipPath", { id: "colClip" });
+  clipPath.appendChild(el("rect", { x: colLeft, y: bedTop, width: colW, height: bedH, rx: 2 }));
+  defs.appendChild(clipPath);
+  const arrow = el("marker", {
+    id: "flowArrow", markerWidth: 6, markerHeight: 6, refX: 3, refY: 3, orient: "auto",
+  });
+  arrow.appendChild(el("path", { d: "M0,0 L6,3 L0,6 z", fill: "var(--text-dim)" }));
+  defs.appendChild(arrow);
+  svg.appendChild(defs);
+
+  // Outer column wall.
+  svg.appendChild(el("rect", {
+    x: colLeft - 4, y: inletH, width: colW + 8, height: H - inletH - outletH,
+    fill: "var(--surface-2)", stroke: "var(--border-strong)", "stroke-width": 1, rx: 3,
+  }));
+  // Inlet manifold band.
+  svg.appendChild(el("rect", {
+    x: colLeft - 4, y: inletH - 8, width: colW + 8, height: 8,
+    fill: "var(--surface-3)", stroke: "var(--border)", "stroke-width": 1,
+  }));
+  // Inlet pipe stub.
+  svg.appendChild(el("rect", {
+    x: cx - 18, y: 2, width: 36, height: inletH - 6,
+    fill: "var(--surface-3)", stroke: "var(--border-strong)", "stroke-width": 1, rx: 2,
+  }));
+  svg.appendChild(el("line", {
+    x1: cx, y1: inletH - 4, x2: cx, y2: inletH + 6,
+    stroke: C.liquid, "stroke-width": 2, "stroke-linecap": "round",
+  }));
+  // Frits (top and bottom).
+  svg.appendChild(el("rect", { x: colLeft, y: inletH, width: colW, height: 6, fill: "url(#fritPat)" }));
+  svg.appendChild(el("rect", { x: colLeft, y: H - outletH - 6, width: colW, height: 6, fill: "url(#fritPat)" }));
+  // Outlet manifold band + stub.
+  svg.appendChild(el("rect", {
+    x: colLeft - 4, y: H - outletH, width: colW + 8, height: 8,
+    fill: "var(--surface-3)", stroke: "var(--border)", "stroke-width": 1,
+  }));
+  svg.appendChild(el("rect", {
+    x: cx - 18, y: H - 12, width: 36, height: 10,
+    fill: "var(--surface-3)", stroke: "var(--border-strong)", "stroke-width": 1, rx: 2,
+  }));
+
+  // Bed group (clipped).
+  const bedG = el("g", { "clip-path": "url(#colClip)" });
+  // Bed background.
+  bedG.appendChild(el("rect", {
+    x: colLeft, y: bedTop, width: colW, height: bedH, fill: "var(--surface)",
+  }));
+  // Liquid front + streamlines + particles + outflow are added dynamically below.
+  const liquidRect = el("rect", {
+    x: colLeft, y: bedTop, width: colW, height: 0, fill: "url(#liquidGrad)",
+  });
+  bedG.appendChild(liquidRect);
+  const frontLine = el("line", {
+    x1: colLeft, x2: colRight, y1: bedTop, y2: bedTop,
+    stroke: C.front, "stroke-width": 1.25, opacity: 0.0,
+  });
+  bedG.appendChild(frontLine);
+
+  // Particle group (and per-particle handle for payload toggle).
+  const partG = el("g");
+  bedG.appendChild(partG);
+  const partNodes = particles.map((p) => {
+    const g = el("g");
+    g.appendChild(el("circle", {
+      cx: p.cx, cy: p.cy, r: p.r,
+      fill: "var(--surface-3)", stroke: "var(--border-strong)", "stroke-width": 0.6,
+    }));
+    const payload = el("circle", {
+      cx: p.cx, cy: p.cy, r: p.r * 0.55,
+      fill: C.payload, opacity: 0,
+    });
+    g.appendChild(payload);
+    const halo = el("circle", {
+      cx: p.cx, cy: p.cy, r: p.r + 1.2,
+      fill: "none", stroke: C.front, "stroke-width": 0.9, opacity: 0,
+    });
+    g.appendChild(halo);
+    partG.appendChild(g);
+    return { g, payload, halo };
+  });
+
+  // Streamline group (above-front, only when liquid present).
+  const slG = el("g");
+  bedG.appendChild(slG);
+  const slNodes = [];
+  streamlines.forEach((x) => {
+    const lane = [];
+    for (let k = 0; k < 4; k++) {
+      const c = el("circle", { cx: x, cy: bedTop, r: 1.1, fill: C.front, opacity: 0 });
+      slG.appendChild(c);
+      lane.push(c);
+    }
+    slNodes.push(lane);
+  });
+
+  // Outflow group (below-front, only for wash/elute/cip).
+  const outG = el("g");
+  bedG.appendChild(outG);
+  const outNodes = [];
+  if (C.outflowColor !== null) {
+    streamlines.forEach((x, i) => {
+      const lane = [];
+      for (let k = 0; k < 3; k++) {
+        const c = el("circle", {
+          cx: x + (i % 2 ? 2 : -2), cy: bedBottom,
+          r: 1.4, fill: C.outflowColor, opacity: 0,
+        });
+        outG.appendChild(c);
+        lane.push(c);
+      }
+      outNodes.push(lane);
+    });
+  }
+  svg.appendChild(bedG);
+
+  // Right-edge CV scale ticks.
+  const tickG = el("g", { "font-family": "Geist Mono, monospace", "font-size": 9, fill: "var(--text-dim)" });
+  [0, 0.25, 0.5, 0.75, 1].forEach((f) => {
+    const y = bedTop + f * bedH;
+    tickG.appendChild(el("line", {
+      x1: colRight + 1, y1: y, x2: colRight + 4, y2: y,
+      stroke: "var(--border-strong)", "stroke-width": 0.6,
+    }));
+    const t = el("text", { x: colRight + 6, y: y + 3 });
+    t.textContent = f.toFixed(2);
+    tickG.appendChild(t);
+  });
+  const cvLabel = el("text", {
+    x: colRight + 6, y: bedTop - 4,
+    "font-family": "Geist Mono, monospace", "font-size": 8.5,
+    fill: "var(--text-muted)",
+  });
+  cvLabel.textContent = "CV";
+  tickG.appendChild(cvLabel);
+  svg.appendChild(tickG);
+
+  // Direction arrow on the left of the inlet.
+  svg.appendChild(el("line", {
+    x1: colLeft - 14, y1: inletH + 4, x2: colLeft - 14, y2: inletH + 18,
+    stroke: "var(--text-dim)", "stroke-width": 1, "marker-end": "url(#flowArrow)",
+  }));
+
+  // ── Legend + geometry ─────────────────────────────────────────────
+  const legend = document.getElementById("legend");
+  const outflowChip = C.outflowLegend
+    ? `<span class="desc" style="color: ${C.outflowColor};">${C.outflowLegend}</span>`
+    : "";
+  legend.innerHTML =
+    `<div style="display:flex;align-items:center;">` +
+      `<span class="dot" style="background:${C.liquid};"></span>` +
+      `<span class="label">${C.label}</span>` +
+      `<span class="desc">${C.desc}</span>` +
+    `</div>` +
+    `<span class="progress" id="cv-progress">front · 0.00 CV</span>`;
+  // Outflow chip below the main row, when present.
+  if (outflowChip) {
+    const sub = document.createElement("div");
+    sub.style.marginTop = "2px";
+    sub.style.fontFamily = "var(--font-mono)";
+    sub.style.fontSize = "10px";
+    sub.innerHTML = outflowChip;
+    legend.appendChild(sub);
+  }
+  document.getElementById("geometry").textContent =
+    "L " + COL_LEN + " mm · ID " + COL_D + " mm · bed " + (BED_FRAC * 100).toFixed(0) + "% · " +
+    PCOUNT + " resin particles";
+
+  // ── Animation ─────────────────────────────────────────────────────
+  let t = 0;
+  let lastT = null;
+  let rafId = null;
+
+  function tick(now) {
+    if (lastT == null) lastT = now;
+    const dt = (now - lastT) / 1000;
+    lastT = now;
+    t += dt * 0.18;          // ~5.5 s per pass at speed 0.18
+    if (t > 1.05) t = 0;
+
+    const frontY = bedTop + bedH * Math.min(1, t);
+
+    // Liquid extent above the front.
+    const liquidH = Math.max(0, frontY - bedTop);
+    liquidRect.setAttribute("height", String(liquidH));
+    if (t > 0 && t < 1.02) {
+      frontLine.setAttribute("y1", String(frontY));
+      frontLine.setAttribute("y2", String(frontY));
+      frontLine.setAttribute("opacity", "0.9");
+    } else {
+      frontLine.setAttribute("opacity", "0");
+    }
+
+    // Streamlines: dotted flow above the front.
+    slNodes.forEach((lane, i) => {
+      lane.forEach((c, k) => {
+        const phase01 = (t * 4 + i * 0.13 + k * 0.25) % 1;
+        const y = bedTop + phase01 * (frontY - bedTop);
+        if (y < bedTop + 4 || y > frontY - 4) {
+          c.setAttribute("opacity", "0");
+        } else {
+          c.setAttribute("cy", String(y));
+          c.setAttribute("opacity", "0.55");
+        }
+      });
+    });
+
+    // Particles: payload appears as the front passes (load),
+    // payload stays through wash, payload disappears as front passes (elute / cip).
+    particles.forEach((p, i) => {
+      const node = partNodes[i];
+      const crossed = p.cy < frontY;
+      const justCrossed = crossed && (frontY - p.cy) < 14;
+      let payloadOpacity = 0;
+      if (PHASE === "load") {
+        payloadOpacity = crossed ? 0.95 : 0;
+      } else if (PHASE === "wash") {
+        payloadOpacity = 0.9;            // bound stays
+      } else if (PHASE === "elute") {
+        payloadOpacity = crossed ? 0 : 0.9;
+      } else if (PHASE === "cip") {
+        payloadOpacity = crossed ? 0 : 0.55;
+      }
+      node.payload.setAttribute("opacity", String(payloadOpacity));
+      node.halo.setAttribute("opacity", justCrossed ? "0.85" : "0");
+    });
+
+    // Outflow streams (wash / elute / cip).
+    if (C.outflowColor !== null) {
+      outNodes.forEach((lane, i) => {
+        lane.forEach((c, k) => {
+          const phase01 = (t * 3 + i * 0.21 + k * 0.33) % 1;
+          const y = frontY + phase01 * (bedBottom - frontY);
+          if (y < frontY + 6 || y > bedBottom - 4) {
+            c.setAttribute("opacity", "0");
+          } else {
+            c.setAttribute("cy", String(y));
+            c.setAttribute("opacity", "0.7");
+          }
+        });
+      });
+    }
+
+    // Update the CV progress readout.
+    const cvProg = document.getElementById("cv-progress");
+    if (cvProg) cvProg.textContent = "front · " + t.toFixed(2) + " CV";
+
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+
+  // Cancel RAF on unload — prevent timer leaks across Streamlit re-renders.
+  window.addEventListener("pagehide", function () {
+    if (rafId) cancelAnimationFrame(rafId);
+  });
+  window.addEventListener("beforeunload", function () {
+    if (rafId) cancelAnimationFrame(rafId);
+  });
+})();
+</script>
+</body>
+</html>

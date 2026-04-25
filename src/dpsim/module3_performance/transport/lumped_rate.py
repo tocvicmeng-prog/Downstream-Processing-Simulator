@@ -369,6 +369,20 @@ def solve_lrm(
     t_eval = np.linspace(0.0, total_time, n_eval)
 
     # ── Solve ──
+    # v0.4.6 / v0.4.7: cancel polls at two granularities.
+    # 1. Pre-solve check (stage boundary) — instant cancel before the
+    #    expensive integration even starts.
+    # 2. scipy `events=[make_cancel_event()]` — per-integration-step
+    #    cancel INSIDE solve_ivp. The event function reads the threading
+    #    flag (set by the run-rail's Stop button) and returns -1 when
+    #    a cancel is requested, triggering scipy's terminal-event halt.
+    from dpsim.lifecycle.cancellation import (
+        RunCancelledError,
+        check_cancel,
+        make_cancel_event,
+    )
+    check_cancel(stage="pre-LRM-solve")
+
     # BDF is the stable default for this stiff chromatography semi-discretized
     # PDE. LSODA was previously faster for some constant-equilibrium cases, but
     # it can stall on high-affinity Langmuir and gradient paths on the current
@@ -383,7 +397,14 @@ def solve_lrm(
         rtol=rtol,
         atol=atol,
         max_step=total_time / 20.0,
+        events=[make_cancel_event()],
     )
+
+    # If the cancel event fired, scipy stops cleanly and returns
+    # sol.success=True with sol.t_events[0] non-empty. Treat that as
+    # a user-initiated cancel rather than a solver failure.
+    if sol.t_events is not None and len(sol.t_events) > 0 and len(sol.t_events[0]) > 0:
+        raise RunCancelledError("LRM solve cancelled mid-integration.")
 
     if not sol.success:
         raise RuntimeError(f"LRM solver failed: {sol.message}")

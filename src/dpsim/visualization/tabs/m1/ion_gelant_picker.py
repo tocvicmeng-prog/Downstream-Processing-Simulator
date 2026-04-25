@@ -146,12 +146,25 @@ def render_ion_gelant_picker(
             "page uses its own legacy `GELANTS_ALGINATE` registry; this "
             "expander surfaces the v9.2+ registry entries for parity."
         )
+        # v0.4.5: ion-gelant picker migrated to labeled_widget.
+        from dpsim.visualization.help import labeled_widget
+
         labels = [opt.label for opt in options]
-        sel_idx = st.selectbox(
+        sel_idx = labeled_widget(
             "Ion gelant",
-            list(range(len(labels))),
-            format_func=lambda i: labels[i],
-            key=f"{key_prefix}_ion_gelant_{family.value}",
+            help=(
+                "Per-family + freestanding ion-gelant profiles from "
+                "`dpsim.level2_gelation.ion_registry`. Profiles flagged "
+                "as not biotherapeutic-safe are blocked from default "
+                "workflows by the `biotherapeutic_safe` gate."
+            ),
+            widget=lambda: st.selectbox(
+                "Ion gelant",
+                list(range(len(labels))),
+                format_func=lambda i: labels[i],
+                key=f"{key_prefix}_ion_gelant_{family.value}",
+                label_visibility="collapsed",
+            ),
         )
         opt = options[sel_idx]
         if not opt.biotherapeutic_safe:

@@ -1,0 +1,280 @@
+<!doctype html>
+<!--
+  DPSim Stop Button — Streamlit Custom Component (no-build pattern).
+
+  Loads React + the Streamlit component lib from CDN; bundles the
+  React code inline via Babel-standalone. This trades a one-time
+  ~250 kB CDN load for not needing an npm build pipeline.
+
+  Bidirectional comms:
+      window.Streamlit.setComponentValue({click_count: N})
+      window.Streamlit.setFrameHeight(px)
+      onRender(event) — receives args from Python via event.detail.args
+
+  Args from Python:
+      runState: "idle" | "running" | "stopping" | "done" | "error"
+      progressPct: 0..100
+      errorMessage: string
+      height: int (px)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --bg: #020617;
+    --surface: #0F172A;
+    --surface-2: #1E293B;
+    --surface-3: #334155;
+    --text: #F8FAFC;
+    --text-dim: #64748B;
+    --border: rgba(71, 85, 105, 0.55);
+    --accent: #2DD4BF;
+    --accent-hover: #5EEAD4;
+    --orange-500: #F97316;
+    --green-500: #22C55E;
+    --red-600: #DC2626;
+    --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 system-ui, sans-serif;
+    --font-mono: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  html, body {
+    margin: 0; padding: 0; background: transparent; color: var(--text);
+    font-family: var(--font-sans); -webkit-font-smoothing: antialiased;
+  }
+  #root { width: 100%; }
+  /* Pulse animation for the running-state stop button. Subtle — not
+   * a marketing-style throbbing button. ~12% opacity drop, 1.4 s. */
+  @keyframes dps-stop-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.45); }
+    50%      { box-shadow: 0 0 0 6px rgba(249, 115, 22, 0); }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script>
+/*
+  Streamlit component shim — minimal port of streamlit-component-lib.
+  We can't use npm here, so we implement the protocol directly:
+    - Listen for "streamlit:render" → re-render with new args
+    - Call Streamlit.setComponentValue(value) → posts to parent
+    - Call Streamlit.setFrameHeight(h) → resizes iframe
+*/
+(function () {
+  function _post(type, data) {
+    window.parent.postMessage(
+      Object.assign({ isStreamlitMessage: true, type: type }, data),
+      "*"
+    );
+  }
+  window.Streamlit = {
+    setComponentValue: function (value) {
+      _post("streamlit:setComponentValue", { value: value, dataType: "json" });
+    },
+    setFrameHeight: function (height) {
+      _post("streamlit:setFrameHeight", {
+        height: height || (document.body && document.body.scrollHeight) || 0,
+      });
+    },
+    setComponentReady: function () {
+      _post("streamlit:componentReady", { apiVersion: 1 });
+    },
+    RENDER_EVENT: "streamlit:render",
+    events: {
+      addEventListener: function (type, fn) {
+        window.addEventListener(type, fn);
+      },
+    },
+  };
+  window.addEventListener("message", function (e) {
+    if (!e.data || !e.data.type) return;
+    if (e.data.type === "streamlit:render") {
+      window.dispatchEvent(new CustomEvent("streamlit:render", { detail: e.data }));
+    }
+  });
+})();
+</script>
+
+<script>
+const e = React.createElement;
+
+// ── Visual config keyed by run state ───────────────────────────────
+const STATE_CONFIG = {
+  idle: {
+    label: "▶  Run lifecycle",
+    bg: "var(--accent)",
+    bgHover: "var(--accent-hover)",
+    fg: "var(--surface)",
+    border: "var(--accent)",
+    pulse: false,
+    disabled: false,
+    aria: "Run lifecycle simulation",
+  },
+  running: {
+    label: "■  Stop run",
+    bg: "var(--orange-500)",
+    bgHover: "#FB923C",
+    fg: "var(--surface)",
+    border: "var(--orange-500)",
+    pulse: true,
+    disabled: false,
+    aria: "Stop the current run (cancellation honoured at next checkpoint)",
+  },
+  stopping: {
+    label: "■  Stopping…",
+    bg: "var(--surface-3)",
+    bgHover: "var(--surface-3)",
+    fg: "var(--text-dim)",
+    border: "var(--border)",
+    pulse: false,
+    disabled: true,
+    aria: "Stopping",
+  },
+  done: {
+    label: "↻  Re-run",
+    bg: "var(--accent)",
+    bgHover: "var(--accent-hover)",
+    fg: "var(--surface)",
+    border: "var(--accent)",
+    pulse: false,
+    disabled: false,
+    aria: "Re-run lifecycle simulation",
+  },
+  error: {
+    label: "↻  Try again",
+    bg: "transparent",
+    bgHover: "rgba(220, 38, 38, 0.12)",
+    fg: "var(--red-600)",
+    border: "var(--red-600)",
+    pulse: false,
+    disabled: false,
+    aria: "Try the run again",
+  },
+};
+
+function StopButton(props) {
+  const cfg = STATE_CONFIG[props.runState] || STATE_CONFIG.idle;
+  const [hover, setHover] = React.useState(false);
+  const [clickCount, setClickCount] = React.useState(0);
+
+  const handleClick = React.useCallback(() => {
+    if (cfg.disabled) return;
+    const next = clickCount + 1;
+    setClickCount(next);
+    // Send the click count back to Python. Streamlit will deliver it
+    // on the next rerun and the Python wrapper will detect the
+    // monotonic increase as a fresh click.
+    window.Streamlit.setComponentValue({ click_count: next });
+  }, [cfg.disabled, clickCount]);
+
+  const showProgress = props.runState === "running" || props.runState === "stopping";
+  const pct = Math.max(0, Math.min(100, props.progressPct || 0));
+
+  return e("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      width: "100%",
+      padding: "2px",
+    },
+  },
+    e("button", {
+      onClick: handleClick,
+      onMouseEnter: () => setHover(true),
+      onMouseLeave: () => setHover(false),
+      disabled: cfg.disabled,
+      "aria-label": cfg.aria,
+      style: {
+        position: "relative",
+        width: "100%",
+        height: "38px",
+        background: hover && !cfg.disabled ? cfg.bgHover : cfg.bg,
+        color: cfg.fg,
+        border: `1px solid ${cfg.border}`,
+        borderRadius: "4px",
+        fontFamily: "var(--font-sans)",
+        fontSize: "13px",
+        fontWeight: 600,
+        letterSpacing: "0.01em",
+        cursor: cfg.disabled ? "not-allowed" : "pointer",
+        transition: "background-color 150ms ease-out, color 150ms ease-out",
+        animation: cfg.pulse ? "dps-stop-pulse 1.4s ease-in-out infinite" : "none",
+      },
+    }, cfg.label),
+
+    showProgress && e("div", {
+      style: {
+        height: "3px",
+        width: "100%",
+        background: "var(--surface-2)",
+        borderRadius: "2px",
+        overflow: "hidden",
+      },
+    }, e("div", {
+      style: {
+        height: "100%",
+        width: `${pct}%`,
+        background: props.runState === "stopping"
+          ? "var(--text-dim)"
+          : "var(--orange-500)",
+        transition: "width 220ms ease-out",
+      },
+    })),
+
+    showProgress && e("div", {
+      style: {
+        fontFamily: "var(--font-mono)",
+        fontSize: "10.5px",
+        color: "var(--text-dim)",
+        textAlign: "center",
+        letterSpacing: "0.04em",
+      },
+    },
+      props.runState === "stopping"
+        ? `Stopping at next checkpoint · ${pct}%`
+        : `Running · ${pct}%`,
+    ),
+
+    props.runState === "error" && props.errorMessage && e("div", {
+      style: {
+        fontFamily: "var(--font-mono)",
+        fontSize: "10.5px",
+        color: "var(--red-600)",
+        textAlign: "center",
+        padding: "2px 4px",
+      },
+    }, `⚠ ${props.errorMessage}`),
+  );
+}
+
+// ── Mount ──────────────────────────────────────────────────────────
+const root = ReactDOM.createRoot(document.getElementById("root"));
+
+function render(args) {
+  root.render(e(StopButton, {
+    runState: (args && args.runState) || "idle",
+    progressPct: (args && args.progressPct) || 0,
+    errorMessage: (args && args.errorMessage) || "",
+  }));
+  // Resize iframe to fit content.
+  const h = (args && args.height) || 80;
+  window.Streamlit.setFrameHeight(h);
+}
+
+window.Streamlit.events.addEventListener("streamlit:render", function (event) {
+  const args = (event.detail && event.detail.args) || {};
+  render(args);
+});
+
+// Initial paint with safe defaults; Streamlit will fire a render with
+// the real props immediately afterward.
+render({});
+window.Streamlit.setComponentReady();
+</script>
+</body>
+</html>

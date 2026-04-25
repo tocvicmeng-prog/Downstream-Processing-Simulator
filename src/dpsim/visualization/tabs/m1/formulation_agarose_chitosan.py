@@ -40,13 +40,20 @@ def render_formulation_section(*, is_stirred: bool) -> AgaroseChitosanContext:
     """
     st.subheader("Formulation")
 
+    # v0.4.4: A+C formulation widgets migrated to labeled_widget for
+    # inline help on each parameter.
+    from dpsim.visualization.help import get_help, labeled_widget
+
     surf_keys = list(SURFACTANTS.keys())
     surf_names = [SURFACTANTS[k].name for k in surf_keys]
-    surf_sel_name = st.selectbox(
-        "Surfactant", surf_names,
-        index=surf_keys.index("span80"),
-        help="Select surfactant for W/O emulsification",
-        key="m1_surfactant",
+    surf_sel_name = labeled_widget(
+        "Surfactant",
+        help="Surfactant species for the W/O emulsification. Drives interfacial tension and droplet stabilisation kinetics.",
+        widget=lambda: st.selectbox(
+            "Surfactant", surf_names,
+            index=surf_keys.index("span80"),
+            key="m1_surfactant", label_visibility="collapsed",
+        ),
     )
     surf_sel_key = surf_keys[surf_names.index(surf_sel_name)]
     surf = SURFACTANTS[surf_sel_key]
@@ -54,53 +61,117 @@ def render_formulation_section(*, is_stirred: bool) -> AgaroseChitosanContext:
 
     fc1, fc2 = st.columns(2)
     with fc1:
-        c_agarose_pct = st.number_input("Agarose (% w/v)", 1.0, 10.0, 4.2, step=0.1, key="m1_c_agar")
+        c_agarose_pct = labeled_widget(
+            "Agarose",
+            help=get_help("m1.formulation.agarose_pct"),
+            unit="% w/v",
+            widget=lambda: st.number_input(
+                "Agarose (% w/v)", 1.0, 10.0, 4.2, step=0.1,
+                key="m1_c_agar", label_visibility="collapsed",
+            ),
+        )
     with fc2:
-        c_chitosan_pct = st.number_input("Chitosan (% w/v)", 0.5, 5.0, 1.8, step=0.1, key="m1_c_chit")
+        c_chitosan_pct = labeled_widget(
+            "Chitosan",
+            help=get_help("m1.formulation.chitosan_pct"),
+            unit="% w/v",
+            widget=lambda: st.number_input(
+                "Chitosan (% w/v)", 0.5, 5.0, 1.8, step=0.1,
+                key="m1_c_chit", label_visibility="collapsed",
+            ),
+        )
 
     if is_stirred:
-        c_span80_vol_pct = st.slider(
-            "Span-80 in oil (% v/v)", 0.2, 5.0, 1.5, step=0.1, key="m1_span_vv",
+        c_span80_vol_pct = labeled_widget(
+            "Span-80 in oil",
+            help="Volume-fraction of Span-80 surfactant in the continuous oil phase. Drives interfacial tension at the W/O boundary.",
+            unit="% v/v",
+            widget=lambda: st.slider(
+                "Span-80 in oil (% v/v)", 0.2, 5.0, 1.5, step=0.1,
+                key="m1_span_vv", label_visibility="collapsed",
+            ),
         )
         c_span80_pct = c_span80_vol_pct * 986.0 / 1000.0
-        T_oil_C = st.slider(
-            "Paraffin Oil Temperature (C)", 65, 110, 80, step=1, key="m1_T_oil",
-            help="Oil temperature at start of emulsification.",
+        T_oil_C = labeled_widget(
+            "Oil temperature",
+            help=get_help("m1.formulation.temperature_C"),
+            unit="°C",
+            widget=lambda: st.slider(
+                "Paraffin Oil Temperature (C)", 65, 110, 80, step=1,
+                key="m1_T_oil", label_visibility="collapsed",
+            ),
         )
     else:
-        c_span80_pct = st.slider(
-            "Surfactant (% w/v)", 0.5, 5.0, 2.0, step=0.1, key="m1_span_wv",
+        c_span80_pct = labeled_widget(
+            "Surfactant",
+            help="Mass-fraction of surfactant in the continuous phase (legacy non-AC path).",
+            unit="% w/v",
+            widget=lambda: st.slider(
+                "Surfactant (% w/v)", 0.5, 5.0, 2.0, step=0.1,
+                key="m1_span_wv", label_visibility="collapsed",
+            ),
         )
         c_span80_vol_pct = 1.5
-        T_oil_C = st.slider(
-            "Oil Temperature (C)", 60, 95, 90, key="m1_T_oil_leg",
+        T_oil_C = labeled_widget(
+            "Oil temperature",
+            help=get_help("m1.formulation.temperature_C"),
+            unit="°C",
+            widget=lambda: st.slider(
+                "Oil Temperature (C)", 60, 95, 90,
+                key="m1_T_oil_leg", label_visibility="collapsed",
+            ),
         )
 
     # L2 cooling + pore model (right column in the legacy layout, but
     # logically part of A+C formulation so we include it here).
     st.subheader("Cooling & Gelation (L2)")
     if is_stirred:
-        cooling_rate_Cmin = st.slider(
-            "Cooling Rate (C/min)", 0.1, 15.0, 0.67, step=0.1,
-            key="m1_cool_rate",
-            help="Natural cooling: ~0.67 C/min for 500 mL beaker",
+        cooling_rate_Cmin = labeled_widget(
+            "Cooling rate",
+            help=get_help("m1.hardware.cool_rate"),
+            unit="°C/min",
+            widget=lambda: st.slider(
+                "Cooling Rate (C/min)", 0.1, 15.0, 0.67, step=0.1,
+                key="m1_cool_rate", label_visibility="collapsed",
+            ),
         )
     else:
-        cooling_rate_Cmin = st.slider(
-            "Cooling Rate (C/min)", 1.0, 20.0, 10.0, step=0.5, key="m1_cool_rate_leg",
+        cooling_rate_Cmin = labeled_widget(
+            "Cooling rate",
+            help=get_help("m1.hardware.cool_rate"),
+            unit="°C/min",
+            widget=lambda: st.slider(
+                "Cooling Rate (C/min)", 1.0, 20.0, 10.0, step=0.5,
+                key="m1_cool_rate_leg", label_visibility="collapsed",
+            ),
         )
-    l2_model = st.radio(
-        "Pore Structure Model",
-        ["Empirical (fast, calibrated)", "Cahn-Hilliard 2D (mechanistic)"],
-        index=0, key="m1_l2_model",
-        help="Empirical: literature-calibrated power law (~1 ms). "
-             "CH 2D: phase-field spinodal decomposition (slower, requires parameter tuning).",
+    l2_model = labeled_widget(
+        "Pore structure model",
+        help=(
+            "Empirical: literature-calibrated power law (~1 ms compute). "
+            "Cahn-Hilliard 2D: phase-field spinodal decomposition — "
+            "mechanistic but requires parameter tuning and is ~100× slower."
+        ),
+        widget=lambda: st.radio(
+            "Pore Structure Model",
+            ["Empirical (fast, calibrated)", "Cahn-Hilliard 2D (mechanistic)"],
+            index=0, key="m1_l2_model", label_visibility="collapsed",
+        ),
     )
     l2_mode = "empirical" if "Empirical" in l2_model else "ch_2d"
     grid_size = 64
     if l2_mode == "ch_2d":
-        grid_size = st.select_slider(
-            "Phase-Field Grid", [32, 64, 128], value=64, key="m1_grid",
+        grid_size = labeled_widget(
+            "Phase-field grid",
+            help=(
+                "Cahn-Hilliard 2D grid resolution. Higher = better-"
+                "resolved phase boundaries but quadratically more "
+                "compute (32×32 ≈ ~1 s; 128×128 ≈ ~30 s)."
+            ),
+            widget=lambda: st.select_slider(
+                "Phase-Field Grid", [32, 64, 128], value=64,
+                key="m1_grid", label_visibility="collapsed",
+            ),
         )
 
     return AgaroseChitosanContext(

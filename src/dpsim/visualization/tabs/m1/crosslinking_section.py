@@ -51,13 +51,19 @@ def render_crosslinking_section(
     """
     st.subheader("Crosslinking (L3)")
 
+    # v0.4.4: crosslinking widgets migrated to labeled_widget.
+    from dpsim.visualization.help import get_help, labeled_widget
+
     xl_keys = list(CROSSLINKERS.keys())
     xl_names = [CROSSLINKERS[k].name for k in xl_keys]
-    xl_sel_name = st.selectbox(
-        "Crosslinker", xl_names,
-        index=xl_keys.index("genipin"),
-        help="Select crosslinking agent",
-        key="m1_crosslinker",
+    xl_sel_name = labeled_widget(
+        "Crosslinker",
+        help=get_help("m1.crosslinker"),
+        widget=lambda: st.selectbox(
+            "Crosslinker", xl_names,
+            index=xl_keys.index("genipin"),
+            key="m1_crosslinker", label_visibility="collapsed",
+        ),
     )
     xl_sel_key = xl_keys[xl_names.index(xl_sel_name)]
     xl = CROSSLINKERS[xl_sel_key]
@@ -69,8 +75,14 @@ def render_crosslinking_section(
             "for the two-phase wet-lab protocol. **Not the same as TPP (STPP).**"
         )
 
-    c_genipin_mM = st.slider(
-        "Crosslinker Concentration (mM)", 0.5, 500.0, 10.0, step=0.5, key="m1_c_xl",
+    c_genipin_mM = labeled_widget(
+        "Crosslinker concentration",
+        help=get_help("m1.crosslinker_concentration"),
+        unit="mM",
+        widget=lambda: st.slider(
+            "Crosslinker Concentration (mM)", 0.5, 500.0, 10.0, step=0.5,
+            key="m1_c_xl", label_visibility="collapsed",
+        ),
     )
     st.markdown(
         f"[View mechanism & protocol](/reagent_detail"
@@ -79,10 +91,13 @@ def render_crosslinking_section(
         f"&c={c_genipin_mM}&pH=7.4)",
     )
 
-    DDA = st.slider(
-        "DDA (degree of deacetylation)", 0.50, 0.99, 0.85, step=0.01,
-        key="m1_DDA",
-        help="Chitosan degree of deacetylation. Affects NH2 density and crosslinking capacity.",
+    DDA = labeled_widget(
+        "DDA (degree of deacetylation)",
+        help="Chitosan degree of deacetylation. Affects NH₂ density (and therefore crosslinking capacity); typical commercial chitosan is 0.80–0.95.",
+        widget=lambda: st.slider(
+            "DDA (degree of deacetylation)", 0.50, 0.99, 0.85, step=0.01,
+            key="m1_DDA", label_visibility="collapsed",
+        ),
     )
     if DDA_out is not None:
         DDA_out.clear()
@@ -109,18 +124,36 @@ def render_crosslinking_section(
 
     T_xlink_default = int(xl.T_crosslink_default - 273.15)
     t_xlink_default_h = max(1, int(xl.t_crosslink_default / 3600))
-    T_xlink_C = st.slider(
-        "Crosslinking Temperature (\u00b0C)", 0, 120,
-        min(max(T_xlink_default, 0), 120), key="m1_T_xl",
+    T_xlink_C = labeled_widget(
+        "Crosslinking temperature",
+        help="Crosslinking reaction temperature. Default is the calibrated reagent setpoint.",
+        unit="\u00b0C",
+        widget=lambda: st.slider(
+            "Crosslinking Temperature (\u00b0C)", 0, 120,
+            min(max(T_xlink_default, 0), 120),
+            key="m1_T_xl", label_visibility="collapsed",
+        ),
     )
-    t_xlink_h = st.slider(
-        "Crosslinking Time (hours)", 1, 48,
-        min(t_xlink_default_h, 48), key="m1_t_xl",
+    t_xlink_h = labeled_widget(
+        "Reaction time",
+        help=get_help("m1.reaction_time"),
+        unit="h",
+        widget=lambda: st.slider(
+            "Crosslinking Time (hours)", 1, 48,
+            min(t_xlink_default_h, 48),
+            key="m1_t_xl", label_visibility="collapsed",
+        ),
     )
 
     if xl.kinetics_model == "uv_dose":
-        uv_intensity = st.slider(
-            "UV Intensity (mW/cm\u00b2)", 1.0, 100.0, 20.0, step=1.0, key="m1_uv",
+        uv_intensity = labeled_widget(
+            "UV intensity",
+            help="UV-source intensity at the bead surface. Drives the photo-initiated crosslinking dose; calibration is per-lamp.",
+            unit="mW/cm\u00b2",
+            widget=lambda: st.slider(
+                "UV Intensity (mW/cm\u00b2)", 1.0, 100.0, 20.0, step=1.0,
+                key="m1_uv", label_visibility="collapsed",
+            ),
         )
     else:
         uv_intensity = 0.0

@@ -42,15 +42,22 @@ def render_hardware_mode_radio(*, key: str = "m1v9_hardware_mode") -> bool:
     Returns True for Stirred Vessel, False for Rotor-Stator (Legacy).
     Default: Rotor-Stator (Legacy) — matches v8.x behaviour.
     """
-    sim_mode = st.radio(
-        "Hardware Mode",
-        ["Rotor-Stator (Legacy)", "Stirred Vessel (New)"],
-        index=0,
-        horizontal=True,
-        help="Legacy: 25 mm rotor-stator at 3k-25k RPM. "
-             "Stirred Vessel: pitched-blade or small rotor-stator at 800-9000 RPM. "
-             "Hardware choice affects L1 PBE only; L2/L3/L4 and M2/M3 are hardware-agnostic.",
-        key=key,
+    # v0.4.5: hardware mode migrated to labeled_widget.
+    from dpsim.visualization.help import labeled_widget
+
+    sim_mode = labeled_widget(
+        "Hardware mode",
+        help=(
+            "Legacy: 25 mm rotor-stator at 3k–25k RPM. "
+            "Stirred Vessel: pitched-blade or small rotor-stator at "
+            "800–9000 RPM. Hardware choice affects the L1 PBE solver "
+            "kernel only; L2/L3/L4 and M2/M3 are hardware-agnostic."
+        ),
+        widget=lambda: st.radio(
+            "Hardware Mode",
+            ["Rotor-Stator (Legacy)", "Stirred Vessel (New)"],
+            index=0, horizontal=True, key=key, label_visibility="collapsed",
+        ),
     )
     return "Stirred" in sim_mode
 

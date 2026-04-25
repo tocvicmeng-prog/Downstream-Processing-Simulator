@@ -183,16 +183,20 @@ def render_family_selector(*, key: str = "m1v9_polymer_family") -> FamilyContext
     enums = [row[1] for row in rows]
     helps = [row[2] for row in rows]
 
-    sel_name = st.radio(
+    # v0.4.5: polymer-family selector migrated to labeled_widget.
+    from dpsim.visualization.help import get_help, labeled_widget
+
+    sel_name = labeled_widget(
         "Polymer family",
-        display_names,
-        index=0,
-        horizontal=True,
-        key=key,
-        help="Selects the L2 gelation pathway and the set of scientifically "
-             "applicable formulation inputs. Only fields that enter the "
-             "chosen family's equations will be shown below.",
-        label_visibility="collapsed",
+        help=get_help("m1.family"),
+        widget=lambda: st.radio(
+            "Polymer family",
+            display_names,
+            index=0,
+            horizontal=True,
+            key=key,
+            label_visibility="collapsed",
+        ),
     )
     idx = display_names.index(sel_name)
     family = enums[idx]

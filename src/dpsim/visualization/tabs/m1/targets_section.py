@@ -44,29 +44,59 @@ def render_targets_section(*, family: PolymerFamily, is_stirred: bool) -> Target
         m1_tgt_pore_leg (legacy pore)
         m1_tgt_G      (G_DN)
     """
+    # v0.4.4: targets section migrated to labeled_widget.
+    from dpsim.visualization.help import labeled_widget
+
     st.subheader("Optimization Targets")
     pore_help = _PORE_HELP.get(family, "Characteristic pore / mesh size.")
     if is_stirred:
-        target_d_mode = st.number_input(
-            "Target d_mode (um)", 10.0, 500.0, 100.0, step=10.0,
-            key="m1_tgt_d", help="Modal diameter of microspheres",
+        target_d_mode = labeled_widget(
+            "Target d_mode",
+            help="Modal (most-frequent) diameter of microspheres. The optimisation drives the predicted distribution toward this value.",
+            unit="µm",
+            widget=lambda: st.number_input(
+                "Target d_mode (um)", 10.0, 500.0, 100.0, step=10.0,
+                key="m1_tgt_d", label_visibility="collapsed",
+            ),
         )
         target_d32 = target_d_mode
-        target_pore = st.number_input(
-            "Target Pore Size (nm)", 10, 500, 100, step=10,
-            key="m1_tgt_pore", help=pore_help,
+        target_pore = labeled_widget(
+            "Target pore size",
+            help=pore_help,
+            unit="nm",
+            widget=lambda: st.number_input(
+                "Target Pore Size (nm)", 10, 500, 100, step=10,
+                key="m1_tgt_pore", label_visibility="collapsed",
+            ),
         )
     else:
-        target_d32 = st.number_input(
-            "Target d32 (um)", 0.5, 50.0, 2.0, step=0.5, key="m1_tgt_d32",
+        target_d32 = labeled_widget(
+            "Target d32",
+            help="Sauter (volume-surface) mean diameter — drives the optimisation in the legacy rotor-stator path.",
+            unit="µm",
+            widget=lambda: st.number_input(
+                "Target d32 (um)", 0.5, 50.0, 2.0, step=0.5,
+                key="m1_tgt_d32", label_visibility="collapsed",
+            ),
         )
         target_d_mode = target_d32
-        target_pore = st.number_input(
-            "Target Pore Size (nm)", 10, 500, 80, step=10,
-            key="m1_tgt_pore_leg", help=pore_help,
+        target_pore = labeled_widget(
+            "Target pore size",
+            help=pore_help,
+            unit="nm",
+            widget=lambda: st.number_input(
+                "Target Pore Size (nm)", 10, 500, 80, step=10,
+                key="m1_tgt_pore_leg", label_visibility="collapsed",
+            ),
         )
-    target_G = st.number_input(
-        "Target G_DN (kPa)", 1.0, 500.0, 10.0, step=1.0, key="m1_tgt_G",
+    target_G = labeled_widget(
+        "Target G_DN",
+        help="Target double-network shear modulus. Drives the optimisation toward stiffer/softer beads.",
+        unit="kPa",
+        widget=lambda: st.number_input(
+            "Target G_DN (kPa)", 1.0, 500.0, 10.0, step=1.0,
+            key="m1_tgt_G", label_visibility="collapsed",
+        ),
     )
     return TargetsContext(
         target_d32=target_d32,

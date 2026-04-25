@@ -76,32 +76,95 @@ def _render_non_ac_family(*, tab_container, family, is_stirred_default, model_mo
         st.subheader("Emulsification (L1)")
         is_stirred = render_hardware_mode_radio()
 
+        # v0.4.5: non-AC family path migrated to labeled_widget for parity
+        # with the AC stirred branch.
+        from dpsim.visualization.help import get_help, labeled_widget as _lw_nac
         if is_stirred:
-            vessel_choice = st.selectbox(
-                "Vessel", ["Glass Beaker (100 mm)", "Jacketed Vessel (92 mm)"],
-                key="m1_vessel",
+            vessel_choice = _lw_nac(
+                "Vessel",
+                help="Glass beaker uses flat-plate heating; jacketed vessel uses circulating hot water with steadier setpoint control.",
+                widget=lambda: st.selectbox(
+                    "Vessel", ["Glass Beaker (100 mm)", "Jacketed Vessel (92 mm)"],
+                    key="m1_vessel", label_visibility="collapsed",
+                ),
             )
-            stirrer_choice = st.selectbox(
-                "Stirrer", ["Stirrer A - Pitched Blade (59 mm)", "Stirrer B - Rotor-Stator (32 mm)"],
-                key="m1_stirrer",
+            stirrer_choice = _lw_nac(
+                "Stirrer",
+                help="Pitched-blade (Stirrer A): mixed axial+radial flow, moderate shear. Rotor-stator (Stirrer B): high-shear annular zone — used for fine emulsification.",
+                widget=lambda: st.selectbox(
+                    "Stirrer", ["Stirrer A - Pitched Blade (59 mm)", "Stirrer B - Rotor-Stator (32 mm)"],
+                    key="m1_stirrer", label_visibility="collapsed",
+                ),
             )
             is_stirrer_A = "Pitched" in stirrer_choice
-            rpm = st.slider(
-                "Stirrer Speed (RPM)", 800, 2000 if is_stirrer_A else 9000,
-                1300 if is_stirrer_A else 1800,
-                step=50 if is_stirrer_A else 100,
-                key="m1_rpm" if is_stirrer_A else "m1_rpm_rs",
+            rpm = _lw_nac(
+                "Stirrer speed",
+                help=get_help("m1.hardware.stir_rpm"),
+                unit="rpm",
+                widget=lambda: st.slider(
+                    "Stirrer Speed (RPM)", 800, 2000 if is_stirrer_A else 9000,
+                    1300 if is_stirrer_A else 1800,
+                    step=50 if is_stirrer_A else 100,
+                    key="m1_rpm" if is_stirrer_A else "m1_rpm_rs",
+                    label_visibility="collapsed",
+                ),
             )
-            t_emul = st.number_input("Emulsification Time (min)", 1, 60, 10, key="m1_t_emul")
-            v_oil_mL = st.slider("Oil + surfactant (mL)", 100, 500, 300, step=10, key="m1_v_oil")
-            v_poly_mL = st.slider("Dispersed phase (mL)", 50, 300, 200, step=10, key="m1_v_poly")
+            t_emul = _lw_nac(
+                "Emulsification time",
+                help="Hold time at full stirring. Drives PBE convergence.",
+                unit="min",
+                widget=lambda: st.number_input(
+                    "Emulsification Time (min)", 1, 60, 10,
+                    key="m1_t_emul", label_visibility="collapsed",
+                ),
+            )
+            v_oil_mL = _lw_nac(
+                "Oil + surfactant",
+                help="Continuous-phase volume.",
+                unit="mL",
+                widget=lambda: st.slider(
+                    "Oil + surfactant (mL)", 100, 500, 300, step=10,
+                    key="m1_v_oil", label_visibility="collapsed",
+                ),
+            )
+            v_poly_mL = _lw_nac(
+                "Dispersed phase",
+                help="Dispersed-phase volume (polysaccharide / PLGA-DCM / cellulose-solvent).",
+                unit="mL",
+                widget=lambda: st.slider(
+                    "Dispersed phase (mL)", 50, 300, 200, step=10,
+                    key="m1_v_poly", label_visibility="collapsed",
+                ),
+            )
             total_mL = v_oil_mL + v_poly_mL
             phi_d = v_poly_mL / total_mL
             st.caption(f"Total: {total_mL} mL | phi_d = {phi_d:.2f}")
         else:
-            rpm = st.slider("Rotor Speed (RPM)", 3000, 25000, 10000, step=500, key="m1_rpm_leg")
-            t_emul = st.number_input("Emulsification Time (min)", 1, 60, 10, key="m1_t_emul_leg")
-            phi_d = st.slider("Dispersed Phase Fraction (phi_d)", 0.01, 0.30, 0.05, step=0.01, key="m1_phi_d")
+            rpm = _lw_nac(
+                "Rotor speed",
+                help="Rotor-stator RPM (legacy path). Driver of high-shear zone in the annular gap.",
+                unit="rpm",
+                widget=lambda: st.slider(
+                    "Rotor Speed (RPM)", 3000, 25000, 10000, step=500,
+                    key="m1_rpm_leg", label_visibility="collapsed",
+                ),
+            )
+            t_emul = _lw_nac(
+                "Emulsification time",
+                unit="min",
+                widget=lambda: st.number_input(
+                    "Emulsification Time (min)", 1, 60, 10,
+                    key="m1_t_emul_leg", label_visibility="collapsed",
+                ),
+            )
+            phi_d = _lw_nac(
+                "Dispersed-phase fraction (φ_d)",
+                help="Volume fraction of the dispersed (aqueous polymer) phase. Above ~0.30 the emulsion is prone to inversion.",
+                widget=lambda: st.slider(
+                    "Dispersed Phase Fraction (phi_d)", 0.01, 0.30, 0.05, step=0.01,
+                    key="m1_phi_d", label_visibility="collapsed",
+                ),
+            )
             v_oil_mL, v_poly_mL, total_mL = 300, 200, 500
 
     # Compare families by .value to survive importlib.reload of datatypes
@@ -356,27 +419,117 @@ def render_tab_m1(
                 is_stirred = render_hardware_mode_radio()
 
             if is_stirred:
-                vessel_choice = st.selectbox(
-                    "Vessel", ["Glass Beaker (100 mm)", "Jacketed Vessel (92 mm)"],
-                    help="Beaker: flat-plate heating. Jacketed: hot-water circulation.",
-                    key="m1_vessel",
+                # v0.4.3: vessel + stirrer migrated to labeled_widget.
+                from dpsim.visualization.help import labeled_widget
+                vessel_choice = labeled_widget(
+                    "Vessel",
+                    help=(
+                        "Vessel geometry. Glass beaker uses flat-plate "
+                        "heating; jacketed vessel uses circulating hot "
+                        "water with steadier setpoint control."
+                    ),
+                    widget=lambda: st.selectbox(
+                        "Vessel",
+                        ["Glass Beaker (100 mm)", "Jacketed Vessel (92 mm)"],
+                        key="m1_vessel", label_visibility="collapsed",
+                    ),
                 )
-                stirrer_choice = st.selectbox(
-                    "Stirrer", ["Stirrer A - Pitched Blade (59 mm)", "Stirrer B - Rotor-Stator (32 mm)"],
-                    key="m1_stirrer",
+                stirrer_choice = labeled_widget(
+                    "Stirrer",
+                    help=(
+                        "Pitched-blade (Stirrer A): mixed axial+radial flow, "
+                        "moderate shear. Rotor-stator (Stirrer B): high-shear "
+                        "annular zone — used for fine emulsification."
+                    ),
+                    widget=lambda: st.selectbox(
+                        "Stirrer",
+                        ["Stirrer A - Pitched Blade (59 mm)", "Stirrer B - Rotor-Stator (32 mm)"],
+                        key="m1_stirrer", label_visibility="collapsed",
+                    ),
                 )
                 is_stirrer_A = "Pitched" in stirrer_choice
 
+                # v0.4.2: stirrer-speed slider migrated to labeled_widget
+                # so the inline help describes the relationship between
+                # RPM, tip speed, and shear regime (drives the kernel
+                # selection in the L1 PBE solver).
+                from dpsim.visualization.help import get_help, labeled_widget
                 if is_stirrer_A:
-                    rpm = st.slider("Stirrer Speed (RPM)", 800, 2000, 1300, step=50, key="m1_rpm")
+                    rpm = labeled_widget(
+                        "Stirrer speed",
+                        help=get_help("m1.hardware.stir_rpm"),
+                        unit="rpm",
+                        widget=lambda: st.slider(
+                            "Stirrer Speed (RPM)", 800, 2000, 1300, step=50,
+                            key="m1_rpm", label_visibility="collapsed",
+                        ),
+                    )
                 else:
-                    rpm = st.slider("Stirrer Speed (RPM)", 800, 9000, 1800, step=100, key="m1_rpm_rs")
+                    rpm = labeled_widget(
+                        "Stirrer speed",
+                        help=get_help("m1.hardware.stir_rpm"),
+                        unit="rpm",
+                        widget=lambda: st.slider(
+                            "Stirrer Speed (RPM)", 800, 9000, 1800, step=100,
+                            key="m1_rpm_rs", label_visibility="collapsed",
+                        ),
+                    )
 
-                t_emul = st.number_input("Emulsification Time (min)", 1, 60, 10, key="m1_t_emul")
+                # v0.4.1: Rushton-in-baffled-tank reference visualisation.
+                # Caption flags that this is a STANDARD reference geometry,
+                # not the literal hardware (which may be pitched-blade or
+                # rotor-stator). The visual conveys shear regime and flow
+                # pattern at the chosen RPM. SA-prescribed fidelity per
+                # docs/handover/SA_v0_4_0_RUSHTON_FIDELITY.md.
+                with st.expander(
+                    "🌀 Rushton reference — flow pattern at this RPM",
+                    expanded=False,
+                ):
+                    from dpsim.visualization.components import render_impeller_xsec
+                    render_impeller_xsec(rpm=float(rpm))
+                    st.caption(
+                        "Standard Rushton-disk in baffled BSTR (D/T = 1/3). "
+                        "Visual conveys shear tier (`v_tip`), break-up zone "
+                        "(trailing-vortex pair behind each blade per Wu & "
+                        "Patterson 1989), and impeller-zone passage frequency "
+                        "(`f_pass`). Actual stirrer geometry above is used by "
+                        "the PBE solver; this visual is a reference for the "
+                        "regime, not a literal rendering of your hardware."
+                    )
+
+                t_emul = labeled_widget(
+                    "Emulsification time",
+                    help=(
+                        "Hold time at full stirring. Drives the PBE "
+                        "convergence — too short and bead size hasn't "
+                        "stabilised; too long is wasted process time."
+                    ),
+                    unit="min",
+                    widget=lambda: st.number_input(
+                        "Emulsification Time (min)", 1, 60, 10,
+                        key="m1_t_emul", label_visibility="collapsed",
+                    ),
+                )
 
                 st.caption("Working liquid volumes")
-                v_oil_mL = st.slider("Oil + Span-80 (mL)", 100, 500, 300, step=10, key="m1_v_oil")
-                v_poly_mL = st.slider("Polysaccharide solution (mL)", 50, 300, 200, step=10, key="m1_v_poly")
+                v_oil_mL = labeled_widget(
+                    "Oil + surfactant",
+                    help="Continuous-phase volume (oil + Span-80). Default 300 mL.",
+                    unit="mL",
+                    widget=lambda: st.slider(
+                        "Oil + Span-80 (mL)", 100, 500, 300, step=10,
+                        key="m1_v_oil", label_visibility="collapsed",
+                    ),
+                )
+                v_poly_mL = labeled_widget(
+                    "Polysaccharide phase",
+                    help="Dispersed-phase volume (aqueous polysaccharide). Default 200 mL.",
+                    unit="mL",
+                    widget=lambda: st.slider(
+                        "Polysaccharide solution (mL)", 50, 300, 200, step=10,
+                        key="m1_v_poly", label_visibility="collapsed",
+                    ),
+                )
                 total_mL = v_oil_mL + v_poly_mL
                 phi_d = v_poly_mL / total_mL
                 st.caption(f"Total: {total_mL} mL | phi_d = {phi_d:.2f}")
@@ -386,9 +539,34 @@ def render_tab_m1(
                 else:
                     st.caption("Heating: jacket (85C circulating water)")
             else:
-                rpm = st.slider("Rotor Speed (RPM)", 3000, 25000, 10000, step=500, key="m1_rpm_leg")
-                t_emul = st.number_input("Emulsification Time (min)", 1, 60, 10, key="m1_t_emul_leg")
-                phi_d = st.slider("Dispersed Phase Fraction (phi_d)", 0.01, 0.30, 0.05, step=0.01, key="m1_phi_d")
+                # v0.4.5: AC legacy rotor-stator branch + advanced PBE
+                # settings migrated to labeled_widget.
+                from dpsim.visualization.help import labeled_widget as _lw_ac_leg
+                rpm = _lw_ac_leg(
+                    "Rotor speed",
+                    help="Rotor-stator legacy path. High-shear annular gap.",
+                    unit="rpm",
+                    widget=lambda: st.slider(
+                        "Rotor Speed (RPM)", 3000, 25000, 10000, step=500,
+                        key="m1_rpm_leg", label_visibility="collapsed",
+                    ),
+                )
+                t_emul = _lw_ac_leg(
+                    "Emulsification time",
+                    unit="min",
+                    widget=lambda: st.number_input(
+                        "Emulsification Time (min)", 1, 60, 10,
+                        key="m1_t_emul_leg", label_visibility="collapsed",
+                    ),
+                )
+                phi_d = _lw_ac_leg(
+                    "Dispersed-phase fraction (φ_d)",
+                    help="Volume fraction of the dispersed phase.",
+                    widget=lambda: st.slider(
+                        "Dispersed Phase Fraction (phi_d)", 0.01, 0.30, 0.05, step=0.01,
+                        key="m1_phi_d", label_visibility="collapsed",
+                    ),
+                )
                 v_oil_mL = 300
                 v_poly_mL = 200
                 total_mL = 500
@@ -396,14 +574,33 @@ def render_tab_m1(
             if model_mode_enum != ModelMode.EMPIRICAL_ENGINEERING:
                 with st.expander("Advanced PBE Settings",
                                   expanded=(model_mode_enum == ModelMode.MECHANISTIC_RESEARCH)):
-                    l1_t_max = st.slider("Max emulsification time (s)", 60, 1800, 600, step=60,
-                                          key="m1_t_max",
-                                          help="Absolute ceiling for adaptive time extensions")
-                    l1_conv_tol = st.slider("Convergence tolerance", 0.005, 0.10, 0.01, step=0.005,
-                                             format="%.3f", key="m1_conv_tol",
-                                             help="Relative d32 variation threshold for steady state")
-                    l1_max_ext = st.number_input("Max extensions", 0, 5, 2, key="m1_max_ext",
-                                                  help="Number of half-interval extensions if PBE not converged")  # type: ignore[assignment]
+                    from dpsim.visualization.help import labeled_widget as _lw_pbe
+                    l1_t_max = _lw_pbe(
+                        "Max emulsification time",
+                        help="Absolute ceiling for adaptive time extensions in the L1 PBE solver.",
+                        unit="s",
+                        widget=lambda: st.slider(
+                            "Max emulsification time (s)", 60, 1800, 600, step=60,
+                            key="m1_t_max", label_visibility="collapsed",
+                        ),
+                    )
+                    l1_conv_tol = _lw_pbe(
+                        "Convergence tolerance",
+                        help="Relative d32 variation threshold for steady state. Below this, the solver declares the PBE converged.",
+                        widget=lambda: st.slider(
+                            "Convergence tolerance", 0.005, 0.10, 0.01, step=0.005,
+                            format="%.3f", key="m1_conv_tol",
+                            label_visibility="collapsed",
+                        ),
+                    )
+                    l1_max_ext = _lw_pbe(
+                        "Max extensions",
+                        help="Number of half-interval extensions allowed if the PBE has not converged within the time bound.",
+                        widget=lambda: st.number_input(
+                            "Max extensions", 0, 5, 2,
+                            key="m1_max_ext", label_visibility="collapsed",
+                        ),
+                    )
             else:
                 l1_t_max = 600
                 l1_conv_tol = 0.01

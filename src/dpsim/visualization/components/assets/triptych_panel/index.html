@@ -1,0 +1,364 @@
+<!doctype html>
+<!--
+  DPSim Triptych Panel — Streamlit Custom Component (no-build pattern).
+
+  Renders the Direction-B 3-column chrome with focus-aware animation.
+  The component owns its own focus state on the React side, so the
+  initial mount can animate from a "collapsed" state into the chosen
+  focus — the previous CSS-only approach in app.py couldn't do this
+  because there was no "from" state on first paint.
+
+  Args from Python (passed as a JSON string in `payloadJson`):
+      initialFocus: "m1" | "m2" | "m3"
+      m1, m2, m3: { title, subtitle, evidence, summary: [{k, v, warn}] }
+
+  Component value back to Python:
+      { focus: "m1" | "m2" | "m3" }
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --bg: #020617;
+    --surface: #0F172A;
+    --surface-2: #1E293B;
+    --surface-3: #334155;
+    --border: rgba(71, 85, 105, 0.55);
+    --border-strong: rgba(148, 163, 184, 0.30);
+    --text: #F8FAFC;
+    --text-muted: #94A3B8;
+    --text-dim: #64748B;
+    --accent: #2DD4BF;
+    --green-500: #22C55E;
+    --green-600: #16A34A;
+    --amber-500: #F59E0B;
+    --orange-500: #F97316;
+    --red-600: #DC2626;
+    --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 system-ui, sans-serif;
+    --font-mono: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  html, body {
+    margin: 0; padding: 0; background: transparent; color: var(--text);
+    font-family: var(--font-sans); -webkit-font-smoothing: antialiased;
+  }
+  #root { width: 100%; }
+
+  /* The triptych grid uses flex children with transitioned flex-grow
+   * so focus expansion / collapse animates smoothly — including the
+   * first-paint animation, because the component mounts in a "neutral"
+   * state and React schedules a transition to the focused state on the
+   * next frame. */
+  .dps-triptych {
+    display: flex;
+    align-items: stretch;
+    gap: 1px;
+    background: var(--border);
+    width: 100%;
+  }
+  .dps-tcol {
+    flex: 1 1 0px;
+    transition: flex-grow 260ms cubic-bezier(0.2, 0, 0.2, 1),
+                flex-basis 260ms cubic-bezier(0.2, 0, 0.2, 1),
+                background-color 200ms ease-out,
+                border-color 200ms ease-out;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 14px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .dps-tcol.focused {
+    flex-grow: 2.4;
+    background: var(--surface);
+    border-color: var(--accent);
+    cursor: default;
+  }
+  .dps-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+  .dps-eyebrow.accent { color: var(--accent); }
+  .dps-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-top: 2px;
+  }
+  .dps-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .dps-badge .dot {
+    width: 5px; height: 5px; border-radius: 5px; display: inline-block;
+  }
+  .dps-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .dps-chip .k {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .dps-chip .v {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .dps-chip .v.warn { color: var(--amber-500); }
+  .dps-open-button {
+    margin-top: 4px;
+    width: 100%;
+    height: 28px;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .dps-open-button:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
+  .dps-focused-body {
+    margin-top: 4px;
+    padding: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script>
+/* Streamlit shim — same as stop_button. */
+(function () {
+  function _post(type, data) {
+    window.parent.postMessage(
+      Object.assign({ isStreamlitMessage: true, type: type }, data),
+      "*"
+    );
+  }
+  window.Streamlit = {
+    setComponentValue: function (value) {
+      _post("streamlit:setComponentValue", { value: value, dataType: "json" });
+    },
+    setFrameHeight: function (height) {
+      _post("streamlit:setFrameHeight", {
+        height: height || (document.body && document.body.scrollHeight) || 0,
+      });
+    },
+    setComponentReady: function () { _post("streamlit:componentReady", { apiVersion: 1 }); },
+    RENDER_EVENT: "streamlit:render",
+    events: {
+      addEventListener: function (type, fn) { window.addEventListener(type, fn); },
+    },
+  };
+  window.addEventListener("message", function (e) {
+    if (!e.data || !e.data.type) return;
+    if (e.data.type === "streamlit:render") {
+      window.dispatchEvent(new CustomEvent("streamlit:render", { detail: e.data }));
+    }
+  });
+})();
+</script>
+
+<script>
+const e = React.createElement;
+
+const TIER_COLOR = {
+  validated_quantitative: "#16A34A",
+  calibrated_local: "#22C55E",
+  semi_quantitative: "#F59E0B",
+  qualitative_trend: "#F97316",
+  unsupported: "#DC2626",
+};
+const TIER_LABEL = {
+  validated_quantitative: "VAL",
+  calibrated_local: "CAL",
+  semi_quantitative: "SEMI",
+  qualitative_trend: "QUAL",
+  unsupported: "UNS",
+};
+
+function Badge(props) {
+  const c = TIER_COLOR[props.tier] || "#94A3B8";
+  const label = TIER_LABEL[props.tier] || (props.tier || "—").toUpperCase();
+  return e("span", {
+    className: "dps-badge",
+    style: {
+      background: `color-mix(in oklab, ${c} 14%, transparent)`,
+      color: c,
+    },
+  },
+    e("span", { className: "dot", style: { background: c } }),
+    label,
+  );
+}
+
+function Chip(props) {
+  return e("div", { className: "dps-chip" },
+    e("span", { className: "k" }, props.k),
+    e("span", { className: "v" + (props.warn ? " warn" : "") }, props.v),
+  );
+}
+
+function Column(props) {
+  const stage = props.stage;
+  const focused = props.focused;
+
+  const onOpen = React.useCallback(() => {
+    if (focused) return;
+    props.onFocus(props.id);
+  }, [focused, props]);
+
+  return e("div", {
+    className: "dps-tcol" + (focused ? " focused" : ""),
+    onClick: focused ? undefined : onOpen,
+    role: focused ? "region" : "button",
+    tabIndex: focused ? -1 : 0,
+    "aria-pressed": focused,
+    "aria-label": focused
+      ? `${stage.title} (currently focused)`
+      : `Open ${stage.title}`,
+  },
+    e("div", {
+      style: {
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        gap: 8,
+      },
+    },
+      e("div", null,
+        e("div", {
+          className: "dps-eyebrow" + (focused ? " accent" : ""),
+        }, stage.subtitle || ""),
+        e("div", { className: "dps-title" }, stage.title),
+      ),
+      e(Badge, { tier: stage.evidence }),
+    ),
+
+    !focused && e("div", {
+      style: { display: "flex", flexDirection: "column", gap: 0, padding: "4px 0" },
+    },
+      (stage.summary || []).slice(0, 6).map((c, i) =>
+        e(Chip, { key: i, k: c.k, v: c.v, warn: c.warn })
+      ),
+    ),
+
+    !focused && e("button", {
+      className: "dps-open-button",
+      onClick: onOpen,
+    }, `Open ${stage.title}`),
+
+    focused && e("div", { className: "dps-focused-body" },
+      "Stage body rendered in Python — see the slot beneath the panel.",
+    ),
+  );
+}
+
+function Triptych(props) {
+  const [focus, setFocus] = React.useState(props.initialFocus || "m2");
+  // First-paint animation: mount in a neutral state, then transition
+  // to the requested focus on the next frame so the CSS transition
+  // engages. Without this, the focused column starts at its expanded
+  // size and there's nothing to animate.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    const id = window.requestAnimationFrame(() => setMounted(true));
+    return () => window.cancelAnimationFrame(id);
+  }, []);
+
+  // Sync focus changes back to Python via setComponentValue.
+  React.useEffect(() => {
+    window.Streamlit.setComponentValue({ focus: focus });
+  }, [focus]);
+
+  // If Python passes a NEW initialFocus on a rerun, honour it (so the
+  // shell's session_state remains the source of truth).
+  React.useEffect(() => {
+    if (props.initialFocus && props.initialFocus !== focus) {
+      setFocus(props.initialFocus);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.initialFocus]);
+
+  const stages = [
+    { id: "m1", stage: props.m1 },
+    { id: "m2", stage: props.m2 },
+    { id: "m3", stage: props.m3 },
+  ];
+
+  return e("div", { className: "dps-triptych" },
+    stages.map(s => e(Column, {
+      key: s.id,
+      id: s.id,
+      stage: s.stage,
+      focused: mounted && focus === s.id,
+      onFocus: setFocus,
+    }))
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+
+function render(args) {
+  // The Python wrapper passes the props as a JSON-encoded string in
+  // `payloadJson` (Streamlit's component arg passing has occasional
+  // issues with complex nested structures; JSON-as-string is robust).
+  let payload = {};
+  try {
+    payload = JSON.parse(args.payloadJson || "{}");
+  } catch (err) {
+    payload = {};
+  }
+  root.render(e(Triptych, payload));
+  window.Streamlit.setFrameHeight((args && args.height) || 240);
+}
+
+window.Streamlit.events.addEventListener("streamlit:render", function (event) {
+  const args = (event.detail && event.detail.args) || {};
+  render(args);
+});
+
+render({});
+window.Streamlit.setComponentReady();
+</script>
+</body>
+</html>

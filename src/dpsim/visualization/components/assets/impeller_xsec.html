@@ -1,0 +1,661 @@
+<!doctype html>
+<!--
+  ImpellerCrossSection — Rushton-disk in a fully-baffled BSTR.
+
+  Geometry follows Rushton (1950); flow / energy-dissipation rendering
+  follows Wu & Patterson (1989), Lee & Yianneskis (1998), and the
+  prescriptions in docs/handover/SA_v0_4_0_RUSHTON_FIDELITY.md.
+
+  Template substitutions (replaced by impeller_xsec.py before embed):
+      __RPM__              float, rpm
+      __WIDTH__            int, iframe width
+      __HEIGHT__           int, iframe height
+      __IMPELLER_D_MM__    float
+      __TANK_D_MM__        float
+      __LIQUID_VOLUME_ML__ float
+      __N_BLADES__         int
+      __THEME__            "dark" | "light"
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  /* Tokens — duplicated from design/tokens.css; iframe is sandboxed. */
+  :root {
+    --bg:        #020617;
+    --surface:   #0F172A;
+    --surface-2: #1E293B;
+    --surface-3: #334155;
+    --border:    rgba(71, 85, 105, 0.55);
+    --border-strong: rgba(148, 163, 184, 0.30);
+    --text:      #F8FAFC;
+    --text-muted: #94A3B8;
+    --text-dim:  #64748B;
+    --accent:    #2DD4BF;
+    --green-500: #22C55E;
+    --amber-500: #F59E0B;
+    --orange-500: #F97316;
+    --sky-300:   #7DD3FC;
+    --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 system-ui, sans-serif;
+    --font-mono: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  body.light {
+    --bg: #FAFBFC; --surface: #FFFFFF; --surface-2: #F1F5F9;
+    --surface-3: #E2E8F0; --border: rgba(148,163,184,0.35);
+    --border-strong: rgba(100,116,139,0.45);
+    --text: #0F172A; --text-muted: #64748B; --text-dim: #94A3B8;
+    --accent: #14B8A6;
+  }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .frame {
+    position: relative;
+    display: block;
+    margin: 0 auto;
+  }
+  .azimuth {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 32px; height: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .legend {
+    margin-top: 4px;
+    display: flex; gap: 10px;
+    font-size: 9.5px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .caption {
+    margin-top: 2px;
+    font-size: 9.5px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    text-align: center;
+  }
+</style>
+</head>
+<body class="__THEME__">
+<div class="frame" id="frame">
+  <svg id="svg" width="__WIDTH__" height="__HEIGHT__"
+       viewBox="0 0 __WIDTH__ __HEIGHT__" style="display:block;"></svg>
+  <div class="azimuth" title="Plan view: 4 baffles at 90° azimuth">
+    <svg width="22" height="22" viewBox="-12 -12 24 24">
+      <circle cx="0" cy="0" r="9" fill="none" stroke="var(--text-dim)" stroke-width="1"/>
+      <line x1="9" y1="0" x2="11" y2="0" stroke="var(--text)" stroke-width="1.2"/>
+      <line x1="-9" y1="0" x2="-11" y2="0" stroke="var(--text)" stroke-width="1.2"/>
+      <line x1="0" y1="9" x2="0" y2="11" stroke="var(--text)" stroke-width="1.2"/>
+      <line x1="0" y1="-9" x2="0" y2="-11" stroke="var(--text)" stroke-width="1.2"/>
+      <circle cx="0" cy="0" r="1.6" fill="var(--accent)"/>
+    </svg>
+  </div>
+</div>
+<div class="caption">4-baffle BSTR · vortex suppressed</div>
+<div class="legend" id="legend"></div>
+
+<script>
+(function () {
+  // ── Parameters (template-substituted) ──────────────────────────────
+  const RPM       = parseFloat("__RPM__");
+  const W         = parseInt("__WIDTH__", 10);
+  const H         = parseInt("__HEIGHT__", 10);
+  const D_I_mm    = parseFloat("__IMPELLER_D_MM__");
+  const T_mm      = parseFloat("__TANK_D_MM__");
+  const V_liq_mL  = parseFloat("__LIQUID_VOLUME_ML__");
+  const N_BL      = parseInt("__N_BLADES__", 10);
+
+  // ── Geometry (SA F-1, F-2, F-4) ────────────────────────────────────
+  // Standard Rushton: D/T = 1/3; blade height = D/5 symmetric about
+  // disk; B/T = 1/12; baffles flush against wall; C/T = 1/3.
+  const padX = 26;
+  const padTop = 14;
+  const padBot = 36;                         // room for v_tip strip
+  const tankW = W - padX * 2;
+  const tankH = H - padTop - padBot;
+  const tankX = padX, tankY = padTop;
+  const wallT = 1.4;
+  const cx = tankX + tankW / 2;
+
+  const D_T_ratio = D_I_mm / T_mm;            // ≈ 0.33 standard Rushton
+  const impellerW = tankW * D_T_ratio;        // disk diameter (edge-on width)
+  const diskHalfW = impellerW / 2;
+  const diskW = impellerW * 0.75;             // Rushton: D_disk = 0.75·D_I
+  const diskHalfWInner = diskW / 2;
+  const diskH = Math.max(2.5, impellerW / 40); // disk thickness ≈ D/40
+
+  // Liquid level: H_liq/T ≈ 1.0 (Nienow). Off-bottom clearance C/T = 1/3.
+  const liquidLvl = tankY + tankH * 0.10;
+  const tankBottomY = tankY + tankH;
+  const liquidH = tankBottomY - liquidLvl;
+  const C_T_ratio = 1 / 3;
+  const diskCY = tankBottomY - liquidH * C_T_ratio;
+
+  // Blade dimensions (SA F-2): symmetric, total height = D/5.
+  const bladeHalfH = impellerW / 10;          // D/10 above + D/10 below
+  const bladeW = Math.max(3.5, impellerW * 0.05);
+
+  const shaftW = Math.max(3, impellerW * 0.06);
+  const hubW = Math.max(7, impellerW * 0.15);
+
+  // Baffles (SA F-4): flush against inner wall; B/T = 1/12.
+  const B_T = 1 / 12;
+  const baffleW = Math.max(4, tankW * B_T);
+
+  // Tip speed and shear tier (Davies/Hinze regime indicator).
+  const D_I_m = D_I_mm / 1000;
+  const tipSpeed = Math.PI * D_I_m * RPM / 60;
+  const shearTier = tipSpeed < 0.6 ? "low" : tipSpeed < 1.2 ? "med" : "high";
+  const shearColor = shearTier === "low" ? "#7DD3FC"
+                   : shearTier === "med" ? "#2DD4BF"
+                                         : "#FBBF24";
+
+  // Impeller-zone passage frequency (SA C.3 ADD).
+  // f_pass ≈ N_Q · N · (πD³/4) · 4 / V_liquid, with N_Q ≈ 0.75 for Rushton.
+  const N_Q = 0.75;
+  const N_rev_s = RPM / 60;
+  const sweptVol_m3 = N_Q * N_rev_s * (Math.PI * Math.pow(D_I_m, 3) / 4) * 4;
+  const V_liq_m3 = V_liq_mL * 1e-6;
+  const f_pass = sweptVol_m3 / V_liq_m3;     // Hz
+
+  // Reynolds number — Re_imp = ρND²/μ (water-like continuous phase
+  // approximation). Surfaced for the user, not used in physics here.
+  const rho_c = 1000;                         // kg/m³
+  const mu_c = 1e-3;                          // Pa·s (1 cP)
+  const Re_imp = rho_c * N_rev_s * Math.pow(D_I_m, 2) / mu_c;
+  const We_imp = rho_c * Math.pow(N_rev_s, 2) * Math.pow(D_I_m, 3) / 0.04;
+
+  // ── PRNG for deterministic droplet placement ───────────────────────
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ── Droplets (SA B.6 ADD: shrink on impeller-plane passage) ────────
+  // Each droplet has an originalSize, a current size that decays each
+  // time it crosses the impeller plane within the high-shear annulus,
+  // and a Hinze-style minimum below which it cannot break further.
+  const dropRng = mulberry32(57);
+  const droplets = Array.from({ length: 32 }, function () {
+    return {
+      side: dropRng() < 0.5 ? -1 : 1,
+      s0: dropRng(),
+      loop: dropRng() < 0.5 ? "upper" : "lower",
+      originalSize: 1.4 + dropRng() * 1.4,
+      size: 0,                                // set below
+      sizeMin: 0.5 + dropRng() * 0.3,         // d_max floor (Hinze)
+      speed: 0.3 + dropRng() * 0.5,
+      _lastSign: 0,                            // for crossing detection
+    };
+  });
+  droplets.forEach(function (d) { d.size = d.originalSize; });
+
+  // ── SVG construction helpers ───────────────────────────────────────
+  const NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs) {
+    const e = document.createElementNS(NS, tag);
+    if (attrs) for (const k in attrs) e.setAttribute(k, String(attrs[k]));
+    return e;
+  }
+
+  const svg = document.getElementById("svg");
+
+  // <defs> — gradients, markers
+  const defs = el("defs");
+  const liquidGrad = el("linearGradient", { id: "liquidGrad", x1: 0, y1: 0, x2: 0, y2: 1 });
+  liquidGrad.appendChild(el("stop", { offset: "0%",  "stop-color": "rgba(125, 211, 252, 0.22)" }));
+  liquidGrad.appendChild(el("stop", { offset: "100%", "stop-color": "rgba(45, 212, 191, 0.10)" }));
+  defs.appendChild(liquidGrad);
+  const marker = el("marker", {
+    id: "flowArrow", markerWidth: 6, markerHeight: 6,
+    refX: 3, refY: 3, orient: "auto",
+  });
+  marker.appendChild(el("path", { d: "M0,0 L6,3 L0,6 z", fill: shearColor, opacity: 0.85 }));
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  // Tank silhouette (no back-rim arc — SA A.4 REMOVE)
+  // Outer body: walls + dished bottom + flat front rim line.
+  const baseY = tankBottomY;
+  const tankPath = el("path", {
+    d: `M ${tankX} ${tankY}
+        L ${tankX} ${baseY - 6}
+        Q ${tankX} ${baseY} ${tankX + 6} ${baseY}
+        L ${tankX + tankW - 6} ${baseY}
+        Q ${tankX + tankW} ${baseY} ${tankX + tankW} ${baseY - 6}
+        L ${tankX + tankW} ${tankY}
+        L ${tankX} ${tankY} Z`,
+    fill: "var(--surface)",
+    stroke: "var(--border-strong)",
+    "stroke-width": wallT,
+  });
+  svg.appendChild(tankPath);
+
+  // Base foot ellipse — suggests round tank in side-view.
+  svg.appendChild(el("ellipse", {
+    cx: cx, cy: baseY - 0.5, rx: tankW / 2 - 4, ry: 3,
+    fill: "none", stroke: "var(--border-strong)", "stroke-width": 0.7, opacity: 0.7,
+  }));
+
+  // Glass highlight strip (single, left wall — SA A.4 right-strip removed
+  // to avoid collision with relocated baffle).
+  svg.appendChild(el("rect", {
+    x: tankX + wallT + 1.5, y: tankY + 8,
+    width: 1.4, height: tankH - 22,
+    fill: "rgba(255,255,255,0.18)", rx: 0.7,
+  }));
+
+  // ── Liquid body ────────────────────────────────────────────────────
+  svg.appendChild(el("path", {
+    d: `M ${tankX + wallT} ${liquidLvl}
+        L ${tankX + wallT} ${tankBottomY - 6}
+        Q ${tankX + wallT} ${tankBottomY - wallT} ${tankX + 6} ${tankBottomY - wallT}
+        L ${tankX + tankW - 6} ${tankBottomY - wallT}
+        Q ${tankX + tankW - wallT} ${tankBottomY - wallT} ${tankX + tankW - wallT} ${tankBottomY - 6}
+        L ${tankX + tankW - wallT} ${liquidLvl} Z`,
+    fill: "url(#liquidGrad)",
+  }));
+
+  // ── Liquid surface (SA F-3: small cusp only, vortex suppressed) ─────
+  // Cap surface dip at liquidH * 0.04, scale weakly with rpm.
+  const cuspMag = Math.min(liquidH * 0.04, 0.5 + (RPM / 1200) * 1.2);
+  const surfRy = 3.6;
+  const sLeft = tankX + wallT;
+  const sRight = tankX + tankW - wallT;
+
+  // Back half of surface ellipse (dashed — hidden side of liquid disk).
+  svg.appendChild(el("path", {
+    d: `M ${sLeft} ${liquidLvl}
+        A ${(sRight - sLeft) / 2} ${surfRy} 0 0 1 ${sRight} ${liquidLvl}`,
+    fill: "none", stroke: "rgba(125, 211, 252, 0.45)",
+    "stroke-width": 0.8, "stroke-dasharray": "2 2",
+  }));
+  // Front half — small cusp at shaft.
+  svg.appendChild(el("path", {
+    d: `M ${sLeft} ${liquidLvl}
+        Q ${sLeft + (sRight - sLeft) * 0.3} ${liquidLvl + surfRy * 0.7}
+          ${cx - 4} ${liquidLvl + surfRy * 0.5 + cuspMag * 0.4}
+        Q ${cx} ${liquidLvl + surfRy * 0.5 + cuspMag}
+          ${cx + 4} ${liquidLvl + surfRy * 0.5 + cuspMag * 0.4}
+        Q ${sRight - (sRight - sLeft) * 0.3} ${liquidLvl + surfRy * 0.7}
+          ${sRight} ${liquidLvl}`,
+    fill: "rgba(125, 211, 252, 0.18)",
+    stroke: "rgba(125, 211, 252, 0.85)", "stroke-width": 1.0,
+  }));
+  // Surface specular highlight.
+  svg.appendChild(el("ellipse", {
+    cx: cx - tankW * 0.15, cy: liquidLvl + surfRy * 0.55,
+    rx: tankW * 0.10, ry: 0.9,
+    fill: "rgba(255,255,255,0.45)",
+  }));
+
+  // Microbubbles (only at high shear; SA F-3 ADD).
+  if (RPM > 600) {
+    const nBub = Math.round((RPM - 600) / 100);
+    for (let i = 0; i < nBub; i++) {
+      svg.appendChild(el("circle", {
+        cx: cx + (i - nBub / 2) * 4, cy: liquidLvl + cuspMag * 0.3,
+        r: 0.7, fill: "rgba(255,255,255,0.7)",
+      }));
+    }
+  }
+
+  // ── Baffles (SA F-4: flush against wall; 2 in-plane visible) ───────
+  [tankX + wallT, tankX + tankW - wallT - baffleW].forEach(function (x) {
+    svg.appendChild(el("rect", {
+      x: x, y: liquidLvl + 4, width: baffleW, height: liquidH - 8,
+      fill: "var(--surface-2)", stroke: "var(--text-dim)",
+      "stroke-width": 0.5, opacity: 0.75,
+    }));
+  });
+
+  // ── Discharge annulus (SA B.4 ADD) ─────────────────────────────────
+  // Faint shaded rectangle in the impeller plane out to ~0.7 R_tank,
+  // marking the high-ε zone. Drop break-up dominantly happens here
+  // (Wu & Patterson 1989).
+  const annulusH = Math.min(40, liquidH * 0.30);
+  const annulusReach = (tankW / 2) * 0.7;
+  svg.appendChild(el("rect", {
+    x: cx - annulusReach, y: diskCY - annulusH / 2,
+    width: annulusReach * 2, height: annulusH,
+    fill: shearColor, opacity: 0.06,
+  }));
+
+  // ── Dead-zone shading at dish corners (SA C.3 ADD) ─────────────────
+  [tankX + wallT, tankX + tankW - wallT].forEach(function (x) {
+    const sign = x < cx ? 1 : -1;
+    svg.appendChild(el("path", {
+      d: `M ${x} ${tankBottomY - 12} L ${x + sign * 14} ${tankBottomY - 1}
+          L ${x} ${tankBottomY - 1} Z`,
+      fill: "rgba(148,163,184,0.5)", opacity: 0.06,
+    }));
+  });
+
+  // ── Recirculation flow paths (SA C.1 KEEP, C.2 REFINE) ─────────────
+  // Four macro-loops in 2D (two per side). Lower loop's bottom turn
+  // follows the dish profile.
+  const wallLeft = tankX + wallT + 2;
+  const wallRight = tankX + tankW - wallT - 2;
+  const tipL = cx - diskHalfW;
+  const tipR = cx + diskHalfW;
+  const upperLoopY = liquidLvl + liquidH * 0.22;
+  const lowerLoopY = tankBottomY - liquidH * 0.13;     // SA C.2 refinement
+
+  function makeLoopPath(side, loop) {
+    const tipX = side > 0 ? tipR : tipL;
+    const wallX = side > 0 ? wallRight : wallLeft;
+    const ax = side > 0 ? cx + shaftW / 2 + 2 : cx - shaftW / 2 - 2;
+    if (loop === "upper") {
+      const ctrlSurfY = liquidLvl - 4;
+      return `M ${tipX} ${diskCY - 2}
+              Q ${(tipX + wallX) / 2} ${diskCY - 6} ${wallX} ${diskCY - 4}
+              L ${wallX} ${upperLoopY}
+              Q ${(wallX + ax) / 2} ${ctrlSurfY} ${ax} ${upperLoopY + 2}
+              L ${ax} ${diskCY - 1}`;
+    } else {
+      const ctrlBotY = tankBottomY + 4;                // dish profile
+      return `M ${tipX} ${diskCY + 2}
+              Q ${(tipX + wallX) / 2} ${diskCY + 6} ${wallX} ${diskCY + 4}
+              L ${wallX} ${lowerLoopY}
+              Q ${(wallX + ax) / 2} ${ctrlBotY} ${ax} ${lowerLoopY - 2}
+              L ${ax} ${diskCY + 1}`;
+    }
+  }
+
+  // Render the four flow paths and store handles for dash-offset animation.
+  const flowPaths = [];
+  [-1, 1].forEach(function (side) {
+    ["upper", "lower"].forEach(function (loop) {
+      const p = el("path", {
+        d: makeLoopPath(side, loop),
+        fill: "none", stroke: shearColor, "stroke-width": 1.1,
+        opacity: 0.55, "stroke-dasharray": "4 5",
+        "marker-end": "url(#flowArrow)",
+        "data-side": side, "data-loop": loop,
+      });
+      svg.appendChild(p);
+      flowPaths.push({ el: p, side: side, loop: loop });
+    });
+  });
+
+  // ── Trailing-vortex pair (SA B.5 ADD — CRITICAL) ───────────────────
+  // Two small counter-rotating closed-curve sub-loops just behind each
+  // blade tip, in the impeller plane (Wu & Patterson 1989). Animated
+  // at ~3× the macro-loop dash speed.
+  const tvPaths = [];
+  [-1, 1].forEach(function (side) {
+    [-1, 1].forEach(function (vsign) {
+      // vsign = +1 upper trailing vortex; -1 lower trailing vortex.
+      const tipX = side > 0 ? tipR : tipL;
+      const cx0 = tipX + side * 9;
+      const cy0 = diskCY + vsign * 5;
+      const dr = 4;
+      const dx = side * 5;
+      const tv = el("path", {
+        d: `M ${cx0 - dx} ${cy0}
+            C ${cx0 - dx} ${cy0 - vsign * dr},
+              ${cx0 + dx} ${cy0 - vsign * dr},
+              ${cx0 + dx} ${cy0}
+            C ${cx0 + dx} ${cy0 + vsign * dr * 0.4},
+              ${cx0 - dx} ${cy0 + vsign * dr * 0.4},
+              ${cx0 - dx} ${cy0}
+            Z`,
+        fill: "none", stroke: shearColor, "stroke-width": 0.9,
+        opacity: 0.55, "stroke-dasharray": "1.5 2",
+      });
+      svg.appendChild(tv);
+      tvPaths.push(tv);
+    });
+  });
+
+  // ── Droplet group (animated) ───────────────────────────────────────
+  const dropletGroup = el("g", { id: "droplets" });
+  svg.appendChild(dropletGroup);
+  const dropletNodes = droplets.map(function () {
+    const c = el("circle", {
+      r: 1, fill: "rgba(125, 211, 252, 0.85)", opacity: 0.7,
+    });
+    dropletGroup.appendChild(c);
+    return c;
+  });
+
+  // ── Shaft + drive cap ──────────────────────────────────────────────
+  svg.appendChild(el("rect", {
+    x: cx - shaftW / 2, y: tankY - 8,
+    width: shaftW, height: diskCY - tankY + 8,
+    fill: "#475569", stroke: "#0F172A",
+    "stroke-width": 0.6, rx: 0.5,
+  }));
+  svg.appendChild(el("rect", {
+    x: cx - 8, y: tankY - 14, width: 16, height: 6,
+    fill: "#1E293B", stroke: "#0F172A",
+    "stroke-width": 0.6, rx: 1,
+  }));
+
+  // ── Rushton disk + hub ─────────────────────────────────────────────
+  // Disk diameter = 0.75 D_I (standard Rushton).
+  svg.appendChild(el("rect", {
+    x: cx - diskHalfWInner, y: diskCY - diskH / 2,
+    width: diskW, height: diskH,
+    fill: "#94A3B8", stroke: "#0F172A",
+    "stroke-width": 0.7, rx: 0.6,
+  }));
+  svg.appendChild(el("rect", {
+    x: cx - hubW / 2, y: diskCY - 5, width: hubW, height: 10,
+    fill: "#1E293B", stroke: "#475569",
+    "stroke-width": 0.5, rx: 1,
+  }));
+  const hubSpinner = el("line", {
+    x1: cx, y1: diskCY - 3.5, x2: cx, y2: diskCY - 3.5,
+    stroke: "#94A3B8", "stroke-width": 1.2, "stroke-linecap": "round", opacity: 0.9,
+  });
+  svg.appendChild(hubSpinner);
+
+  // ── Edge-on blades (SA F-2: symmetric about disk plane) ────────────
+  const bladeNodes = [];
+  [-1, 1].forEach(function (side) {
+    const bx = cx + side * (diskHalfW - bladeW * 0.5);
+    const bladeTopY = diskCY - bladeHalfH;
+    const bladeBotY = diskCY + bladeHalfH;
+    const blade = el("rect", {
+      x: bx - bladeW / 2, y: bladeTopY,
+      width: bladeW, height: bladeBotY - bladeTopY,
+      fill: "#1E293B", stroke: "#0F172A", "stroke-width": 0.6, rx: 0.6,
+    });
+    svg.appendChild(blade);
+    svg.appendChild(el("rect", {
+      x: bx - bladeW / 2 + 0.6, y: bladeTopY + 1,
+      width: bladeW * 0.32, height: (bladeBotY - bladeTopY) - 2,
+      fill: "#475569", opacity: 0.85,
+    }));
+    // Blade-tip discharge arrow (radial).
+    svg.appendChild(el("line", {
+      x1: bx + side * (bladeW / 2),
+      y1: diskCY,
+      x2: bx + side * (bladeW / 2 + 14),
+      y2: diskCY,
+      stroke: shearColor, "stroke-width": 1.6,
+      "marker-end": "url(#flowArrow)",
+    }));
+    bladeNodes.push(blade);
+  });
+
+  // ── v_tip + Re + f_pass readout strip ──────────────────────────────
+  const stripY = H - 32;
+  svg.appendChild(el("rect", {
+    x: 2, y: stripY, width: W - 4, height: 28,
+    fill: "var(--surface-2)", stroke: "var(--border)",
+    "stroke-width": 0.6, rx: 3,
+  }));
+  function svgText(x, y, text, attrs) {
+    const t = el("text", Object.assign({
+      x: x, y: y, "font-family": "var(--font-mono)", "font-size": 10.5,
+      fill: "var(--text-dim)", "letter-spacing": "0.06em",
+    }, attrs || {}));
+    t.textContent = text;
+    return t;
+  }
+  // Row 1: v_tip / Re_imp / f_pass — three columns.
+  const rowY1 = stripY + 11;
+  const rowY2 = stripY + 23;
+  svg.appendChild(svgText(8, rowY1, "v_tip"));
+  const vtipText = el("text", {
+    x: 38, y: rowY1, "font-family": "var(--font-mono)",
+    "font-size": 11.5, "font-weight": 600, fill: shearColor,
+  });
+  vtipText.textContent = tipSpeed.toFixed(2) + " m/s";
+  svg.appendChild(vtipText);
+
+  svg.appendChild(svgText(W * 0.42, rowY1, "Re_imp"));
+  const reText = el("text", {
+    x: W * 0.42 + 36, y: rowY1, "font-family": "var(--font-mono)",
+    "font-size": 11.5, "font-weight": 600, fill: "var(--text)",
+  });
+  reText.textContent = Math.round(Re_imp).toLocaleString();
+  svg.appendChild(reText);
+
+  svg.appendChild(svgText(W * 0.72, rowY1, "f_pass"));
+  const fpassText = el("text", {
+    x: W * 0.72 + 36, y: rowY1, "font-family": "var(--font-mono)",
+    "font-size": 11.5, "font-weight": 600, fill: "var(--accent)",
+  });
+  fpassText.textContent = f_pass.toFixed(1) + " Hz";
+  svg.appendChild(fpassText);
+
+  // Row 2: shear-tier badge + geometry recap
+  const tierBadge = svgText(8, rowY2,
+    shearTier === "low"  ? "LOW SHEAR"
+  : shearTier === "med"  ? "MED SHEAR"
+                         : "HIGH SHEAR",
+    { fill: shearColor, "font-size": 9.5, "font-weight": 600 }
+  );
+  svg.appendChild(tierBadge);
+
+  const geomText = svgText(W - 8, rowY2,
+    "D/T " + D_T_ratio.toFixed(2) + " · " + N_BL + "-blade · C/T 1/3",
+    { "text-anchor": "end", "font-size": 9.5 }
+  );
+  svg.appendChild(geomText);
+
+  // Legend below the SVG — populated from JS so we can reuse the
+  // computed values rather than hard-coding.
+  const legend = document.getElementById("legend");
+  legend.innerHTML =
+    "<span>D_I " + D_I_mm + "mm</span><span>·</span>" +
+    "<span>T " + T_mm + "mm</span><span>·</span>" +
+    "<span>" + N_BL + "-blade Rushton</span><span>·</span>" +
+    "<span>" + Math.round(RPM) + " rpm</span>";
+
+  // ── Trajectory sampler — used to position droplets ─────────────────
+  function sampleLoop(loop, side, s) {
+    const tipX = side > 0 ? tipR : tipL;
+    const wallX = side > 0 ? wallRight : wallLeft;
+    const ax = side > 0 ? cx + shaftW / 2 + 1 : cx - shaftW / 2 - 1;
+    if (loop === "upper") {
+      if (s < 0.25)      { const t = s / 0.25;          return [tipX + (wallX - tipX) * t, diskCY - 2 + (upperLoopY - diskCY + 2) * t * 0.4]; }
+      else if (s < 0.5)  { const t = (s - 0.25) / 0.25; return [wallX, diskCY * (1 - t) + upperLoopY * t - 2]; }
+      else if (s < 0.75) { const t = (s - 0.5) / 0.25;  return [wallX + (ax - wallX) * t, upperLoopY]; }
+      else               { const t = (s - 0.75) / 0.25; return [ax + (tipX - ax) * t, upperLoopY + (diskCY - upperLoopY) * t]; }
+    } else {
+      if (s < 0.25)      { const t = s / 0.25;          return [tipX + (wallX - tipX) * t, diskCY + 2 + (lowerLoopY - diskCY - 2) * t * 0.4]; }
+      else if (s < 0.5)  { const t = (s - 0.25) / 0.25; return [wallX, diskCY * (1 - t) + lowerLoopY * t + 2]; }
+      else if (s < 0.75) { const t = (s - 0.5) / 0.25; return [wallX + (ax - wallX) * t, lowerLoopY]; }
+      else               { const t = (s - 0.75) / 0.25; return [ax + (tipX - ax) * t, lowerLoopY + (diskCY - lowerLoopY) * t]; }
+    }
+  }
+
+  // ── Animation loop ─────────────────────────────────────────────────
+  let theta = 0;
+  let lastT = null;
+  let rafId = null;
+
+  function inDischargeAnnulus(x, y) {
+    return Math.abs(y - diskCY) < annulusH / 2 &&
+           Math.abs(x - cx) > diskHalfW &&
+           Math.abs(x - cx) < annulusReach;
+  }
+
+  function tick(now) {
+    if (lastT == null) lastT = now;
+    const dt = (now - lastT) / 1000;
+    lastT = now;
+    theta += dt * (RPM * 2 * Math.PI / 60) / 6;
+
+    // Animate flow path dash-offsets — outward direction matches
+    // physical sign (radial discharge from blades).
+    const dashOff = -theta * 14;
+    flowPaths.forEach(function (fp) {
+      fp.el.setAttribute("stroke-dashoffset", String(dashOff * fp.side));
+    });
+    // Trailing vortices move at ~3× macro-loop rate.
+    tvPaths.forEach(function (tv, i) {
+      tv.setAttribute("stroke-dashoffset", String(-theta * 42 * (i % 2 === 0 ? 1 : -1)));
+    });
+
+    // Hub spinner rotation cue.
+    const sx = cx + Math.cos(theta * 1.2) * 3.5;
+    const sy = diskCY - 3.5 + Math.sin(theta * 1.2) * 1;
+    hubSpinner.setAttribute("x2", String(sx));
+    hubSpinner.setAttribute("y2", String(sy));
+
+    // Update droplets — position, recolour in annulus, shrink on
+    // impeller-plane crossing within the high-ε annulus.
+    droplets.forEach(function (d, i) {
+      const s = (d.s0 + theta * 0.05 * d.speed) % 1;
+      const xy = sampleLoop(d.loop, d.side, s);
+      const x = xy[0], y = xy[1];
+
+      // Detect impeller-plane crossing (sign change of (y - diskCY))
+      // AND inside the high-ε annulus → shrink with probability 0.4.
+      const signNow = Math.sign(y - diskCY);
+      if (signNow !== d._lastSign && d._lastSign !== 0 && inDischargeAnnulus(x, y)) {
+        if (Math.random() < 0.4 && d.size > d.sizeMin) {
+          d.size = Math.max(d.sizeMin, d.size * 0.85);
+        }
+      }
+      d._lastSign = signNow;
+
+      const inAnn = inDischargeAnnulus(x, y);
+      const node = dropletNodes[i];
+      node.setAttribute("cx", String(x));
+      node.setAttribute("cy", String(y));
+      node.setAttribute("r", String(d.size));
+      node.setAttribute("fill", inAnn ? shearColor : "rgba(125, 211, 252, 0.85)");
+      node.setAttribute("opacity", String(inAnn ? 0.95 : 0.65));
+    });
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  rafId = requestAnimationFrame(tick);
+
+  // Cancel the RAF loop when the iframe unloads — prevents timer leaks
+  // across Streamlit re-renders (SA / arch §9 R-05).
+  window.addEventListener("pagehide", function () {
+    if (rafId) cancelAnimationFrame(rafId);
+  });
+  window.addEventListener("beforeunload", function () {
+    if (rafId) cancelAnimationFrame(rafId);
+  });
+})();
+</script>
+</body>
+</html>

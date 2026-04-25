@@ -307,6 +307,12 @@ class PBESolver:
         t_converged = None
 
         for extension_round in range(max_extensions + 1):
+            # v0.4.6: cancellation poll between extension rounds. Latency
+            # is bounded by one extension's duration (typically 5–30 s),
+            # not the full PBE run.
+            from dpsim.lifecycle.cancellation import check_cancel
+            check_cancel(stage=f"PBE-extension-{extension_round}")
+
             t_span = (t_start, t_end)
             n_eval_pts = 101 if extension_round == 0 else 51
             t_eval = np.linspace(t_start, t_end, n_eval_pts)

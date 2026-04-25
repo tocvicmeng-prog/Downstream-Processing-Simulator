@@ -856,28 +856,104 @@ def render_lifecycle_run_panel(
             key="p6_run_dsd_breakthrough",
         )
 
-    if st.button("Run full lifecycle", type="primary", use_container_width=True):
+    # v0.4.8: threaded orchestrator path. The previous synchronous
+    # `orchestrator.run(...)` blocked the Streamlit script for 5–30 s,
+    # so Stop clicks couldn't reach Python during a solve. We now run
+    # the orchestrator in a background daemon thread and poll its
+    # state on each rerun, sleeping 500 ms between polls. The Stop
+    # button delivers its click on the next rerun, request_cancel()
+    # sets the threading flag, the scipy-events hook in solve_ivp
+    # sees it on the next integration step, and the solve halts.
+    import time
+
+    from dpsim.lifecycle.cancellation import RunCancelledError
+    from dpsim.lifecycle.threaded_runner import (
+        BackgroundRun,
+        run_in_background,
+    )
+
+    BG_RUN_KEY = "_dpsim_background_run"
+    POLL_INTERVAL_S = 0.5
+
+    if st.button("Run full lifecycle", type="primary", use_container_width=True,
+                 disabled=session_state.get(BG_RUN_KEY) is not None):
         run_id = "streamlit-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         context = RunContext(
             calibration_store=session_state.get("_cal_store"),
             run_id=run_id,
             notes="P6 lifecycle workflow run from Streamlit.",
         )
+        orchestrator = DownstreamProcessOrchestrator(
+            output_dir=default_output_dir("streamlit_lifecycle"),
+        )
+        bg_run = run_in_background(
+            orchestrator.run,
+            kwargs=dict(
+                recipe=recipe,
+                run_context=context,
+                propagate_dsd=propagate_dsd,
+                dsd_mode=dsd_mode,
+                dsd_run_breakthrough=dsd_run_breakthrough,
+            ),
+        )
+        session_state[BG_RUN_KEY] = bg_run
+        session_state["_dpsim_run_id"] = run_id
         try:
-            orchestrator = DownstreamProcessOrchestrator(output_dir=default_output_dir("streamlit_lifecycle"))
-            with st.spinner("Running M1 -> M2 -> M3 lifecycle simulation..."):
-                lifecycle_result = orchestrator.run(
-                    recipe=recipe,
-                    run_context=context,
-                    propagate_dsd=propagate_dsd,
-                    dsd_mode=dsd_mode,
-                    dsd_run_breakthrough=dsd_run_breakthrough,
+            from dpsim.visualization.run_rail import set_run_state
+
+            set_run_state("running")
+        except ImportError:  # pragma: no cover — visualization always present
+            pass
+        st.rerun()
+
+    # Poll the background run on every rerun. While alive, sleep then
+    # rerun so the WebSocket layer can deliver Stop clicks; on
+    # completion, capture the result + reset state.
+    bg_run: BackgroundRun | None = session_state.get(BG_RUN_KEY)
+    if bg_run is not None:
+        if bg_run.is_running():
+            elapsed = bg_run.elapsed_seconds()
+            st.info(f"Running M1 → M2 → M3 lifecycle · {elapsed:.1f} s elapsed. "
+                    "Click Stop in the run rail to cancel.")
+            # Brief sleep, then rerun so click events get a chance to
+            # land. The 500 ms cadence balances responsiveness with
+            # CPU cost.
+            time.sleep(POLL_INTERVAL_S)
+            st.rerun()
+        else:
+            # Worker finished — collect outcome.
+            del session_state[BG_RUN_KEY]
+            run_id = session_state.pop("_dpsim_run_id", "")
+            try:
+                from dpsim.visualization.run_rail import (
+                    clear_cancel,
+                    set_run_state,
                 )
-            store_lifecycle_result(session_state, lifecycle_result, run_id=run_id)
-            st.success("Lifecycle simulation completed.")
-        except Exception as exc:  # pragma: no cover - Streamlit defensive path
-            st.error(f"Lifecycle simulation failed: {exc}")
-            raise
+            except ImportError:  # pragma: no cover
+                clear_cancel = lambda: None  # noqa: E731
+                set_run_state = lambda _s: None  # noqa: E731
+
+            if bg_run.cancelled:
+                st.info("Run cancelled by user (mid-solve).")
+                clear_cancel()
+                set_run_state("idle")
+            elif bg_run.exception is not None:
+                # Re-raise to preserve the existing error contract for
+                # test / dev workflows; production users see the trace.
+                st.error(f"Lifecycle simulation failed: {bg_run.exception}")
+                set_run_state("error", error_msg=str(bg_run.exception))
+                if not isinstance(bg_run.exception, RunCancelledError):
+                    raise bg_run.exception  # pragma: no cover - defensive
+            else:
+                store_lifecycle_result(
+                    session_state, bg_run.result, run_id=run_id,
+                )
+                st.success(
+                    f"Lifecycle simulation completed in "
+                    f"{bg_run.elapsed_seconds():.1f} s."
+                )
+                set_run_state("done")
+                clear_cancel()
 
     result = session_state.get("lifecycle_result")
     rows = lifecycle_result_summary_rows(result)
