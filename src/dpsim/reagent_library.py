@@ -123,6 +123,38 @@ class SurfactantProfile:
 # ═══════════════════════════════════════════════════════════════════════════
 #  CROSSLINKER LIBRARY
 # ═══════════════════════════════════════════════════════════════════════════
+#
+# v0.3.5 (UI audit fix 5): the v0.3.3 audit flagged that DPSim has TWO
+# crosslinker registries with non-overlapping content. They serve
+# different purposes — the split is intentional, not a bug:
+#
+#   - ``CROSSLINKERS`` (this dict, in ``dpsim.reagent_library``) drives
+#     the **L3 / M1 covalent-hardening** step — the primary crosslinking
+#     applied during gelation or post-gelation hardening of the polymer
+#     matrix itself. Consumed by the M1 crosslinking_section.py Streamlit
+#     widget. Entries: genipin, glutaraldehyde, edc_nhs, pegda_uv, tpp,
+#     stmp, epichlorohydrin, dvs, citric_acid.
+#
+#   - ``REAGENT_PROFILES[mode='crosslinker']`` (in
+#     ``dpsim.module2_functionalization.reagent_profiles``) drives the
+#     **M2 secondary-crosslinking step** — additional crosslinking
+#     applied AFTER ligand coupling for stability. Consumed by the M2
+#     "Secondary Crosslinking" Chemistry bucket via
+#     ``_BUCKET_TO_MODES``. Entries: genipin_secondary,
+#     glutaraldehyde_secondary, stmp_secondary, alcl3_trivalent_gelant,
+#     borax_reversible_crosslinking, glyoxal_dialdehyde,
+#     hrp_h2o2_tyramine, bis_epoxide_crosslinking.
+#
+# Some chemistries (genipin, glutaraldehyde, STMP) appear in both with
+# different parameter contexts: the L3 entries carry M1-stage kinetic
+# defaults, while the M2 ``_secondary`` variants carry post-coupling
+# stage defaults. This is a feature — it lets the same chemistry be
+# tuned independently for primary vs secondary crosslinking timing,
+# concentration, and hazard caveats.
+#
+# Do not consolidate without first identifying every consumer of each
+# registry; the v0.3.3 audit confirmed both are load-bearing for
+# distinct UI surfaces.
 
 CROSSLINKERS: dict[str, CrosslinkerProfile] = {
     # ── 1. Genipin (baseline) ─────────────────────────────────────────────

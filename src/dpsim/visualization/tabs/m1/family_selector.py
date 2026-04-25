@@ -198,6 +198,17 @@ def render_family_selector(*, key: str = "m1v9_polymer_family") -> FamilyContext
     family = enums[idx]
     st.caption(f"**{sel_name}** — {helps[idx]}")
 
+    # v0.3.5 (UI audit fix 3): surface ion-gelant registry entries for
+    # ionic-gel families. The expander only renders for families that
+    # have at least one ION_GELANT_REGISTRY entry; PLGA / agarose-only /
+    # dextran etc. skip silently.
+    from dpsim.visualization.tabs.m1.ion_gelant_picker import (
+        family_has_ion_gelants,
+        render_ion_gelant_picker,
+    )
+    if family_has_ion_gelants(family):
+        render_ion_gelant_picker(family, expanded=False, key_prefix=key)
+
     # v9.5 update: the three Tier-3 multi-variant composites
     # (pectin-chitosan, gellan-alginate, pullulan-dextran) are now
     # selectable above. The preview now records only documented

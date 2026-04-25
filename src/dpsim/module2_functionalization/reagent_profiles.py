@@ -17,6 +17,30 @@ Phase 2 expansion (Module 2 extension) adds 10 further profiles:
 
 Follows the CrosslinkerProfile pattern from reagent_library.py.
 Literature values sourced from the Scientific Advisor report.
+
+Crosslinker registry split (v0.3.5 documentation, UI audit fix 5)
+-----------------------------------------------------------------
+DPSim carries TWO crosslinker registries with non-overlapping content:
+
+  1. ``dpsim.reagent_library.CROSSLINKERS`` — drives the **L3 / M1
+     covalent-hardening** step (primary crosslinking applied during
+     gelation or post-gelation hardening of the polymer matrix
+     itself). Consumed by the M1 crosslinking_section.py widget.
+  2. ``REAGENT_PROFILES[functional_mode='crosslinker']`` (this module)
+     — drives the **M2 secondary-crosslinking step** (additional
+     crosslinking applied AFTER ligand coupling for stability).
+     Consumed by the M2 "Secondary Crosslinking" bucket via
+     ``visualization.tabs.tab_m2._BUCKET_TO_MODES``.
+
+The split is intentional. Some chemistries (genipin, glutaraldehyde,
+STMP) appear in both registries with different parameter contexts: L3
+entries carry M1-stage kinetic defaults, while M2 ``_secondary``
+variants carry post-coupling stage defaults. This lets the same
+chemistry be tuned independently for primary vs secondary crosslinking.
+
+Do not consolidate without first identifying every consumer of each
+registry; the v0.3.3 audit confirmed both are load-bearing for
+distinct UI surfaces.
 """
 
 from __future__ import annotations

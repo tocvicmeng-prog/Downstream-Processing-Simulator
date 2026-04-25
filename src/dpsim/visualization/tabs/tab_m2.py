@@ -281,6 +281,22 @@ def render_tab_m2(tab_container, _smgr) -> None:
                     _reagent_key = list(_reagent_options.values())[0]
                     _profile = _REAGENT_PROFILES[_reagent_key]
                 st.caption(f"k={_profile.k_forward:.1e} | E_a={_profile.E_a / 1000:.0f} kJ/mol")
+                # v0.3.5 (UI audit fix 4): surface ACSSiteType for the
+                # selected reagent so users see which surface group is
+                # consumed (target_acs) and which is installed
+                # (product_acs). Closes the "16 of 25 ACSSiteType
+                # entries unsurfaced" gap from the v0.3.3 audit.
+                _target_acs = getattr(_profile, "target_acs", None)
+                _product_acs = getattr(_profile, "product_acs", None)
+                if _target_acs is not None:
+                    _t_label = getattr(_target_acs, "value", str(_target_acs))
+                    if _product_acs is not None:
+                        _p_label = getattr(_product_acs, "value", str(_product_acs))
+                        st.caption(
+                            f"Surface chemistry: `{_t_label}` → `{_p_label}`"
+                        )
+                    else:
+                        st.caption(f"Targets surface group: `{_t_label}`")
                 # Audit F16: display confidence, calibration, hazard
                 _conf = getattr(_profile, 'confidence_tier', 'semi_quantitative')
                 _cal = getattr(_profile, 'calibration_source', '')[:60]

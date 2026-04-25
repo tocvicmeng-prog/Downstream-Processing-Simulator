@@ -1,5 +1,89 @@
 # Changelog
 
+## v0.3.5 — UI Audit Follow-Ons (Ion Gelants + ACS + Crosslinker Docs) (2026-04-25)
+
+Closes the three remaining items from the v0.3.3 UI audit. With v0.3.4
+already shipped (M2 reagent dropdown 50/94 → 94/94), this release
+addresses:
+
+### Fix 3 — Ion-gelant picker (was 1/13 surfaced → 13/13)
+
+- New module: `src/dpsim/visualization/tabs/m1/ion_gelant_picker.py`
+  with two public APIs:
+  - `available_ion_gelants_for_family(family)` — pure backend lookup
+    that returns the union of `ION_GELANT_REGISTRY` per-family entries
+    + applicable `FREESTANDING_ION_GELANTS` (matched by ion).
+  - `render_ion_gelant_picker(family)` — Streamlit expander widget.
+- `family_selector.py` now invokes the picker for any family that has
+  registered ion gelants (alginate, κ-carrageenan, hyaluronate, pectin,
+  gellan). Non-ionic families (PLGA, agarose, cellulose, dextran)
+  silently skip the expander.
+- Non-biotherapeutic-safe entries (Al³⁺ on gellan, AlCl₃ freestanding)
+  surface a red warning in the UI per `biotherapeutic_safe=False`.
+- Per-family coverage now: alginate (4 entries), hyaluronate (2),
+  κ-carrageenan (2), pectin (2), gellan (6) — every entry from the
+  v9.2-onwards `ION_GELANT_REGISTRY` is reachable in the UI.
+
+### Fix 4 — ACSSiteType visibility (16 unsurfaced → 2 documented)
+
+- M2 reagent caption now reads `target_acs → product_acs` for every
+  selected reagent, so users see exactly which surface group is
+  consumed and which is installed by each chemistry. Closes the
+  audit's "16 of 25 ACSSiteType entries unsurfaced" gap.
+- ACSSiteType reference coverage via `REAGENT_PROFILES.target_acs` /
+  `product_acs`: **23 of 25 (92 %)**.
+- 2 documented unreferenced entries:
+  - `alkyne` — SPAAC click partner; backend reagent data lists `azide`
+    only on the click reagents (data oversight; tracked as backend
+    follow-on).
+  - `sulfate_ester` — passive κ-carrageenan polymer-side surface group;
+    not a reagent target.
+- The pinned 23-of-25 baseline is enforced by
+  `test_known_unreferenced_acs_types_remain_documented` so an
+  intentional fix here trips the test (gives the team a chance to
+  update the doc).
+
+### Fix 5 — Crosslinker registry split documentation
+
+- Added cross-reference comments to both registries explaining that
+  the split between `dpsim.reagent_library.CROSSLINKERS` (M1 / L3
+  primary covalent hardening) and
+  `REAGENT_PROFILES[functional_mode='crosslinker']` (M2 secondary
+  crosslinking after ligand coupling) is **intentional**, not a bug:
+  both serve distinct UI surfaces with stage-appropriate kinetic
+  defaults.
+- Permanent doc gate via two tests in
+  `test_v0_3_5_audit_followons.py` that assert the cross-references
+  remain in place in both files.
+
+### Tests
+
+`tests/test_v0_3_5_audit_followons.py` — 18 tests:
+
+- 6 ion-gelant picker tests (per-family coverage, freestanding pairing
+  rule, biotherapeutic-safe flag propagation, audit gate that every
+  registered entry surfaces).
+- 3 ACSSiteType coverage tests (23/25 floor, documented-unreferenced
+  baseline, every reagent has a target_acs).
+- 2 crosslinker-registry doc-presence tests.
+- 1 family-selector import smoke.
+
+### Audit close-out
+
+The v0.3.3 UI audit's 5 findings are now all addressed:
+
+1. ✓ PolymerFamily M1 — 21/21 (closed at v0.3.3 / v9.5)
+2. ✓ M2 reagent dropdown — 94/94 (closed at v0.3.4)
+3. ✓ Ion-gelant picker — 13/13 (closed at v0.3.5)
+4. ✓ ACSSiteType visibility — 23/25 + 2 documented (closed at v0.3.5)
+5. ✓ Crosslinker registry split — documented as intentional (closed
+   at v0.3.5)
+
+Remaining backend follow-on (not a UI audit gap, tracked separately):
+the `cuaac_click_coupling` and `spaac_click_coupling` reagents should
+list `alkyne` somewhere in their target_acs / product_acs fields. The
+audit-gate test will trip when this lands.
+
 ## v0.3.4 — M2 Reagent Dropdown UI Audit Fix (2026-04-25)
 
 Closes the load-bearing finding from the v0.3.3 UI audit: the M2
