@@ -1,5 +1,78 @@
 # Changelog
 
+## v0.3.4 — M2 Reagent Dropdown UI Audit Fix (2026-04-25)
+
+Closes the load-bearing finding from the v0.3.3 UI audit: the M2
+Functionalization tab's reagent dropdown was hardcoded against the v9.1
+baseline and never updated as new reagents shipped through v9.2/v9.3/
+v9.4. The audit found 44 of 94 backend reagents (47 %) had no UI
+exposure at all — including every entry from the v9.2 click-chemistry
+batch, the v9.2 dye-pseudo-affinity ligands, the v9.3 mixed-mode HCIC /
+thiophilic / boronate / peptide-affinity / oligonucleotide additions,
+the v9.2 material-as-ligand pattern (amylose / chitin), and the v9.4
+crosslinker / activator / spacer expansions.
+
+### What changed
+
+- `src/dpsim/visualization/tabs/tab_m2.py` no longer hardcodes 9 reagent
+  option dicts in an `if/elif` chain. Replaced with:
+  - `_BUCKET_TO_MODES`: declarative map from each user-facing Chemistry
+    bucket name to the `functional_mode` values it contains. Covers
+    all 23 entries in `ALLOWED_FUNCTIONAL_MODES`.
+  - `_reagent_options_for_bucket(bucket)`: helper that auto-generates
+    the `{display_label: reagent_key}` dict by iterating
+    `REAGENT_PROFILES` and reading each profile's `.name` field.
+  - Result: every reagent shipped in `REAGENT_PROFILES` now auto-
+    surfaces; new reagent additions reach the UI without code changes
+    in `tab_m2.py`.
+- The Chemistry radio gains 8 new bucket types to surface chemistry
+  classes that had no place to render under the old taxonomy:
+  **Click Chemistry**, **Dye Pseudo-Affinity**, **Mixed-Mode HCIC**,
+  **Thiophilic**, **Boronate**, **Peptide Affinity**,
+  **Oligonucleotide**, **Material-as-Ligand**.
+- The v9.1 baseline buckets (Secondary Crosslinking, Hydroxyl
+  Activation, Ligand Coupling, Protein Coupling, Spacer Arm, Metal
+  Charging, Protein Pretreatment, Washing, Quenching) are preserved
+  verbatim — their contents grow to absorb the v9.x additions, so
+  existing user habits (and Streamlit session-state values) carry
+  forward unchanged.
+
+### Coverage
+
+- M2 reagent dropdown: **94 / 94 (100 %)** — was 50 / 94 (53 %) before
+  this PR.
+- Per-bucket counts (post-fix): Secondary Crosslinking 8, Hydroxyl
+  Activation 11, Ligand Coupling 12, Protein Coupling 18, Spacer Arm
+  19, Metal Charging 7, Protein Pretreatment 2, Washing 2, Quenching
+  4, plus the 8 new buckets at 1–2 reagents each.
+
+### Permanent regression gate
+
+`tests/test_v0_3_4_m2_dropdown_coverage.py` (51 tests):
+
+- Every value in `ALLOWED_FUNCTIONAL_MODES` must appear in exactly one
+  bucket — adding a new mode without updating `_BUCKET_TO_MODES` fails
+  the suite.
+- Every key in `REAGENT_PROFILES` must surface under at least one
+  bucket (the load-bearing audit gate).
+- Every previously-invisible v9.2/v9.3/v9.4 reagent has a parametrised
+  test asserting its expected bucket placement (44 cases).
+- Labels are non-empty, unique within bucket, and alphabetically
+  sorted (predictable order).
+
+### Out of scope (documented as audit follow-ons)
+
+The v0.3.3 audit also flagged three other coverage gaps that remain
+open and are tracked for separate cycles:
+
+- **Ion-gelant pickers** on M1 alginate/pectin/gellan/κ-carrageenan
+  formulation tabs (1 of 13 entries surfaced — only the v9.5 borax
+  warning).
+- **ACSSiteType selector** (16 of 25 site types unsurfaced anywhere).
+- **Crosslinker registry consolidation** between
+  `dpsim.reagent_library.CROSSLINKERS` and
+  `REAGENT_PROFILES[mode='crosslinker']` (5 entries differ).
+
 ## v0.3.3 — v9.5 Tier-3 Multi-Variant Composites (2026-04-25)
 
 Promotes the three Tier-3 multi-variant composite polymer families that
