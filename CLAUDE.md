@@ -20,7 +20,12 @@ gradients, entrance animations, etc.).
 - Always compare PolymerFamily members by `.value`, never by `is`. The
   Streamlit app reloads `dpsim.datatypes` on every rerun, minting a new
   enum class; identity comparisons silently break after the first rerun.
-  See `RunReport.compute_min_tier` for the reference pattern.
+  See `RunReport.compute_min_tier` for the reference pattern. This rule
+  is enforced as a CI gate by
+  `tests/test_v9_3_enum_comparison_enforcement.py` — an AST-based
+  scanner that walks `src/dpsim/` and `tests/` and fails the build on
+  any `is` / `is not` comparison against `PolymerFamily`, `ACSSiteType`,
+  `ModelEvidenceTier`, or `ModelMode` members.
 
 ## Known project quirks
 

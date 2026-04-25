@@ -1,5 +1,181 @@
 # Changelog
 
+## v0.2.0 — Functional-Optimization (SA cycles v9.2-v9.4) (2026-04-25)
+
+Processes all 50 candidates from the Scientific Advisor's
+functional-optimization screening report. Internal SA cycle labels
+v9.2 / v9.3 / v9.4 map to Tier-1 / Tier-2 / Tier-3 and are distinct
+from the upstream simulator's v9.x release line (last upstream
+release v9.2.2 below).
+
+### What you can now do
+
+- Pick from 18 polymer families in the M1 selector — the v9.1 baseline
+  (AGAROSE_CHITOSAN / ALGINATE / CELLULOSE / PLGA) plus 14 new
+  Tier-1/2/3 families: AGAROSE, CHITOSAN, DEXTRAN, AMYLOSE
+  (material-as-ligand for MBP), HYALURONATE, KAPPA_CARRAGEENAN,
+  AGAROSE_DEXTRAN (Capto-class core-shell), AGAROSE_ALGINATE IPN,
+  ALGINATE_CHITOSAN PEC, CHITIN (material-as-ligand for CBD),
+  PECTIN, GELLAN, PULLULAN, STARCH.
+- Run a complete L1 → L2 → L3 → L4 pipeline for every UI-enabled
+  family. The pipeline orchestrator's new `_run_v9_2_tier1` branch
+  routes the 10 non-legacy families through the composite L2
+  dispatcher (`level2_gelation/composite_dispatch.py`).
+- Build M2 functionalization workflows from 94 reagent profiles
+  (was 59 in the upstream baseline). New profiles span: classical
+  affinity (CNBr, CDI), oriented glycoprotein chain (NaIO₄, ADH,
+  aminooxy-PEG), dye pseudo-affinity (Cibacron Blue, Procion Red,
+  cyanuric chloride), mixed-mode antibody capture (MEP HCIC,
+  thiophilic), bis-epoxide hardening (PEGDGE/EGDGE/BDDE), click
+  chemistry (CuAAC + SPAAC with ICH Q3D Cu accounting), multipoint
+  enzyme immobilization (glyoxyl-agarose), boronate cis-diol
+  (aminophenylboronic acid), HRP-tyramine enzymatic crosslinking,
+  Procion Red, p-aminobenzamidine, lectins (Jacalin, lentil),
+  oligonucleotide DNA, HWRGWV peptide-affinity, oligoglycine /
+  cystamine / succinic-anhydride spacers, tresyl + pyridyl-disulfide
+  activations, plus Tier-3 Al³⁺ trivalent gelant (`biotherapeutic_safe
+  =False`), borax reversible crosslinker, glyoxal, calmodulin
+  CBP/TAP-tag.
+- Ingest wet-lab calibration data via a YAML schema:
+  `src/dpsim/calibration/wetlab_ingestion.py` parses bench measurements
+  into `WetlabCampaign` objects and applies tier-promoted updates to
+  ReagentProfile fields and L2 solver constants. Example campaigns at
+  `data/wetlab_calibration_examples/`.
+- See M2 q_max / process state advice that's specific to your ligand
+  type. The M2 orchestrator's `_mode_map` now routes to 12 specialised
+  ligand-type branches (was 8): the v9.1 baseline (`affinity`,
+  `iex_anion/cation`, `imac`, `hic`, `gst_affinity`, `biotin_affinity`,
+  `heparin_affinity`) plus 7 v0.2 specialised modes
+  (`dye_pseudo_affinity`, `mixed_mode_hcic`, `thiophilic`, `boronate`,
+  `peptide_affinity`, `oligonucleotide`, `material_as_ligand`).
+
+### New schema
+
+- `ACSSiteType`: 13 → 25 site types. Added `SULFATE_ESTER`, `THIOL`,
+  `PHENOL_TYRAMINE`, `AZIDE`, `ALKYNE`, `AMINOOXY`, `CIS_DIOL`,
+  `TRIAZINE_REACTIVE`, `GLYOXYL`, `CYANATE_ESTER`,
+  `IMIDAZOLYL_CARBONATE`, `SULFONATE_LEAVING`.
+- `PolymerFamily`: 4 → 21 entries (18 UI-enabled, 3 multi-variant
+  composites — `PECTIN_CHITOSAN`, `GELLAN_ALGINATE`, `PULLULAN_DEXTRAN`
+  — kept as data-only placeholders pending bioprocess-relevance
+  evidence).
+- New `IonGelantProfile` registry under
+  `src/dpsim/level2_gelation/ion_registry.py` with 11 entries: alginate
+  + Ca²⁺ (3 variants: external CaCl₂, GDL/CaCO₃ internal, CaSO₄
+  internal), κ-carrageenan + K⁺, hyaluronate + Ca²⁺ cofactor, pectin +
+  Ca²⁺ (LM), gellan + K⁺ / Ca²⁺ / Al³⁺ (research-only). Plus 4
+  freestanding ion gelants (KCl, CaSO₄, AlCl₃, borax). Replaces the
+  alginate-hardcoded Ca²⁺ assumption with a per-(polymer, ion) registry.
+- New `ALLOWED_FUNCTIONAL_MODES` (15 entries) and
+  `ALLOWED_CHEMISTRY_CLASSES` (28 entries) closed vocabularies in
+  `module2_functionalization/reagent_profiles.py`, plus
+  `validate_functional_mode()` / `validate_chemistry_class()`
+  validators.
+- New `CHEMISTRY_CLASS_TO_TEMPLATE` dispatch map in
+  `module2_functionalization/reactions.py` covering all 28 classes
+  with `kinetic_template_for()` lookup.
+
+### New L2 solver modules (all use parallel-module + delegate-and-retag)
+
+- `level2_gelation/agarose_only.py` — chitosan-free agarose; delegate
+  to legacy `solve_gelation` with chitosan zeroed; CALIBRATED_LOCAL
+  tier inherited from AGAROSE_CHITOSAN baseline.
+- `level2_gelation/chitosan_only.py` — pH-dependent amine protonation
+  (pKa 6.4 sigmoid per Sorlier 2001); SEMI_QUANTITATIVE.
+- `level2_gelation/dextran_ech.py` — Sephadex G-class calibration
+  (Hagel 1996); SEMI_QUANTITATIVE within
+  `c_dextran ∈ [3, 20]% w/v` and `ECH:OH ∈ [0.02, 0.30]`,
+  QUALITATIVE_TREND outside. New formulation field
+  `ech_oh_ratio_dextran` (default 0.0 → Sephadex G-100 baseline).
+- `level2_gelation/composite_dispatch.py` — `solve_gelation_by_family()`
+  router; delegates 10 v0.2 families to specialised solvers, raises
+  `NotImplementedError` for the 3 multi-variant placeholders, raises
+  `ValueError` for ALGINATE/CELLULOSE/PLGA (pipeline-branch families).
+- `level2_gelation/tier2_families.py` — 5 Tier-2 family solvers
+  (HA / κ-carrageenan / agarose-dextran / agarose-alginate /
+  alginate-chitosan); delegates to alginate-ionic-Ca or dextran-ECH
+  with re-tagged manifests.
+- `level2_gelation/tier3_families.py` — 4 Tier-3 family solvers
+  (pectin / gellan / pullulan / starch); same delegate pattern.
+- `level2_gelation/ion_registry.py` — `IonGelantProfile` and
+  `to_alginate_gelant_profile()` adapter (translates new registry
+  entries to the legacy `AlginateGelantProfile` shape so the existing
+  alginate solver consumes the registry without code change).
+
+### Pipeline integration
+
+- `pipeline/orchestrator.py::_run_v9_2_tier1` — new sub-pipeline
+  branch for the 10 v0.2 polymer families. L3 stubbed (no covalent
+  crosslinking layer calibrated for the new families); L4 reuses the
+  AGAROSE_CHITOSAN modulus solver as a SEMI_QUANTITATIVE placeholder.
+  Family-specific moduli are wet-lab calibration follow-on.
+
+### Wet-lab calibration ingestion
+
+- New module: `src/dpsim/calibration/wetlab_ingestion.py`. The bench
+  scientist fills in a YAML campaign file; the module parses it, applies
+  tier-promoted updates to ReagentProfile fields and L2 solver
+  constants, and produces an audit-friendly JSON manifest. Strict
+  whitelist of patchable fields (immutable identity fields like `name`,
+  `cas`, `target_acs` cannot be patched through a campaign). Strict
+  upward-only tier ladder rejects accidental downgrades.
+- Example campaigns: `data/wetlab_calibration_examples/Q-013_chitosan_kernel_calibration.yaml`
+  (kernel calibration: pKa fitting + genipin kinetics) and
+  `data/wetlab_calibration_examples/Q-014_v9_2_profile_validation.yaml`
+  (skeleton with 6 entries demonstrating the format for the bench
+  team to extend across the 18 v0.2 profiles).
+
+### Architecture decisions
+
+- **ADR-003** — POCl₃ formally rejected as Tier-4 (hazard outweighs
+  bioprocess value; STMP covers the bioprocess-relevant phosphate-
+  crosslinking subset). See `docs/decisions/ADR-003-pocl3-tier-4-rejection.md`.
+- **D-016 / D-017 / D-027 / D-037** — the parallel-module +
+  delegate-and-retag pattern is now the load-bearing architectural
+  pattern of the polymer-family layer. It scaled across three cycles
+  (5 + 5 + 4 modules) without modification.
+- **Closed vocabulary discipline** — every new ReagentProfile uses
+  existing `ALLOWED_FUNCTIONAL_MODES` / `ALLOWED_CHEMISTRY_CLASSES`
+  values. Zero vocabulary extensions in v9.4.
+
+### Q-011 latent reload-safety bug surfaced and fixed
+
+A pre-existing `is PolymerFamily.AGAROSE_CHITOSAN` identity comparison
+in `visualization/tabs/m1/material_constants.py:78` (introduced in the
+v9.0 Family-First UI work) was caught by the new AST enforcement test
+`tests/test_v9_3_enum_comparison_enforcement.py`. The bug would have
+silently broken material-constant resolution after the first Streamlit
+rerun (the documented danger in CLAUDE.md). Fixed by switching to
+`.value == .value` comparison; the AST scanner is now a permanent CI
+gate against future regressions of the same shape.
+
+### Test coverage
+
+- 510+ tests on the cumulative v0.x surface; zero regressions on v9.1
+  calibrated solvers (alginate, agarose-chitosan, cellulose, PLGA).
+- New test files: `test_module2_acs.py` extensions (parametrized
+  conservation tests over all 25 ACS sites), `test_ion_registry.py`,
+  `test_v9_2_solvers.py`, `test_v9_2_golden_master.py`,
+  `test_v9_2_pipeline_integration.py`, `test_v9_2_reagent_profiles.py`,
+  `test_v9_3_enum_comparison_enforcement.py` (the AST CI gate),
+  `test_v9_3_m3_specialised_dispatch.py`,
+  `test_v9_3_tier2_preview.py`, `test_v9_3_tier2_families.py`,
+  `test_v9_4_tier3.py`, `test_wetlab_ingestion.py`.
+
+### What's deferred to v0.3+
+
+- Wet-lab Track 2 (Q-013 kernel calibration, Q-014 18-profile
+  validation) — bench protocols documented in
+  `docs/handover/WETLAB_v9_3_CALIBRATION_PLAN.md`. Estimated 6 weeks
+  bench effort. Independent of the simulator track; the
+  ingestion-path scaffolding is in place.
+- 3 multi-variant composites (PECTIN_CHITOSAN, GELLAN_ALGINATE,
+  PULLULAN_DEXTRAN) remain data-only placeholders pending bioprocess-
+  relevance evidence.
+- M3 family-specific mechanical solvers — currently the v0.2 Tier-1/2/3
+  families reuse the AGAROSE_CHITOSAN modulus solver as a placeholder.
+  Family-specific moduli land alongside Q-013/Q-014 wet-lab calibration.
+
 ## v0.1.0 - Downstream Processing Simulator fork (2026-04-25)
 
 Creates the DPSim fork with the `downstream-processing-simulator` package

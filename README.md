@@ -36,7 +36,7 @@ and the weakest inherited evidence tier.
 
 ## Current Fork Status
 
-Version `0.1.0` is an initial architecture fork.
+Version `0.2.0` — Functional-Optimization initiative (Tiers 1–3) complete.
 
 Implemented in this fork:
 
@@ -52,13 +52,54 @@ Implemented in this fork:
   `FunctionalMediaContract`.
 - Handover documentation under `docs/handover/`.
 
-The current lifecycle command reuses:
+### Functional-Optimization initiative (v0.2.0)
 
-- M1 fabrication: legacy `PipelineOrchestrator`.
-- M2 functionalization: ECH activation -> Protein A coupling -> ethanolamine
-  quench with modeled wash steps through `ModificationOrchestrator`.
-- M3 performance: LRM breakthrough through `run_breakthrough`, consuming the
-  `FunctionalMediaContract`.
+Three SA-screened candidate cycles delivered between 2026-04-25
+sessions, processing all 50 candidates from the Scientific Advisor's
+functional-optimization screening:
+
+- **Tier 1** (18 candidates) — schema expansion + 18 reagent profiles
+  spanning M1–M9 workflow batches (CNBr / CDI / hexyl HIC; periodate /
+  ADH / aminooxy-PEG glycoprotein chain; Cibacron Blue dye-affinity;
+  MEP HCIC + thiophilic mixed-mode antibody capture; PEGDGE/EGDGE/BDDE
+  bis-epoxide hardening; CuAAC + SPAAC click chemistry; glyoxyl-agarose
+  multipoint enzyme immobilization; amylose-MBP material-as-ligand;
+  aminophenylboronic-acid boronate affinity).
+- **Tier 2** (17 candidates) — 6 polymer families promoted to UI
+  (HYALURONATE, KAPPA_CARRAGEENAN, AGAROSE_DEXTRAN, AGAROSE_ALGINATE,
+  ALGINATE_CHITOSAN, CHITIN) + 13 supporting reagent profiles (Procion
+  Red, p-aminobenzamidine, Jacalin, lentil lectin, oligonucleotide,
+  HWRGWV peptide-affinity, HRP-tyramine, oligoglycine / cystamine /
+  succinic-anhydride spacers, tresyl + pyridyl-disulfide activations).
+- **Tier 3** (11 candidates) — 4 polymer families promoted (PECTIN,
+  GELLAN, PULLULAN, STARCH) + Al³⁺ trivalent gelant
+  (`biotherapeutic_safe=False`), borax reversible crosslinker, glyoxal
+  dialdehyde, calmodulin CBP/TAP-tag.
+- **Tier 4** — POCl₃ formally rejected via `docs/decisions/ADR-003`
+  (hazard outweighs value; STMP covers the bioprocess subset).
+
+Cumulative state: 25 ACS site types · 21 PolymerFamily entries (18
+UI-enabled) · 94 ReagentProfile entries · 11 ion-gelation registry
+entries · 7 new L2 solver modules · 3 ADRs · 510+ tests.
+
+Wet-lab Track 2 (Q-013/Q-014) remains scheduled bench work; the
+simulator's calibration-ingestion path is implemented in
+`src/dpsim/calibration/wetlab_ingestion.py` with a YAML schema and
+example campaigns under `data/wetlab_calibration_examples/`.
+
+### What the lifecycle command reuses
+
+- M1 fabrication: legacy `PipelineOrchestrator` (now with
+  `_run_v9_2_tier1` branch routing the 10 v0.2 polymer families through
+  `level2_gelation/composite_dispatch.py`).
+- M2 functionalization: 12 specialised ligand-type branches
+  (`affinity`, `iex_anion/cation`, `imac`, `hic`, `gst_affinity`,
+  `biotin_affinity`, `heparin_affinity`, `dye_pseudo_affinity`,
+  `mixed_mode_hcic`, `thiophilic`, `boronate`, `peptide_affinity`,
+  `oligonucleotide`, `material_as_ligand`) via
+  `ModificationOrchestrator`.
+- M3 performance: LRM breakthrough through `run_breakthrough`, consuming
+  the `FunctionalMediaContract`.
 
 ## Install
 
@@ -153,13 +194,41 @@ src/dpsim/calibration/                 # calibration records and stores
 
 Start here:
 
-- `docs/handover/INITIAL_HANDOVER.md`
-- `docs/DPS_CLEAN_SLATE_ARCHITECTURE.md`
-- `docs/03_architecture_modification_plan.md`
+- `docs/handover/INITIAL_HANDOVER.md` — fork kickoff
+- `docs/DPS_CLEAN_SLATE_ARCHITECTURE.md` — clean-slate architecture
+- `docs/03_architecture_modification_plan.md` — architecture modification plan
+
+### v0.2.0 Functional-Optimization handover trail
+
+The v0.2 functional-optimization initiative produced a self-contained
+handover series that records the full design → implementation → close
+arc for the SA Tier-1, Tier-2, and Tier-3 cycles:
+
+- `docs/handover/SA_v9_2_FUNCTIONAL_OPTIMIZATION_SCREENING.md` —
+  Scientific Advisor candidate ranking (50 candidates → 4 tiers).
+- `docs/handover/ARCH_v9_2_MODULE_DECOMPOSITION.md` — Architect
+  module-level decomposition for Tier 1.
+- `docs/handover/DEVORCH_v9_2_JOINT_PLAN.md` — orchestrator master plan.
+- `docs/handover/HANDOVER_v9_2_M0a.md` / `M0b.md` /
+  `HANDOVER_v9_2_CLOSE.md` — Tier-1 cycle (foundation +
+  refactors + close).
+- `docs/handover/HANDOVER_v9_3_FOLLOWONS_CLOSE.md` /
+  `HANDOVER_v9_3_CLOSE.md` — Tier-2 cycle.
+- `docs/handover/HANDOVER_v9_4_CLOSE.md` — Tier-3 cycle close.
+- `docs/handover/WETLAB_v9_3_CALIBRATION_PLAN.md` — wet-lab calibration
+  brief (Q-013/Q-014); pending bench execution.
+- `docs/decisions/ADR-003-pocl3-tier-4-rejection.md` — Tier-4 rejection.
+
+> **Naming note:** the handover documents use internal cycle names
+> `v9.2`/`v9.3`/`v9.4` to label the Tier-1/Tier-2/Tier-3 SA cycles.
+> These are **internal cycle labels**, not project versions — the
+> project's effective version is `v0.2.0`. The upstream simulator's
+> v9.x release line (last release `v9.2.2` on 2026-04-24) is a
+> separate numbering scheme that pre-dates the SA cycles.
 
 The copied DPSim documents remain as scientific provenance and legacy
 reference material. New Downstream Processing Simulator documentation should
-prefer the `DPS_*` and `docs/handover/` documents.
+prefer the `DPS_*`, `docs/handover/`, and `docs/decisions/` documents.
 
 ## Scientific Operating Rules
 
