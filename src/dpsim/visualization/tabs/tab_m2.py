@@ -50,15 +50,36 @@ def _m2_evidence_tier_badge(result_obj) -> str:
 
 
 def _active_polymer_family() -> PolymerFamily:
-    """Resolve the active polymer family from the session-state recipe."""
+    """Resolve the active polymer family from the session-state recipe.
+
+    The recipe may be either a dataclass-like object (legacy
+    LifecycleRecipe) or a plain dict (newer JSON-deserialised form);
+    both shapes appear in the wild depending on how the recipe was
+    constructed. Defensively read both.
+    """
     recipe = st.session_state.get("process_recipe")
-    if recipe is not None:
-        raw = (recipe.material_batch.polymer_family or "").strip().lower()
-        try:
-            return PolymerFamily(raw)
-        except ValueError:
-            pass
-    return PolymerFamily.AGAROSE_CHITOSAN
+    if recipe is None:
+        return PolymerFamily.AGAROSE_CHITOSAN
+
+    # Resolve material_batch from either object-attribute or dict access.
+    mb = getattr(recipe, "material_batch", None)
+    if mb is None and isinstance(recipe, dict):
+        mb = recipe.get("material_batch")
+    if mb is None:
+        return PolymerFamily.AGAROSE_CHITOSAN
+
+    # Resolve polymer_family from material_batch (same dual-shape rule).
+    polymer_family_value = getattr(mb, "polymer_family", None)
+    if polymer_family_value is None and isinstance(mb, dict):
+        polymer_family_value = mb.get("polymer_family")
+    if not polymer_family_value:
+        return PolymerFamily.AGAROSE_CHITOSAN
+
+    raw = str(polymer_family_value).strip().lower()
+    try:
+        return PolymerFamily(raw)
+    except ValueError:
+        return PolymerFamily.AGAROSE_CHITOSAN
 
 
 def _family_filter_reagents(
