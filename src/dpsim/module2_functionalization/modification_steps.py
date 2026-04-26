@@ -123,6 +123,10 @@ class ModificationStep:
     reagent_concentration: float = 10.0  # [mol/m^3]
     stoichiometry: float = 1.0
     conversion: float = 0.0           # populated after solving
+    # v0.5.1: stage index for sequential-substitution converters (cyanuric
+    # chloride: 1 = 1st Cl @ 0-5 °C, 2 = 2nd Cl @ 25 °C, 3 = 3rd Cl @ 60-80 °C).
+    # 0 means unstaged; the solver falls back to the reagent's base k_forward.
+    temperature_stage: int = 0
 
 
 @dataclass
@@ -152,6 +156,12 @@ class ModificationResult:
     # P3: numeric chemistry diagnostics from the reaction solver. Keeping this
     # structured avoids downstream tools parsing human-readable notes.
     reaction_diagnostics: dict[str, float | str] | None = None
+    # v0.5.1: chain-scission fractional G_DN loss for oxidative converters
+    # above their conversion threshold (periodate, glyoxyl-chained). The
+    # orchestrator applies this multiplicatively to G_DN_updated AFTER
+    # summing per-step delta_G_DN, so a 0.4 here trims the final G_DN by
+    # 40 %. Default 0.0 = no scission loss.
+    g_dn_scission_fraction: float = 0.0
 
     # v0.6.1 (F2) — typed Quantity accessors. Underlying float fields above
     # remain authoritative for arithmetic; these expose unit-tagged handles.
@@ -587,18 +597,29 @@ def _solve_activation_step(
         reagent_consumed_molar = (conversion + edc_result.p_hydrolysed) * c0
         reagent_remaining = max(1.0 - reagent_consumed_molar / c_edc0, 0.0)
     else:
+        # v0.5.1: staged kinetics — when the step declares a temperature_stage
+        # and the reagent ships per-stage (k_forward, E_a) tuples, look up
+        # the per-stage values. Cyanuric chloride is the canonical user:
+        # three sequential Cl substitutions at three different temperatures,
+        # each ~10x slower than the previous. Outside this case both fields
+        # default to falsy and we use the base k_forward / E_a.
+        _stage = getattr(step, "temperature_stage", 0)
+        _staged = getattr(reagent_profile, "staged_kinetics", ())
+        if _stage > 0 and _staged and _stage <= len(_staged):
+            _k_forward, _E_a = _staged[_stage - 1]
+        else:
+            _k_forward, _E_a = reagent_profile.k_forward, reagent_profile.E_a
         k0 = _arrhenius_prefactor(
-            reagent_profile.k_forward, reagent_profile.E_a,
-            reagent_profile.temperature_default,
+            _k_forward, _E_a, reagent_profile.temperature_default,
         )
         conversion, reagent_remaining = solve_second_order_consumption(
             acs_concentration=acs_concentration,
             reagent_concentration=step.reagent_concentration,
-            k_forward=reagent_profile.k_forward,
+            k_forward=_k_forward,
             stoichiometry=step.stoichiometry,
             time=step.time,
             temperature=step.temperature,
-            E_a=reagent_profile.E_a,
+            E_a=_E_a,
             k0=k0,
             hydrolysis_rate=reagent_profile.hydrolysis_rate,
         )
@@ -670,6 +691,27 @@ def _solve_activation_step(
         hydrol_note,
     )
 
+    # v0.5.1: chain-scission penalty for oxidative converters above threshold.
+    # Periodate (Bobbitt 1956) and glyoxyl-chained (Mateo 2007) report
+    # progressive polymer scission once vicinal-diol cleavage exceeds ~30%,
+    # saturating around 50%. The fractional G_DN loss is interpolated
+    # linearly between threshold and 1.0 conversion, capped at the
+    # reagent's chain_scission_max_g_dn_loss.
+    scission_threshold = getattr(reagent_profile, "chain_scission_threshold", 1.0)
+    scission_max = getattr(reagent_profile, "chain_scission_max_g_dn_loss", 0.0)
+    g_dn_scission_fraction = 0.0
+    if scission_max > 0.0 and conversion > scission_threshold:
+        denominator = max(1.0 - scission_threshold, 1e-9)
+        progress = min((conversion - scission_threshold) / denominator, 1.0)
+        g_dn_scission_fraction = scission_max * progress
+
+    scission_note = ""
+    if g_dn_scission_fraction > 0.0:
+        scission_note = (
+            f" Chain-scission penalty: {g_dn_scission_fraction * 100:.1f}% G_DN "
+            f"loss (conversion {conversion:.2f} > threshold {scission_threshold:.2f})."
+        )
+
     return ModificationResult(
         step=step,
         acs_before={},
@@ -677,14 +719,16 @@ def _solve_activation_step(
         conversion=conversion,
         delta_G_DN=0.0,
         notes=f"Activation: {sites_consumed:.4e} mol OH consumed, "
-              f"produced {product_type.value if product_type else 'none'}.{hydrol_note}",
+              f"produced {product_type.value if product_type else 'none'}.{hydrol_note}{scission_note}",
         reaction_diagnostics={
             "sites_consumed_mol_per_particle": float(sites_consumed),
             "reagent_remaining_fraction": float(reagent_remaining),
             "side_reaction_reagent_hydrolyzed_mol_m3": float(reagent_hydrolyzed),
             "target_site_type": step.target_acs.value,
             "product_site_type": product_type.value if product_type else "",
+            "g_dn_scission_fraction": float(g_dn_scission_fraction),
         },
+        g_dn_scission_fraction=g_dn_scission_fraction,
     )
 
 

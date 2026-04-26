@@ -497,6 +497,11 @@ def _g6_acs_converter_sequence(
                 )
 
     # G6.5 — CNBr coupling window.
+    # Cyanate ester half-life at 4 °C / pH 11 is ~5 min (k ≈ 2e-3 /s),
+    # so any gap between CNBr activation and the next ligand coupling
+    # longer than 15 min wipes out essentially all activated sites
+    # (Kohn & Wilchek 1981 Anal. Biochem. 115:375).
+    _CNBR_WINDOW_S = 900.0  # 15 minutes
     for idx, step, _, rkey in timeline:
         if rkey != "cnbr_activation":
             continue
@@ -520,10 +525,58 @@ def _g6_acs_converter_sequence(
                 ),
                 module="M2",
             )
-        # Time-window validation depends on a structured time field on the
-        # step parameters. If the recipe declares "time" or "duration" on
-        # the converter step, use it as a coarse proxy.
-        # (Defensive — many recipes will not carry this field; absence is OK.)
+            continue
+        # v0.5.1 — strengthened time-window check. Sum the durations of
+        # all steps strictly between the converter and the next coupling.
+        # The activation step's own duration is part of the activation
+        # plateau (the activator is being consumed), so it does NOT count
+        # against the post-activation hydrolysis window. If any step in
+        # between lacks a "time" field we cannot quantify the gap and
+        # fall back to the pre-existing structural WARNING.
+        next_idx, next_step = next_couple
+        intervening_time_s = 0.0
+        time_quantified = True
+        for j_idx, j_step, _, _ in timeline:
+            if j_idx <= idx or j_idx >= next_idx:
+                continue
+            t = _qty_value(j_step.parameters.get("time"))
+            if t is None:
+                time_quantified = False
+                break
+            intervening_time_s += float(t)
+        if time_quantified and intervening_time_s > _CNBR_WINDOW_S:
+            report.add(
+                ValidationSeverity.BLOCKER,
+                "FP_G6_CNBR_HYDROLYSIS_LOSS",
+                (
+                    f"Step {step.name!r}: cumulative time between CNBr "
+                    f"activation and next coupling step is "
+                    f"{intervening_time_s / 60:.1f} min "
+                    f"(>{_CNBR_WINDOW_S / 60:.0f} min limit). Cyanate "
+                    f"ester half-life is ~5 min at 4 °C / pH 11; the "
+                    f"activator is consumed by hydrolysis before ligand "
+                    f"coupling can run."
+                ),
+                module="M2",
+                recommendation=(
+                    "Move CNBr activation immediately before the coupling "
+                    "step (no intervening washes longer than ~10 min "
+                    "total), or accept the hydrolysis loss as a "
+                    "qualitative-only result."
+                ),
+            )
+        elif time_quantified and intervening_time_s > 0.5 * _CNBR_WINDOW_S:
+            report.add(
+                ValidationSeverity.WARNING,
+                "FP_G6_CNBR_WINDOW_AT_RISK",
+                (
+                    f"Step {step.name!r}: intervening duration "
+                    f"{intervening_time_s / 60:.1f} min is approaching the "
+                    f"15 min CNBr hydrolysis window. Cyanate-ester yield "
+                    f"will be degraded by competing hydrolysis."
+                ),
+                module="M2",
+            )
 
     # G6.6 — back-to-back converter smell (excluding cyanuric staging).
     prev_was_converter = False

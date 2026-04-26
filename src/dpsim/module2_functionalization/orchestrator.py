@@ -1008,6 +1008,25 @@ class ModificationOrchestrator:
         # --- Compute updated mechanical properties ---
         G_DN_base = contract.G_DN
         G_DN_updated = G_DN_base + total_delta_G
+        # v0.5.1: chain-scission penalty (periodate / glyoxyl above threshold).
+        # The per-step g_dn_scission_fraction values compose multiplicatively;
+        # two 30 % scission events in series are not additive (~0.30 + 0.30
+        # would over-count). Use 1 - product(1 - f_i) to combine, then apply
+        # to the post-additive G_DN. This preserves the existing additive
+        # delta_G_DN semantics (rubber-elasticity bridges) while overlaying
+        # an oxidative-loss penalty on top.
+        survival = 1.0
+        for r in history:
+            f = getattr(r, "g_dn_scission_fraction", 0.0)
+            if f > 0.0:
+                survival *= max(1.0 - f, 0.0)
+        scission_loss_fraction = 1.0 - survival
+        if scission_loss_fraction > 0.0:
+            G_DN_updated *= survival
+            logger.info(
+                "Chain-scission penalty applied: -%.1f%% G_DN (cumulative).",
+                scission_loss_fraction * 100,
+            )
         # E* ~ 3*G for incompressible rubber (Poisson's ratio ~ 0.5)
         E_star_updated = 3.0 * G_DN_updated
 

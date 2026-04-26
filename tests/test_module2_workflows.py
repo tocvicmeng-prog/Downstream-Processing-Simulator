@@ -1033,8 +1033,8 @@ def test_fmc_biotin_stoich_2_5():
 
 
 def test_profile_count():
-    """Canonical profile count — v0.5.0 ACS Converter epic adds 4 closed-loop
-    couplers (CDI/Tresyl/Pyridyl-disulfide/CNBr generic amine routes)."""
+    """Canonical profile count — v0.5.1 deferred work adds 3 per-protein
+    pyridyl-disulfide couplers (Cys-Protein A / G / L)."""
     # v9.1 baseline: 59 profiles (post-P3 alternate M2 chemistries).
     # v9.2 M1-M9 Tier-1 additions: 18 profiles.
     # v9.3 Tier-2 additions: 13 profiles.
@@ -1044,9 +1044,11 @@ def test_profile_count():
     # v0.5.0 closed-loop couplers: 4 profiles
     # (generic_amine_to_imidazolyl_carbonate, generic_amine_to_sulfonate,
     #  protein_thiol_to_pyridyl_disulfide, generic_amine_to_cyanate_ester).
-    assert len(REAGENT_PROFILES) == 100, (
-        f"Expected 100 profiles (59 v9.1 + 18 v9.2 + 13 v9.3 + 4 v9.4 + "
-        f"2 v0.4.x interim + 4 v0.5.0), got {len(REAGENT_PROFILES)}"
+    # v0.5.1 per-protein pyridyl-disulfide variants: 3 profiles
+    # (protein_a/g/l_thiol_to_pyridyl_disulfide).
+    assert len(REAGENT_PROFILES) == 103, (
+        f"Expected 103 profiles (59 v9.1 + 18 v9.2 + 13 v9.3 + 4 v9.4 + "
+        f"2 v0.4.x interim + 4 v0.5.0 + 3 v0.5.1), got {len(REAGENT_PROFILES)}"
     )
 
 

@@ -293,6 +293,25 @@ class ReagentProfile:
     # measurement (e.g. "A_343_pyridine_2_thione" for pyridyl-disulfide).
     wetlab_observable: str = ""
 
+    # ── v0.5.1 deferred-work fields ──
+    # Staged kinetics for sequential-substitution chemistries (cyanuric
+    # chloride: three Cl substituents at three different temperatures, each
+    # ~10x slower than the previous due to electron donation from the
+    # already-substituted positions). Tuple of (k_forward, E_a) pairs,
+    # indexed by ``ModificationStep.temperature_stage`` (1-based). Empty
+    # tuple = no staging; reagent falls back to base k_forward / E_a.
+    staged_kinetics: tuple[tuple[float, float], ...] = ()
+
+    # Chain-scission penalty applied to G_DN when oxidative converters
+    # (periodate, glyoxyl-chained) exceed a conversion threshold. Periodate
+    # (Bobbitt 1956) loses polymer mechanical integrity when oxidation
+    # passes ~30%, with full saturation by ~50%. The penalty is a
+    # multiplicative loss surfaced on ModificationResult and applied by the
+    # orchestrator to the cumulative G_DN_updated. Default 1.0 / 0.0 means
+    # no penalty.
+    chain_scission_threshold: float = 1.0   # conversion above which scission begins
+    chain_scission_max_g_dn_loss: float = 0.0  # max fractional G_DN loss at saturation
+
 
 # ─── Phase B Reagent Library (4 profiles) ─────────────────────────────
 
@@ -2099,6 +2118,13 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         # v0.5.0: Malaprade cleavage of one diol pair yields two aldehydes.
         aldehyde_multiplier=2.0,
         wetlab_observable="TNBS_schiff_base_titration",
+        # v0.5.1 deferred-work: chain-scission penalty above 30% conversion.
+        # Bobbitt 1956 + Painter 1973 (J. Chromatogr. Sci. 11:567) report
+        # progressive uronic-acid release into supernatant once vicinal-diol
+        # oxidation passes ~30%, with full loss of bead mechanical integrity
+        # by ~50% conversion. Linear interpolation between threshold and 1.0.
+        chain_scission_threshold=0.30,
+        chain_scission_max_g_dn_loss=0.70,
         notes=(
             "Malaprade oxidation: cleaves vicinal diols (2 OH on adjacent "
             "carbons) to a pair of aldehydes. Foundational for oriented "
@@ -2182,7 +2208,7 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         reaction_type="acs_conversion",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.TRIAZINE_REACTIVE,
-        k_forward=3e-3,                # first-Cl rate; remaining 2 Cl lumped (2-stage default)
+        k_forward=3e-3,                # base / stage-1 rate; staged_kinetics below
         E_a=30000.0,
         stoichiometry=1.0,
         hydrolysis_rate=5e-4,
@@ -2197,6 +2223,19 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         calibration_source="Korpela & Mäntsälä (1968) Anal. Biochem. 23:381",
         hazard_class="reactive_corrosive",
         wetlab_observable="UV_265_triazine_substitution",
+        # v0.5.1 deferred-work: 3-stage staged substitution. Each successive
+        # Cl reacts ~10x slower due to electron donation from prior
+        # substituents (Lowe & Pearson 1984 Methods Enzymol. 104:97).
+        # Stage 1: 1st Cl @ 0-5 °C  — k=3e-3, Ea=30 kJ/mol  (matches base).
+        # Stage 2: 2nd Cl @ 25 °C   — k=3e-4, Ea=50 kJ/mol  (~10x slower).
+        # Stage 3: 3rd Cl @ 60-80 °C — k=3e-5, Ea=70 kJ/mol  (~10x slower again).
+        # Recipes that drive only the 1st substitution (most affinity-dye
+        # supports) leave temperature_stage=0 and use the base k_forward.
+        staged_kinetics=(
+            (3e-3, 30000.0),
+            (3e-4, 50000.0),
+            (3e-5, 70000.0),
+        ),
         notes=(
             "2,4,6-Trichloro-1,3,5-triazine activation of polysaccharide "
             "OH gives a dichlorotriazine support. The remaining 2 chlorines "
@@ -2543,6 +2582,13 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         # with periodate_oxidation downstream-doubling semantics.
         aldehyde_multiplier=2.0,
         wetlab_observable="hydroxylamine_aldehyde_titration",
+        # v0.5.1 deferred-work: chain-scission penalty mirrors periodate
+        # behaviour but with a higher threshold (~40%) because the glycidol
+        # overlay protects the bead's main backbone — the periodate step
+        # cleaves the installed glyceryl-ether tethers preferentially before
+        # touching the agarose backbone (Mateo 2007).
+        chain_scission_threshold=0.40,
+        chain_scission_max_g_dn_loss=0.50,
         notes=(
             "Two-step activation: glycidol coats agarose -OH with "
             "glyceryl ether (giving 1,2-diol termini); periodate then "
@@ -3291,6 +3337,124 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
             "forming a mixed disulfide. Stoichiometric A_343 release is "
             "the canonical assay. Eluted by 10 mM DTT or 5 mM TCEP — "
             "fully reversible capture for analytical workflows."
+        ),
+    ),
+
+    # ── Per-protein pyridyl-disulfide variants (v0.5.1) ──────────────
+    # The single generic protein_thiol_to_pyridyl_disulfide handles the
+    # general case; these per-protein entries mirror the existing pattern
+    # at protein_a_cys_coupling (line 1461) and protein_g_cys_coupling
+    # (line 1495), but route through PYRIDYL_DISULFIDE rather than
+    # MALEIMIDE for reversible thiol-disulfide capture.
+
+    # AC-CL5 Cys-tagged Protein A → pyridyl-disulfide support.
+    "protein_a_thiol_to_pyridyl_disulfide": ReagentProfile(
+        name="Cys-Protein A → pyridyl-disulfide support",
+        cas="N/A (Cys-tagged variant)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.PYRIDYL_DISULFIDE,
+        product_acs=None,
+        k_forward=2e-3,
+        E_a=25000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-7,
+        ph_optimum=7.5,
+        temperature_default=298.15,
+        time_default=3600.0,
+        functional_mode="affinity_ligand",
+        chemistry_class="thiol_disulfide_exchange",
+        installed_ligand="protein_a_cys_pds",
+        ligand_mw=42000.0,
+        is_macromolecule=True,
+        activity_retention=0.85,
+        max_surface_density=2.0e-7,
+        ph_min=6.5, ph_max=8.5,
+        binding_model_hint="fc_affinity",
+        confidence_tier="semi_quantitative",
+        calibration_source="Carlsson et al. (1978) Biochem. J. 173:723; Hermanson §17.4",
+        hazard_class="reversible_redox",
+        wetlab_observable="A_343_pyridine_2_thione",
+        notes=(
+            "Site-directed Cys variant of Protein A captured on a "
+            "pyridyl-disulfide-loaded matrix via thiol-disulfide exchange. "
+            "Reversible Fc affinity capture; eluted by 10 mM DTT or "
+            "5 mM TCEP. Useful for analytical Protein A column "
+            "regeneration without leaching ligand. Pre-condition: "
+            "SPACER_ARM step must produce AMINE_DISTAL > 0 (e.g. cystamine "
+            "or EDA), and matrix must have been arm-activated by "
+            "pyridyl_disulfide_activation."
+        ),
+    ),
+
+    # AC-CL6 Cys-tagged Protein G → pyridyl-disulfide support.
+    "protein_g_thiol_to_pyridyl_disulfide": ReagentProfile(
+        name="Cys-Protein G → pyridyl-disulfide support",
+        cas="N/A (Cys-tagged variant)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.PYRIDYL_DISULFIDE,
+        product_acs=None,
+        k_forward=2e-3,
+        E_a=25000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-7,
+        ph_optimum=7.5,
+        temperature_default=298.15,
+        time_default=3600.0,
+        functional_mode="affinity_ligand",
+        chemistry_class="thiol_disulfide_exchange",
+        installed_ligand="protein_g_cys_pds",
+        ligand_mw=22000.0,
+        is_macromolecule=True,
+        activity_retention=0.85,
+        max_surface_density=2.5e-7,    # smaller MW than Protein A → higher density
+        ph_min=6.5, ph_max=8.5,
+        binding_model_hint="fc_affinity",
+        confidence_tier="semi_quantitative",
+        calibration_source="Carlsson et al. (1978) Biochem. J. 173:723; Hermanson §17.4",
+        hazard_class="reversible_redox",
+        wetlab_observable="A_343_pyridine_2_thione",
+        notes=(
+            "Site-directed Cys variant of Protein G on pyridyl-disulfide "
+            "support. Broader Fc subclass coverage than Protein A (binds "
+            "IgG2 / IgG3 / mouse IgG1 better) at the cost of slightly "
+            "lower affinity for IgG1. Reversible capture; same elution "
+            "and pre-conditions as protein_a_thiol_to_pyridyl_disulfide."
+        ),
+    ),
+
+    # AC-CL7 Cys-tagged Protein L → pyridyl-disulfide support.
+    "protein_l_thiol_to_pyridyl_disulfide": ReagentProfile(
+        name="Cys-Protein L → pyridyl-disulfide support",
+        cas="N/A (Cys-tagged variant)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.PYRIDYL_DISULFIDE,
+        product_acs=None,
+        k_forward=2e-3,
+        E_a=25000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-7,
+        ph_optimum=7.5,
+        temperature_default=298.15,
+        time_default=3600.0,
+        functional_mode="affinity_ligand",
+        chemistry_class="thiol_disulfide_exchange",
+        installed_ligand="protein_l_cys_pds",
+        ligand_mw=36000.0,
+        is_macromolecule=True,
+        activity_retention=0.80,        # lower than A/G — kappa-light-chain mode
+        max_surface_density=2.2e-7,
+        ph_min=6.5, ph_max=8.5,
+        binding_model_hint="affinity",
+        confidence_tier="semi_quantitative",
+        calibration_source="Nilson et al. (1992) Eur. J. Immunol. 22:2547; Hermanson §17.4",
+        hazard_class="reversible_redox",
+        wetlab_observable="A_343_pyridine_2_thione",
+        notes=(
+            "Site-directed Cys variant of Protein L on pyridyl-disulfide "
+            "support. Binds antibody kappa light chains (IgG/IgM/IgA/Fab "
+            "fragments lacking Fc). Useful for capturing Fab fragments "
+            "or single-chain antibodies that elude Protein A/G. Same "
+            "reversible capture and pre-conditions as the other variants."
         ),
     ),
 

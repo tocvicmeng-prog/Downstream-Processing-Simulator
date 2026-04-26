@@ -144,10 +144,26 @@ agreement to 0.1%).
 
 ## 8. Deferred / future work
 
-- **Cyanuric 3-stage staged kinetics.** Currently 2-stage (single rate). When a calibration dataset exists, add per-Cl rate constants `k_stage1/2/3` and the corresponding `temperature_stage` field on `ModificationStep`.
-- **Per-protein pyridyl-disulfide couplers.** `protein_a_thiol_to_pyridyl_disulfide`, `protein_g_thiol_to_pyridyl_disulfide`, etc. follow the existing `protein_a_cys_coupling` / `protein_g_cys_coupling` pattern at `reagent_profiles.py:1461, 1495`.
-- **Periodate chain-scission penalty on G_DN/mesh.** Notes describe the 30–50% threshold; a follow-up PR can wire a multiplicative penalty into `M1ExportContract.G_DN` when `oxidation_degree > 0.30`.
-- **CNBr time-window enforcement (G6.5).** Currently a structural WARNING that fires when the converter has no downstream coupling step. A stronger version reads `step.parameters["time"]` and tightens to BLOCKER when activator-to-coupling gap > 900 s; needs the recipe DSL to standardise the `time` quantity.
+**ALL FOUR ITEMS LANDED IN v0.5.1.** See `CHANGELOG.md` v0.5.1 entry and
+`tests/test_v0_5_1_deferred_work.py` (21 cases, green).
+
+- ~~**Cyanuric 3-stage staged kinetics.**~~ **DONE in v0.5.1.** New
+  `ReagentProfile.staged_kinetics` and `ModificationStep.temperature_stage`
+  fields; cyanuric carries 3 stages (3e-3 / 3e-4 / 3e-5 m³/(mol·s),
+  Ea 30 / 50 / 70 kJ/mol). Default unstaged behaviour preserves v0.5.0.
+- ~~**Per-protein pyridyl-disulfide couplers.**~~ **DONE in v0.5.1.**
+  `protein_a_thiol_to_pyridyl_disulfide` (42 kDa, Fc-IgG1),
+  `protein_g_thiol_to_pyridyl_disulfide` (22 kDa, broader Fc), and
+  `protein_l_thiol_to_pyridyl_disulfide` (36 kDa, κ-light-chain) added.
+- ~~**Periodate chain-scission penalty on G_DN/mesh.**~~ **DONE in v0.5.1.**
+  `ReagentProfile.chain_scission_threshold` / `_max_g_dn_loss` fields plus
+  per-result `g_dn_scission_fraction`; orchestrator composes losses
+  multiplicatively after the additive rubber-elasticity bridges sum.
+  Periodate (0.30, 0.70); glyoxyl-chained (0.40, 0.50).
+- ~~**CNBr time-window enforcement (G6.5).**~~ **DONE in v0.5.1.**
+  G6.5 now sums intervening-step durations and emits BLOCKER
+  (`FP_G6_CNBR_HYDROLYSIS_LOSS`) at > 15 min, WARNING
+  (`FP_G6_CNBR_WINDOW_AT_RISK`) at > 7.5 min, clean below.
 
 ---
 

@@ -1,5 +1,84 @@
 # Changelog
 
+## v0.5.1 — M2 ACS Converter deferred-work follow-on (2026-04-27)
+
+Closes the four deferred items from `HANDOVER_v0_5_0_ACS_CONVERTER.md` §8.
+Same branch (`feat/m2-acs-converter`) as v0.5.0; additive to the v0.5.0
+APIs (no breaking changes).
+
+### Cyanuric chloride 3-stage staged kinetics
+
+- New `staged_kinetics: tuple[tuple[float, float], ...]` field on
+  `ReagentProfile` — empty by default, populated for cyanuric chloride
+  with three `(k_forward, E_a)` tuples covering the 1st / 2nd / 3rd Cl
+  substitutions at 0–5 °C / 25 °C / 60–80 °C respectively. Each
+  successive Cl is ~10× slower than the previous.
+- New `temperature_stage: int = 0` field on `ModificationStep`. When
+  > 0 and the reagent has staged_kinetics defined, `_solve_activation_step`
+  uses the per-stage `(k_forward, E_a)` instead of the base values.
+  `temperature_stage=0` preserves v0.5.0 behaviour exactly.
+- Reference: Lowe & Pearson (1984) Methods Enzymol. 104:97.
+
+### Periodate / glyoxyl chain-scission penalty
+
+- New `chain_scission_threshold: float = 1.0` and
+  `chain_scission_max_g_dn_loss: float = 0.0` fields on `ReagentProfile`.
+  Set to (0.30, 0.70) on `periodate_oxidation` (Bobbitt 1956) and
+  (0.40, 0.50) on `glyoxyl_chained_activation` (Mateo 2007 — glycidol
+  overlay protects backbone, raising the threshold and lowering the
+  max loss).
+- New `g_dn_scission_fraction: float = 0.0` field on `ModificationResult`.
+  `_solve_activation_step` linearly interpolates between threshold and
+  conversion = 1.0 to compute the per-step fraction.
+- Orchestrator's `run()` composes per-step scission fractions
+  multiplicatively (1 - product(1 - f_i)) and applies the cumulative
+  loss to `G_DN_updated` AFTER summing the additive `delta_G_DN` from
+  rubber-elasticity bridges. Result: high-conversion periodate now
+  correctly degrades the bead's mechanical modulus.
+
+### Per-protein pyridyl-disulfide couplers (3 new reagents)
+
+| reagent_key | Ligand MW | Binding mode |
+|---|---|---|
+| `protein_a_thiol_to_pyridyl_disulfide` | 42 kDa | Fc affinity (IgG1-favoring) |
+| `protein_g_thiol_to_pyridyl_disulfide` | 22 kDa | Fc affinity (broader subclass) |
+| `protein_l_thiol_to_pyridyl_disulfide` | 36 kDa | κ-light-chain (Fab capture) |
+
+- All three follow the existing `protein_a_cys_coupling` /
+  `protein_g_cys_coupling` pattern but route through `PYRIDYL_DISULFIDE`
+  (reversible thiol-disulfide exchange) rather than `MALEIMIDE`
+  (irreversible Michael addition).
+- All declare `wetlab_observable="A_343_pyridine_2_thione"` for evidence-
+  tier calibration anchoring on stoichiometric pyridine-2-thione release.
+- All surface under the existing "Protein Coupling" UI bucket via
+  `functional_mode="affinity_ligand"` — no new bucket required.
+- Reference: Carlsson et al. (1978) Biochem. J. 173:723; Hermanson
+  Bioconjugate Techniques 3rd ed. (2013) §17.4; Nilson et al. (1992)
+  Eur. J. Immunol. 22:2547 (Protein L).
+
+### CNBr time-window enforcement (G6.5 strengthened)
+
+- G6.5 now sums the durations of all steps strictly between a CNBr
+  activation step and the next `COUPLE_LIGAND` step (each must declare
+  a `time` Quantity in its `parameters`).
+- Three-tier severity:
+  - ≤ 7.5 min intervening: clean.
+  - (7.5 min, 15 min]: WARNING (`FP_G6_CNBR_WINDOW_AT_RISK`).
+  - > 15 min: BLOCKER (`FP_G6_CNBR_HYDROLYSIS_LOSS`).
+- The pre-existing "no downstream coupling" WARNING
+  (`FP_G6_CNBR_NO_COUPLING_FOLLOWUP`) is unchanged.
+- When intervening steps lack a `time` parameter, the time-window
+  check is silently skipped (recipes without structured timing fall
+  back to the v0.5.0 behaviour).
+
+### Tests
+
+- `tests/test_v0_5_1_deferred_work.py` (NEW): 21 test cases across the
+  four areas. All green.
+- `tests/test_module2_workflows.py::test_profile_count`: bumped 100 → 103
+  to account for the 3 new per-protein pyridyl variants.
+- 329 targeted tests green; ruff=0; mypy=0.
+
 ## v0.5.0 — M2 ACS Converter epic (2026-04-27)
 
 Closes the 7 ranked gaps from the M2 ACS-converter audit; the Scientific
