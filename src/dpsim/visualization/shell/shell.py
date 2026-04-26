@@ -159,10 +159,13 @@ def render_top_bar(
     # reference. Adds: inline DirectionSwitch, vertical-divider rules,
     # workspace/ breadcrumb prefix, decorative search input, and a
     # run-history ghost button.
-    # v0.4.19 (B2): split cols[7] into theme-toggle (0.9) + manual-icons
-    # (0.4) so Manual + Appendix J render as a horizontal icon pair to
+    # v0.4.19 (B2): split cols[7] into theme-toggle (0.7) + manual-icons
+    # (0.6) so Manual + Appendix J render as a horizontal icon pair to
     # the right of the DARK/LIGHT pill instead of stacking below it.
-    cols = st.columns([0.55, 0.6, 2.4, 1.8, 1.8, 1.6, 1.4, 0.9, 0.4])
+    # v0.4.19 (B6): widened cols[8] from 0.4 → 0.6 — the previous
+    # ratio gave each icon's sub-column only ~16 px of width, clipping
+    # the 26 px-wide download-button chrome.
+    cols = st.columns([0.55, 0.6, 2.4, 1.8, 1.8, 1.6, 1.4, 0.7, 0.6])
 
     with cols[0]:
         st.html(

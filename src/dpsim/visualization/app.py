@@ -155,23 +155,26 @@ st.markdown(
         background-color: var(--dps-accent-hover) !important;
         border-color: var(--dps-accent-hover) !important;
     }
-    /* v0.4.19 (B2): top-bar download buttons (Manual + Appendix J)
-     * render as compact icon-only squares. The keys ``_dpsim_manual_icon``
-     * and ``_dpsim_appendix_j_icon`` let us scope CSS to just these two
-     * without touching the wider download-button family. */
-    [data-testid="stDownloadButton"]:has(button[aria-label*="Manual"]) button,
-    [data-testid="stDownloadButton"]:has(button[aria-label*="Appendix"]) button,
-    [data-testid="stDownloadButton"][data-testid*="manual_icon"] button,
-    [data-testid="stDownloadButton"][data-testid*="appendix_j_icon"] button {
+    /* v0.4.19 (B2/B6): top-bar download buttons (Manual + Appendix J)
+     * render as compact icon-only squares. The previous ``aria-label``
+     * and ``data-testid``-keyed selectors didn't match because
+     * ``st.download_button`` exposes neither (the ``key`` arg is for
+     * Streamlit-internal state, not the DOM). Scope to ``stMain`` so
+     * the rule only hits top-bar download buttons (the run rail and
+     * other content panes don't use download_button). */
+    [data-testid="stMain"] [data-testid="stDownloadButton"] button {
         padding: 0 !important;
         height: 26px !important;
-        min-width: 0 !important;
-        width: 26px !important;
-        font-size: 13px !important;
+        min-width: 26px !important;
+        font-size: 14px !important;
+        line-height: 1 !important;
     }
     /* Streamlit emits download_button as a stack with extra top-margin
      * — neutralise it so the icon row aligns with the DARK/LIGHT pill. */
-    [data-testid="stDownloadButton"] { margin-top: 0 !important; }
+    [data-testid="stMain"] [data-testid="stDownloadButton"] {
+        margin-top: 0 !important;
+        height: 26px !important;
+    }
 
     /* v0.4.2: sticky right rail. Tag the second top-level horizontal
      * column with a sticky position. Streamlit doesn't expose a class
