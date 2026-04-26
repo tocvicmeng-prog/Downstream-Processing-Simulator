@@ -55,6 +55,25 @@ _TIER_COLOR: Final[dict[str, str]] = {
     "qualitative_trend": "var(--dps-orange-500)",
     "unsupported": "var(--dps-red-600)",
 }
+# Rank used by the Direction-A Ladder progress-bar fill: VAL=5,
+# CAL=4, SEMI=3, QUAL=2, UNS=1 (mirrors the standalone TIERS table).
+_TIER_RANK: Final[dict[str, int]] = {
+    "validated_quantitative": 5,
+    "calibrated_local": 4,
+    "semi_quantitative": 3,
+    "qualitative_trend": 2,
+    "unsupported": 1,
+}
+
+
+def tier_rank(tier: "ModelEvidenceTier | str") -> int:
+    """Return the 1..5 progress-bar rank for an evidence tier."""
+    return _TIER_RANK.get(_tier_value(tier), 1)
+
+
+def tier_color(tier: "ModelEvidenceTier | str") -> str:
+    """Return the CSS colour token for an evidence tier."""
+    return _TIER_COLOR.get(_tier_value(tier), "var(--dps-text-muted)")
 
 # ── Stage-node status registry ────────────────────────────────────────
 #
@@ -725,18 +744,26 @@ class StageSpec:
     evidence: ModelEvidenceTier | str | None = None
 
 
-def pipeline_spine(stages: Iterable[StageSpec], *, active_id: str) -> str:
+def pipeline_spine(
+    stages: Iterable[StageSpec],
+    *,
+    active_id: str,
+    nav_query_key: str = "dpsim_stage",
+) -> str:
     """Compose a horizontal pipeline spine from a list of ``StageSpec``.
 
-    Renders N ``stage_node`` cells with ``→`` mono separators between
-    them, matching the canonical Direction-A reference layout. Click
-    handling is the caller's responsibility (typically a row of
-    ``st.button`` overlaid via column layout, with this helper rendering
-    the visual chrome behind them).
+    v0.4.19 (A1): each stage cell is wrapped in an ``<a>`` anchor that
+    sets ``?{nav_query_key}={stage_id}`` so a click navigates without
+    needing a parallel ``st.button`` overlay row. The caller reads
+    ``st.query_params[nav_query_key]`` once per rerun and dispatches
+    to ``set_active_stage`` (then deletes the param so the URL stays
+    clean). This collapses the spine from two visual rows (chrome +
+    click overlay) to one, matching the canonical reference exactly.
 
     Args:
         stages: Ordered list of ``StageSpec``.
         active_id: ``id`` of the stage to highlight as active.
+        nav_query_key: Query-param name that anchor clicks set.
     """
     cells: list[str] = []
     items = list(stages)
@@ -750,7 +777,17 @@ def pipeline_spine(stages: Iterable[StageSpec], *, active_id: str) -> str:
             evidence=s.evidence,
             complete=s.status == "valid",
         )
-        cells.append(node)
+        # Wrap the stage_node in a same-origin anchor so a click sets
+        # the routing query-param. ``target="_top"`` avoids breaking
+        # out of any wrapping iframe (defensive — Streamlit doesn't
+        # currently iframe st.html output, but cheap insurance).
+        cells.append(
+            f'<a href="?{nav_query_key}={_esc(s.id)}" '
+            'class="dps-spine-link" target="_self" '
+            'style="text-decoration:none;flex:1 1 0;min-width:0;'
+            'display:flex;color:inherit;">'
+            f"{node}</a>"
+        )
         if i < len(items) - 1:
             # Mono "→" separator between stage nodes — canonical pattern.
             cells.append(

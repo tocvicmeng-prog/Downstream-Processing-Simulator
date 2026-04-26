@@ -184,19 +184,47 @@ def render_family_selector(*, key: str = "m1v9_polymer_family") -> FamilyContext
     enums = [row[1] for row in rows]
     helps = [row[2] for row in rows]
 
-    # v0.4.5: polymer-family selector migrated to labeled_widget.
+    # v0.4.19 (A4): family selector migrated from horizontal radio
+    # grid to compact selectbox dropdown — matches the standalone
+    # FamilyDropdown component (single-row select that expands a
+    # classified list). The previous radio took ~3-4 rows for 21
+    # families and pushed Hardware off-screen; this collapses it to
+    # a single row and surfaces the family classification inline.
     from dpsim.visualization.help import get_help, labeled_widget
+
+    def _classify(fam: PolymerFamily) -> str:
+        """Return the chemistry-class label shown beside each option."""
+        v = fam.value
+        if v in ("alginate", "pectin", "gellan", "kappa_carrageenan",
+                 "alginate_chitosan", "pectin_chitosan",
+                 "gellan_alginate"):
+            return "Ionotropic"
+        if v == "cellulose":
+            return "Phase separation"
+        if v == "plga":
+            return "Solvent evap"
+        if v in ("amylose", "chitin"):
+            return "Material-as-ligand"
+        if v in ("agarose_dextran",):
+            return "Core-shell composite"
+        if v in ("pullulan", "pullulan_dextran", "starch"):
+            return "Neutral α-glucan"
+        if v == "hyaluronate":
+            return "Polyelectrolyte"
+        return "Thermal + covalent"
 
     sel_name = labeled_widget(
         "Polymer family",
         help=get_help("m1.family"),
-        widget=lambda: st.radio(
+        widget=lambda: st.selectbox(
             "Polymer family",
             display_names,
             index=0,
-            horizontal=True,
             key=key,
             label_visibility="collapsed",
+            format_func=lambda name: (
+                f"{name}  ·  {_classify(enums[display_names.index(name)])}"
+            ),
         ),
     )
     idx = display_names.index(sel_name)

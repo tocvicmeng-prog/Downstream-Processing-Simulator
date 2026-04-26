@@ -125,21 +125,45 @@ def load_css() -> str:
     return CSS_PATH.read_text(encoding="utf-8")
 
 
-def inject_global_css() -> None:
-    """Inject ``tokens.css`` as a single ``<style>`` block.
+_LIGHT_OVERRIDES_CSS: Final[str] = """
+:root {
+    --dps-bg: #FAFBFC;
+    --dps-surface: #FFFFFF;
+    --dps-surface-2: var(--dps-slate-50);
+    --dps-surface-3: var(--dps-slate-100);
+    --dps-border: rgba(148, 163, 184, 0.35);
+    --dps-border-strong: rgba(100, 116, 139, 0.45);
+    --dps-text: var(--dps-slate-900);
+    --dps-text-muted: var(--dps-slate-500);
+    --dps-text-dim: var(--dps-slate-400);
+    --dps-accent: var(--dps-teal-500);
+    --dps-accent-hover: var(--dps-teal-600);
+    --dps-accent-soft: rgba(20, 184, 166, 0.12);
+}
+"""
+
+
+def inject_global_css(*, theme: str = "dark") -> None:
+    """Inject ``tokens.css`` as ``<style>`` blocks with theme overrides.
 
     v0.4.18 (P10): switched from ``st.html`` to
     ``st.markdown(unsafe_allow_html=True)``. Streamlit 1.55 sanitises
-    ``<style>`` tags out of ``st.html`` output (verified empirically:
-    the injected ``<style>`` element is dropped before reaching the
-    DOM, leaving the page unstyled). Markdown's ``unsafe_allow_html``
-    path preserves ``<style>`` blocks intact.
+    ``<style>`` tags out of ``st.html`` output. Markdown's
+    ``unsafe_allow_html`` path preserves ``<style>`` blocks.
 
-    Markdown does process the inner text for italics/bold, but Python-
-    Markdown and Streamlit's renderer skip that inside raw ``<style>``
-    blocks, so ``*=`` attribute selectors survive. The single such
-    selector in tokens.css (``div[style*="border: 1px solid"]``) has
-    been verified to round-trip correctly.
+    v0.4.19 (A2): theme-aware. ``theme="light"`` appends a second
+    ``<style>`` block that re-emits the light-theme variables at
+    ``:root`` level. This server-side flip replaces the previous JS-
+    based ``document.documentElement.classList`` toggle, which was
+    silently dropped by Streamlit 1.55's ``<script>`` sanitiser.
+
+    Args:
+        theme: Either ``"dark"`` (default, no overrides) or ``"light"``.
     """
     css = load_css()
     st.markdown(f"<style>\n{css}\n</style>", unsafe_allow_html=True)
+    if theme == "light":
+        st.markdown(
+            f"<style>\n{_LIGHT_OVERRIDES_CSS}\n</style>",
+            unsafe_allow_html=True,
+        )

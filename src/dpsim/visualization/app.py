@@ -67,10 +67,7 @@ from dpsim.visualization.ui_workflow import (
     render_target_product_profile_editor,
 )
 from dpsim.visualization.tabs import render_tab_m1, render_tab_m2, render_tab_m3
-from dpsim.visualization.panels import (
-    render_uncertainty_panel,
-    render_lifetime_panel,
-)
+from dpsim.visualization.panels import render_lifetime_panel
 
 # ─── Page Config ──────────────────────────────────────────────────────────
 
@@ -81,12 +78,22 @@ st.set_page_config(
 )
 
 # v0.4.0: design tokens from `design/tokens.css` are injected here as a
-# single global stylesheet. The legacy 200-line `--dps-*` CSS block that
-# lived inline in this file (v0.3.x) has been deleted and replaced by
-# this single call — the same DESIGN.md tokens, sourced from one place,
-# loaded via `st.html` (NOT `st.markdown(unsafe_allow_html=True)` — the
-# markdown parser eats `*` characters in CSS attribute selectors).
-inject_global_css()
+# single global stylesheet.
+# v0.4.19 (A2/A3): consume the navigation query params BEFORE injecting
+# CSS so theme/stage/view changes take effect on the same rerun. The
+# alternative (consume during widget render) would emit dark CSS first
+# and the new theme would only apply on the second click.
+from dpsim.visualization.shell.shell import get_theme as _get_theme_for_css
+# Theme query: ?dpsim_theme=light flips to light theme.
+_theme_q = st.query_params.get("dpsim_theme")
+if _theme_q in ("dark", "light"):
+    from dpsim.visualization.shell.shell import set_theme as _set_theme_top
+    _set_theme_top(_theme_q)  # type: ignore[arg-type]
+    try:
+        del st.query_params["dpsim_theme"]
+    except KeyError:
+        pass
+inject_global_css(theme=_get_theme_for_css())
 
 # Streamlit shell-specific overrides that DON'T belong in the shared
 # token file: hide Streamlit's auto-page nav, hide the Deploy button,
@@ -148,8 +155,23 @@ st.markdown(
         background-color: var(--dps-accent-hover) !important;
         border-color: var(--dps-accent-hover) !important;
     }
-    /* Margin tweak so the manual PDF button doesn't pin under the toolbar. */
-    [data-testid="stDownloadButton"] { margin-top: 0.5rem; }
+    /* v0.4.19 (B2): top-bar download buttons (Manual + Appendix J)
+     * render as compact icon-only squares. The keys ``_dpsim_manual_icon``
+     * and ``_dpsim_appendix_j_icon`` let us scope CSS to just these two
+     * without touching the wider download-button family. */
+    [data-testid="stDownloadButton"]:has(button[aria-label*="Manual"]) button,
+    [data-testid="stDownloadButton"]:has(button[aria-label*="Appendix"]) button,
+    [data-testid="stDownloadButton"][data-testid*="manual_icon"] button,
+    [data-testid="stDownloadButton"][data-testid*="appendix_j_icon"] button {
+        padding: 0 !important;
+        height: 26px !important;
+        min-width: 0 !important;
+        width: 26px !important;
+        font-size: 13px !important;
+    }
+    /* Streamlit emits download_button as a stack with extra top-margin
+     * — neutralise it so the icon row aligns with the DARK/LIGHT pill. */
+    [data-testid="stDownloadButton"] { margin-top: 0 !important; }
 
     /* v0.4.2: sticky right rail. Tag the second top-level horizontal
      * column with a sticky position. Streamlit doesn't expose a class
@@ -166,17 +188,21 @@ st.markdown(
         overflow-y: auto;
     }
 
-    /* Stage spine: tighten the button row so it visually merges with the
-     * StageNode chrome above it. */
-    .dps-spine-marker + div [data-testid="stHorizontalBlock"] {
-        gap: 4px !important;
-        margin-top: -8px;
-        padding: 0 16px 8px;
+    /* v0.4.19 (A1): the previous .dps-spine-marker rules overlaid an
+     * invisible click row on top of the visual chrome. The spine is
+     * now a single anchor-link row (chrome.pipeline_spine emits
+     * <a href="?dpsim_stage=...">), so no overlay is needed. */
+    .dps-spine-link { cursor: pointer; }
+    .dps-spine-link:hover > div {
+        background: var(--dps-surface-2) !important;
     }
-    .dps-spine-marker + div [data-testid="stHorizontalBlock"] button {
-        opacity: 0.0001;     /* invisible but click-receiving overlay */
-        height: 38px;
-        margin-top: -42px;
+
+    /* v0.4.19 (A3): direction-switch hover affordance only.
+     * The pill itself is rendered as a single HTML <div> with anchor
+     * links by render_direction_switch — no Streamlit columns, so
+     * no :has cascading-up issue. */
+    .dps-dir-switch a:hover {
+        background: var(--dps-surface-3) !important;
     }
 
     /* v0.4.6: triptych column-width animation. Streamlit columns are
@@ -207,10 +233,14 @@ st.markdown(
 
 
 def _render_manual_pdf_buttons() -> None:
-    """Render the Manual + Appendix-J PDF download buttons.
+    """Render the Manual + Appendix-J PDF download icons.
 
-    Called from the new shell's top bar. The auto-build path falls
-    back to a caption if the build script is unavailable.
+    v0.4.19 (B2): rendered as a horizontal pair of icon-only download
+    buttons (24×24 px each) so they sit on the same top-bar row as the
+    UI A|B switch and the DARK/LIGHT toggle, matching the canonical
+    Direction-A reference's compact top bar. The previous version used
+    full-width text-labelled buttons that stacked vertically and
+    pushed the rail down at standard widescreen widths.
     """
     _um_dir = _root / "docs" / "user_manual"
     _manual_pdf = _um_dir / "polysaccharide_microsphere_simulator_first_edition.pdf"
@@ -225,26 +255,31 @@ def _render_manual_pdf_buttons() -> None:
             except Exception as _build_ex:  # pragma: no cover — defensive
                 logger.warning("PDF auto-build failed: %s", _build_ex)
 
-    if _manual_pdf.exists():
-        with open(_manual_pdf, "rb") as _f:
-            st.download_button(
-                label="\U0001F4D8  Manual",
-                data=_f.read(),
-                file_name="dpsim_First_Edition.pdf",
-                mime="application/pdf",
-                help="DPSim First-Edition instruction manual.",
-                width="stretch",
-            )
-    if _appendix_j_pdf.exists():
-        with open(_appendix_j_pdf, "rb") as _f:
-            st.download_button(
-                label="\U0001F9EA  Appendix J",
-                data=_f.read(),
-                file_name="dpsim_Appendix_J_Functionalization.pdf",
-                mime="application/pdf",
-                help="Appendix J — Functionalisation Wet-Lab Protocols (44 reagents).",
-                width="stretch",
-            )
+    icon_cols = st.columns([1, 1])
+    with icon_cols[0]:
+        if _manual_pdf.exists():
+            with open(_manual_pdf, "rb") as _f:
+                st.download_button(
+                    label="\U0001F4D8",
+                    data=_f.read(),
+                    file_name="dpsim_First_Edition.pdf",
+                    mime="application/pdf",
+                    help="DPSim First-Edition instruction manual.",
+                    key="_dpsim_manual_icon",
+                    width="stretch",
+                )
+    with icon_cols[1]:
+        if _appendix_j_pdf.exists():
+            with open(_appendix_j_pdf, "rb") as _f:
+                st.download_button(
+                    label="\U0001F9EA",
+                    data=_f.read(),
+                    file_name="dpsim_Appendix_J_Functionalization.pdf",
+                    mime="application/pdf",
+                    help="Appendix J — Functionalisation Wet-Lab Protocols (44 reagents).",
+                    key="_dpsim_appendix_j_icon",
+                    width="stretch",
+                )
 
 
 # ─── Session state init ───────────────────────────────────────────────────
@@ -292,8 +327,12 @@ with st.sidebar:
     st.divider()
     st.caption("ANALYSIS TOOLS")
     st.caption("Calibration data is loaded and reviewed in workflow step 7.")
-    with st.popover("\U0001F4CA  Uncertainty (MC sampling)", width="stretch"):
-        _unc_contract = render_uncertainty_panel()
+    # v0.4.19 (B1): Uncertainty MC was promoted to a primary M3 card in
+    # v0.4.18 P7 (see tab_m3.py:222). Keeping the sidebar popover too
+    # caused a StreamlitDuplicateElementKey crash on M3 (every widget
+    # in render_uncertainty_panel uses fixed keys), which silently
+    # killed the right rail's render — the user reported this as
+    # "rail vanishes on M3". Removed here.
     with st.popover("⏳  Resin lifetime projection", width="stretch"):
         _lt_proj = render_lifetime_panel()
 

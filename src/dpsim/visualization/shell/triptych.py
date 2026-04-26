@@ -68,30 +68,76 @@ def set_triptych_focus(focus: TriptychFocus) -> None:
     st.session_state[TRIPTYCH_FOCUS_KEY] = focus
 
 
+DIRECTION_NAV_QUERY_KEY: Final[str] = "dpsim_direction"
+
+
+def consume_direction_query() -> None:
+    """Translate ``?dpsim_direction=…`` (set by switch anchor clicks)
+    into a session-state direction update, then delete the param.
+
+    Mirrors the spine's ``_consume_stage_nav_query`` pattern (A1).
+    Called once per rerun from the shell's top-of-render code path.
+    """
+    raw = st.query_params.get(DIRECTION_NAV_QUERY_KEY)
+    if not raw:
+        return
+    target = raw if isinstance(raw, str) else (raw[0] if raw else "")
+    if target in ("a", "b"):
+        set_direction(target)  # type: ignore[arg-type]
+    try:
+        del st.query_params[DIRECTION_NAV_QUERY_KEY]
+    except KeyError:
+        pass
+
+
 def render_direction_switch() -> None:
-    """Render the A/B segmented switch for the top bar."""
+    """Render the ``UI · A | B`` pill-style segmented switch.
+
+    v0.4.19 (A3): single-block HTML anchor-link rendering, matching
+    the canonical Direction-A ``DirectionSwitch`` component byte-for-
+    byte (26 px pill, mono ``UI`` prefix, A/B as filled/ghost
+    buttons). The previous ``st.columns + st.button`` approach
+    cascaded its scoped CSS up through ``:has`` to the outer top-bar
+    stHorizontalBlock, squashing the whole top bar to 120 px wide
+    (verified in 1920×1200 viewport). Anchor-links work the same way
+    the spine works (see ``shell.shell._consume_stage_nav_query``).
+    """
+    consume_direction_query()
     direction = get_direction()
-    pair = st.columns([1, 1])
-    with pair[0]:
-        if st.button(
-            "A",
-            key="_dpsim_dir_a",
-            type="primary" if direction == "a" else "secondary",
-            use_container_width=True,
-            help="Direction A — Pipeline-as-spine",
-        ):
-            set_direction("a")
-            st.rerun()
-    with pair[1]:
-        if st.button(
-            "B",
-            key="_dpsim_dir_b",
-            type="primary" if direction == "b" else "secondary",
-            use_container_width=True,
-            help="Direction B — Triptych workbench",
-        ):
-            set_direction("b")
-            st.rerun()
+    a_active = direction == "a"
+    b_active = direction == "b"
+
+    def _btn(side: str, active: bool, title: str) -> str:
+        bg = "var(--dps-accent)" if active else "transparent"
+        fg = "var(--dps-slate-950)" if active else "var(--dps-text-muted)"
+        return (
+            f'<a href="?{DIRECTION_NAV_QUERY_KEY}={side}" '
+            f'title="{title}" target="_self" '
+            f'style="display:inline-flex;align-items:center;'
+            f'justify-content:center;width:24px;height:20px;'
+            f'border-radius:3px;background:{bg};color:{fg};'
+            f'font-family:var(--dps-font-mono);font-size:11px;'
+            f'font-weight:600;letter-spacing:0.04em;'
+            f'text-decoration:none;cursor:pointer;'
+            f'transition:background-color 120ms ease-out, '
+            f'color 120ms ease-out;">'
+            f"{side.upper()}</a>"
+        )
+
+    st.markdown(
+        '<div class="dps-dir-switch" style="display:inline-flex;'
+        "align-items:center;gap:0;padding:2px;height:26px;"
+        "background:var(--dps-surface-2);"
+        "border:1px solid var(--dps-border);border-radius:4px;\">"
+        '<span class="dps-mono dps-dir-switch-label" style="'
+        "font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;"
+        "color:var(--dps-text-dim);padding:0 8px 0 6px;line-height:1;\">"
+        "UI</span>"
+        + _btn("a", a_active, "Direction A — Pipeline-as-spine")
+        + _btn("b", b_active, "Direction B — Triptych workbench")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _summary_chip(k: str, v: str, *, warn: bool = False) -> str:

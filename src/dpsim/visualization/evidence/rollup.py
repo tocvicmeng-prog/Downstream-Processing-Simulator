@@ -120,29 +120,32 @@ def render_evidence_summary(stages: Iterable[StageEvidence]) -> None:
 
 
 def _format_stage_row(stage: StageEvidence, lifecycle_min: str) -> str:
-    """One stage row in the per-stage breakdown.
+    """One stage row in the Ladder-style per-stage breakdown.
 
-    The row dims slightly when the stage's tier is *better* than the
-    lifecycle min (i.e. it is not the bottleneck) so the eye lands on
-    the rate-limiting stage(s).
+    v0.4.19 (A5): redesigned to match the canonical Direction-A
+    ``Ladder`` component — three-column grid of ``32px label │ 1fr
+    progress-bar │ auto badge``. The progress-bar fill width is the
+    tier rank as a fraction of 5 (VAL=5/5, CAL=4/5, SEMI=3/5, QUAL=
+    2/5, UNS=1/5), filled with the tier-specific colour. Bottleneck
+    rows render with full-strength label colour; rows where the
+    stage's tier is better than the lifecycle min dim slightly so
+    the eye lands on the rate-limiting stage.
     """
-    is_bottleneck = stage.tier == lifecycle_min
+    del lifecycle_min  # no longer drives dimming — every row uses tier color
+    bar_color = chrome.tier_color(stage.tier)
+    bar_pct = chrome.tier_rank(stage.tier) * 100 // 5
     badge = chrome.evidence_badge(stage.tier, compact=True)
-    label_color = (
-        "var(--dps-text)" if is_bottleneck else "var(--dps-text-muted)"
-    )
-    note_html = (
-        f'<span style="font-size:10.5px;color:var(--dps-text-dim);'
-        f'font-family:var(--dps-font-mono);">{stage.note}</span>'
-        if stage.note
-        else ""
-    )
+    short_label = stage.label.split(" — ")[0] if " — " in stage.label else stage.label
     return (
-        f'<div style="display:flex;align-items:center;gap:6px;'
-        f'min-height:18px;">'
-        f'<span style="font-size:11.5px;color:{label_color};'
-        f'min-width:130px;">{stage.label}</span>'
-        f'{badge}{note_html}</div>'
+        '<div style="display:grid;grid-template-columns:36px 1fr auto;'
+        'gap:8px;align-items:center;">'
+        f'<span class="dps-mono" style="font-size:11px;'
+        f'color:var(--dps-text-dim);">{short_label}</span>'
+        f'<div style="height:4px;border-radius:4px;'
+        f'background:var(--dps-surface-3);overflow:hidden;">'
+        f'<div style="height:100%;width:{bar_pct}%;background:{bar_color};">'
+        f'</div></div>'
+        f'{badge}</div>'
     )
 
 

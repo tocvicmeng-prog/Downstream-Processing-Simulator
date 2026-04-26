@@ -310,22 +310,39 @@ def render_run_rail(
             + "</div>"
         )
 
-    # ── Card 3: Evidence roll-up (skipped when no stages) ────────────
+    # ── Card 3: Evidence roll-up ─────────────────────────────────────
+    # v0.4.19 (A5): always render — pre-run shows a placeholder ladder
+    # with M1/M2/M3 at "unsupported" tier so the rail layout matches the
+    # canonical Direction-A reference at every state. The previous
+    # "skip when empty" branch made the rail collapse vertically before
+    # any run, which the standalone reference does not do.
+    from dpsim.visualization.evidence.rollup import aggregate_min_tier
+    from dpsim.visualization.evidence import StageEvidence as _StageEv
     stages_list = list(stages)
     if stages_list:
-        from dpsim.visualization.evidence.rollup import aggregate_min_tier
-
         min_tier = aggregate_min_tier(stages_list)
-        tier_short = min_tier.upper().split("_")[0]  # e.g. "SEMI"
-        with st.container(border=True):
-            st.html(
-                chrome.card_header_strip(
-                    eyebrow_text="Evidence roll-up",
-                    title=f"Lifecycle min: {tier_short}",
-                    right_html=chrome.evidence_badge(min_tier, compact=True),
-                )
+        ladder_stages = stages_list
+    else:
+        min_tier = "unsupported"
+        ladder_stages = [
+            _StageEv(stage_id="m1", label="M1", tier="unsupported"),
+            _StageEv(stage_id="m2", label="M2", tier="unsupported"),
+            _StageEv(stage_id="m3", label="M3", tier="unsupported"),
+        ]
+    tier_short = min_tier.upper().split("_")[0]
+    with st.container(border=True):
+        st.html(
+            chrome.card_header_strip(
+                eyebrow_text="Evidence roll-up",
+                title=(
+                    f"Lifecycle min: {tier_short}"
+                    if stages_list
+                    else "No run yet"
+                ),
+                right_html=chrome.evidence_badge(min_tier, compact=True),
             )
-            render_evidence_summary(stages_list)
+        )
+        render_evidence_summary(ladder_stages)
 
     # ── Card 4: Pending edits + run/stop CTA ─────────────────────────
     with st.container(border=True):

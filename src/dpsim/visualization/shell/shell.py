@@ -61,42 +61,62 @@ def set_theme(theme: ThemeMode) -> None:
     st.session_state[THEME_KEY] = theme
 
 
-def _render_theme_toggle() -> None:
-    """Render the dark/light segmented switch and apply the body class.
+_THEME_QUERY_KEY: Final[str] = "dpsim_theme"
 
-    The segmented switch is two ``st.button`` calls in a tight column
-    pair so a click flips the session-state theme. The class flip on
-    ``document.documentElement`` is performed via an injected ``<script>``
-    each render — Streamlit's iframe boundary forces the JS to re-run on
-    every page render, but the operation is idempotent.
+
+def _consume_theme_query() -> None:
+    """Translate ``?dpsim_theme=…`` (set by toggle anchor clicks) into
+    a session-state theme update, then delete the query param."""
+    raw = st.query_params.get(_THEME_QUERY_KEY)
+    if not raw:
+        return
+    target = raw if isinstance(raw, str) else (raw[0] if raw else "")
+    if target in ("dark", "light"):
+        set_theme(target)  # type: ignore[arg-type]
+    try:
+        del st.query_params[_THEME_QUERY_KEY]
+    except KeyError:
+        pass
+
+
+def _render_theme_toggle() -> None:
+    """Render the dark/light segmented switch as an anchor pill.
+
+    v0.4.19 (A3 follow-on): single HTML block. The previous
+    ``st.button``-in-2-columns approach got squashed at typical
+    widescreen widths (DARK / LIGHT wrapped to one letter per line).
+
+    A click sets ``?dpsim_theme=light`` (or ``=dark``);
+    ``_consume_theme_query`` updates ``THEME_KEY`` on the next rerun
+    so ``inject_global_css`` re-emits the appropriate ``:root`` vars.
     """
+    _consume_theme_query()
     theme = get_theme()
-    pair = st.columns([1, 1])
-    with pair[0]:
-        if st.button(
-            "DARK",
-            key="_dpsim_theme_dark",
-            type="primary" if theme == "dark" else "secondary",
-            use_container_width=True,
-        ):
-            set_theme("dark")
-            st.rerun()
-    with pair[1]:
-        if st.button(
-            "LIGHT",
-            key="_dpsim_theme_light",
-            type="primary" if theme == "light" else "secondary",
-            use_container_width=True,
-        ):
-            set_theme("light")
-            st.rerun()
-    # JS: apply / remove the .dps-light class on the document element so
-    # the iframe-side tokens.css responds. Idempotent on every render.
-    add_or_remove = "add" if theme == "light" else "remove"
-    st.html(
-        f"<script>"
-        f"document.documentElement.classList.{add_or_remove}('dps-light');"
-        f"</script>"
+
+    def _seg(value: str, label: str) -> str:
+        active = value == theme
+        bg = "var(--dps-accent)" if active else "transparent"
+        fg = "var(--dps-slate-950)" if active else "var(--dps-text-muted)"
+        return (
+            f'<a href="?{_THEME_QUERY_KEY}={value}" target="_self" '
+            f'style="display:inline-flex;align-items:center;'
+            f'justify-content:center;padding:0 10px;height:20px;gap:5px;'
+            f'border-radius:3px;background:{bg};color:{fg};'
+            f'font-family:var(--dps-font-mono);font-size:10.5px;'
+            f'font-weight:600;text-decoration:none;cursor:pointer;'
+            f'letter-spacing:0.04em;transition:background-color 120ms;">'
+            f"{label}</a>"
+        )
+
+    st.markdown(
+        '<div class="dps-theme-toggle" style="display:inline-flex;'
+        "align-items:center;gap:0;padding:2px;height:26px;"
+        "background:var(--dps-surface-2);"
+        "border:1px solid var(--dps-border);border-radius:4px;\">"
+        + _seg("dark", "DARK")
+        + _seg("light", "LIGHT")
+        + "</div>",
+        unsafe_allow_html=True,
     )
 
 
@@ -135,9 +155,11 @@ def render_top_bar(
     # v0.4.16: top-bar restructured to match the canonical Direction-A
     # reference. Adds: inline DirectionSwitch, vertical-divider rules,
     # workspace/ breadcrumb prefix, decorative search input, and a
-    # run-history ghost button. Column ratios chosen so each cell has
-    # enough breathing room at typical widescreen widths.
-    cols = st.columns([0.55, 0.6, 2.4, 1.8, 1.8, 1.6, 1.4, 1.2])
+    # run-history ghost button.
+    # v0.4.19 (B2): split cols[7] into theme-toggle (0.9) + manual-icons
+    # (0.4) so Manual + Appendix J render as a horizontal icon pair to
+    # the right of the DARK/LIGHT pill instead of stacking below it.
+    cols = st.columns([0.55, 0.6, 2.4, 1.8, 1.8, 1.6, 1.4, 0.9, 0.4])
 
     with cols[0]:
         st.html(
@@ -219,9 +241,14 @@ def render_top_bar(
         _render_top_bar_view_segmented()
 
     with cols[7]:
-        # Theme toggle + manual stacked into a tight 2-row cell so the
-        # right edge stays compact at common widescreen widths.
+        # v0.4.19 (B2): theme toggle now lives alone in cols[7]; the
+        # manual-icons render in cols[8] to the right.
         _render_theme_toggle()
+
+    with cols[8]:
+        # v0.4.19 (B2): icon-only Manual + Appendix-J download buttons
+        # in their own column so they share the same row as the
+        # DARK/LIGHT pill (matches the canonical Direction-A reference).
         if manual_pdf_button is not None:
             manual_pdf_button()
 
@@ -268,58 +295,121 @@ def _render_run_history_ghost_button() -> None:
 
 
 _VIEW_MODE_KEY: Final[str] = "_dpsim_topbar_view_mode"
+_VIEW_MODE_QUERY_KEY: Final[str] = "dpsim_view"
+
+
+def _consume_view_mode_query() -> None:
+    """Translate ``?dpsim_view=…`` into a session-state view-mode update."""
+    raw = st.query_params.get(_VIEW_MODE_QUERY_KEY)
+    if not raw:
+        return
+    target = raw if isinstance(raw, str) else (raw[0] if raw else "")
+    if target in ("diff", "evidence", "history"):
+        st.session_state[_VIEW_MODE_KEY] = target
+    try:
+        del st.query_params[_VIEW_MODE_QUERY_KEY]
+    except KeyError:
+        pass
 
 
 def _render_top_bar_view_segmented() -> None:
-    """Render the Diff / Evidence / History segmented control.
+    """Render the Diff / Evidence / History segmented as an anchor pill.
+
+    v0.4.19 (A3 follow-on): single HTML block with three anchor links.
+    Replaces the previous 3-sub-column ``st.button`` layout, which got
+    squashed at typical widescreen widths (each label wrapped to one
+    letter per line inside its narrow sub-column).
 
     Drives ``st.session_state[_VIEW_MODE_KEY]`` ∈ {``diff``, ``evidence``,
-    ``history``}; downstream rail / panel render functions can read it to
-    switch their primary content. Default: ``diff`` (the recipe-edit
-    cockpit view).
+    ``history``}; downstream rail / panel render functions read it to
+    switch their primary content. Default: ``diff``.
     """
+    _consume_view_mode_query()
     current = st.session_state.get(_VIEW_MODE_KEY, "diff")
-    cols = st.columns(3)
     options = (("diff", "Diff"), ("evidence", "Evidence"), ("history", "History"))
-    for i, (key, label) in enumerate(options):
-        with cols[i]:
-            if st.button(
-                label,
-                key=f"_dpsim_topbar_view_{key}",
-                type="primary" if current == key else "secondary",
-                use_container_width=True,
-            ):
-                st.session_state[_VIEW_MODE_KEY] = key
-                st.rerun()
+
+    def _seg(key: str, label: str) -> str:
+        active = key == current
+        bg = "var(--dps-accent)" if active else "transparent"
+        fg = "var(--dps-slate-950)" if active else "var(--dps-text-muted)"
+        return (
+            f'<a href="?{_VIEW_MODE_QUERY_KEY}={key}" target="_self" '
+            f'style="display:inline-flex;align-items:center;'
+            f'justify-content:center;padding:0 10px;height:20px;'
+            f'border-radius:3px;background:{bg};color:{fg};'
+            f'font-family:var(--dps-font-sans);font-size:11px;'
+            f'font-weight:600;text-decoration:none;cursor:pointer;'
+            f'letter-spacing:0.02em;transition:background-color 120ms;">'
+            f"{label}</a>"
+        )
+
+    st.markdown(
+        '<div class="dps-view-seg" style="display:inline-flex;'
+        "align-items:center;gap:0;padding:2px;height:26px;"
+        "background:var(--dps-surface-2);"
+        "border:1px solid var(--dps-border);border-radius:4px;\">"
+        + "".join(_seg(k, lbl) for k, lbl in options)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+_STAGE_NAV_QUERY_KEY: Final[str] = "dpsim_stage"
+
+
+def _consume_stage_nav_query() -> None:
+    """Translate ``?dpsim_stage=…`` (set by spine anchor clicks) into
+    a session-state active-stage update, then delete the query param so
+    the URL stays clean for subsequent navigation.
+
+    v0.4.19 (A1): replaces the previous ``st.button``-overlay click
+    row. The spine now renders as a single ``<nav>`` of anchor links
+    that set this query param; we read it here at the top of each
+    rerun and dispatch.
+    """
+    valid_ids = {sid for sid, _ in STAGE_ORDER}
+    raw = st.query_params.get(_STAGE_NAV_QUERY_KEY)
+    if not raw:
+        return
+    target = raw if isinstance(raw, str) else (raw[0] if raw else "")
+    if target in valid_ids:
+        set_active_stage(target)  # type: ignore[arg-type]
+    # Remove the param so reloads / shares don't pin the user to that
+    # stage; session state is the source of truth from here on.
+    try:
+        del st.query_params[_STAGE_NAV_QUERY_KEY]
+    except KeyError:
+        pass
 
 
 def render_stage_spine(
     *, status_map: dict[str, str] | None = None,
     evidence_map: dict[str, str] | None = None,
 ) -> StageId:
-    """Render the 7-stage pipeline spine and handle click navigation.
+    """Render the 7-stage pipeline spine.
 
-    Two-pass rendering:
-        1. The visual chrome (``chrome.pipeline_spine``) painted via st.html.
-        2. A row of ``st.button`` for click handling underneath the
-           visual chrome.
+    v0.4.19 (A1): single-pass render. Each stage cell is an anchor
+    link that sets ``?dpsim_stage={id}``; ``_consume_stage_nav_query``
+    (called once at the top of the shell render) reads the param and
+    updates ``ACTIVE_STAGE_KEY``. The previous parallel ``st.button``
+    row is gone — that overlay was fragile (the CSS scoping selector
+    broke against newer Streamlit DOM emissions, leaving a redundant
+    plain-text row visible).
 
     Args:
         status_map: Optional mapping from stage id → status literal
             (``pending`` / ``active`` / ``valid`` / ``warn``). Stages
-            not in the map default to ``pending``. Drives stage-node
-            colouring. ``None`` is equivalent to all-pending (the
-            v0.4.0 behaviour).
+            not in the map default to ``pending``.
         evidence_map: Optional mapping from stage id → evidence-tier
             string. Renders inline compact badges on the spine cells.
 
     Returns:
         The currently active stage id.
     """
+    _consume_stage_nav_query()
     active = get_active_stage()
     status_map = status_map or {}
     evidence_map = evidence_map or {}
-    # Layer 1: visual chrome — derive each stage's status.
     specs = [
         chrome.StageSpec(
             id=sid,
@@ -329,19 +419,12 @@ def render_stage_spine(
         )
         for sid, lbl in STAGE_ORDER
     ]
-    # Anchor marker so app.py's CSS can scope the click-row overlay.
-    st.html('<div class="dps-spine-marker"></div>')
-    st.html(chrome.pipeline_spine(specs, active_id=active))
-
-    # Layer 2: click handlers — minimal-text buttons in a 7-column row.
-    cols = st.columns(len(STAGE_ORDER))
-    for i, (sid, lbl) in enumerate(STAGE_ORDER):
-        with cols[i]:
-            short = lbl.split(" — ")[0] if " — " in lbl else lbl
-            if st.button(short, key=f"_dpsim_stage_btn_{sid}",
-                         use_container_width=True):
-                set_active_stage(sid)  # type: ignore[arg-type]
-                st.rerun()
+    st.markdown(
+        chrome.pipeline_spine(
+            specs, active_id=active, nav_query_key=_STAGE_NAV_QUERY_KEY,
+        ),
+        unsafe_allow_html=True,
+    )
     return active
 
 
