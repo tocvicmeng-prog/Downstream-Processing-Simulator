@@ -67,7 +67,8 @@ from dpsim.visualization.ui_workflow import (
     render_target_product_profile_editor,
 )
 from dpsim.visualization.tabs import render_tab_m1, render_tab_m2, render_tab_m3
-from dpsim.visualization.panels import render_lifetime_panel
+# v0.4.19 (C1): render_lifetime_panel moved from sidebar popover into
+# tab_m3 as a primary M3 card. The import lives in tab_m3.py now.
 
 # ─── Page Config ──────────────────────────────────────────────────────────
 
@@ -330,14 +331,10 @@ with st.sidebar:
     st.divider()
     st.caption("ANALYSIS TOOLS")
     st.caption("Calibration data is loaded and reviewed in workflow step 7.")
-    # v0.4.19 (B1): Uncertainty MC was promoted to a primary M3 card in
-    # v0.4.18 P7 (see tab_m3.py:222). Keeping the sidebar popover too
-    # caused a StreamlitDuplicateElementKey crash on M3 (every widget
-    # in render_uncertainty_panel uses fixed keys), which silently
-    # killed the right rail's render — the user reported this as
-    # "rail vanishes on M3". Removed here.
-    with st.popover("⏳  Resin lifetime projection", width="stretch"):
-        _lt_proj = render_lifetime_panel()
+    # v0.4.19 (B1/C1): Both Uncertainty MC and Resin lifetime projection
+    # have been promoted to primary M3 cards (see tab_m3.py). Keeping
+    # the sidebar popovers caused StreamlitDuplicateElementKey crashes
+    # on M3 since both panels register widgets with fixed keys.
 
 
 # ─── Calibration Protocol Loader ─────────────────────────────────────────

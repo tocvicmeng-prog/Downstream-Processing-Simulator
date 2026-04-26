@@ -12,13 +12,27 @@ import streamlit as st
 from dpsim.lifetime import LifetimeProjection, project_lifetime
 
 
-def render_lifetime_panel() -> LifetimeProjection | None:
+def render_lifetime_panel(*, as_card: bool = False) -> LifetimeProjection | None:
     """Render the lifetime projection panel.
+
+    Args:
+        as_card: When ``False`` (default), wraps the body in an
+            ``st.expander`` \u2014 the legacy sidebar popover layout. When
+            ``True``, skips the expander wrap so the caller can place
+            the panel inside its own ``st.container(border=True)``
+            chrome (used by tab_m3 to surface lifetime as a primary
+            M3 card per the canonical Direction-A reference).
 
     Returns:
         LifetimeProjection if computed, else None.
     """
-    with st.expander("\u23f3 Resin Lifetime Projection", expanded=False):
+    import contextlib as _cl
+    _outer = (
+        _cl.nullcontext()
+        if as_card
+        else st.expander("\u23f3 Resin Lifetime Projection", expanded=False)
+    )
+    with _outer:
         st.caption(
             "Empirical first-order deactivation model: "
             "capacity(n) = initial \u00d7 exp(\u2212k \u00d7 n). "

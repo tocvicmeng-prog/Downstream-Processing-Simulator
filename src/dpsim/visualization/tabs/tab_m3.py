@@ -218,7 +218,10 @@ def render_tab_m3(tab_container) -> None:
         # Direction-A reference. The panel writes _unc_spec /
         # _unc_n_jobs into session state; the M3 Run button below
         # picks them up automatically.
-        from dpsim.visualization.panels import render_uncertainty_panel
+        from dpsim.visualization.panels import (
+            render_lifetime_panel,
+            render_uncertainty_panel,
+        )
         with st.container(border=True):
             st.html(
                 _chrome_top.card_header_strip(
@@ -230,6 +233,24 @@ def render_tab_m3(tab_container) -> None:
                 )
             )
             render_uncertainty_panel(as_card=True)
+
+        # v0.4.19 (C1): Resin lifetime projection — promoted from the
+        # sidebar popover into a primary M3 card matching the MC
+        # uncertainty card pattern. Empirical first-order deactivation
+        # (capacity vs cycle count); user-calibrated k from cycle
+        # studies. Sits next to the MC card so column-method tuning
+        # and lifetime forecasting share one stage.
+        with st.container(border=True):
+            st.html(
+                _chrome_top.card_header_strip(
+                    eyebrow_text="Resin lifetime",
+                    title="Empirical first-order deactivation",
+                    right_html=_chrome_top.chip(
+                        "user-calibrated k", color="var(--dps-text-muted)",
+                    ),
+                )
+            )
+            render_lifetime_panel(as_card=True)
 
         # Mode-specific inputs
         chrom_mode = "Breakthrough"
