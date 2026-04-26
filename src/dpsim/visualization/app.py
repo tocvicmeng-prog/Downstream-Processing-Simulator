@@ -156,6 +156,11 @@ st.markdown(
         background-color: var(--dps-accent-hover) !important;
         border-color: var(--dps-accent-hover) !important;
     }
+    /* v0.4.19 (D2): Scientific Mode segmented pill hover affordance. */
+    .dps-mode-seg a:hover {
+        background: var(--dps-surface-3) !important;
+    }
+
     /* v0.4.19 (B2/B6): top-bar download buttons (Manual + Appendix J)
      * render as compact icon-only squares. The previous ``aria-label``
      * and ``data-testid``-keyed selectors didn't match because
@@ -308,24 +313,107 @@ if "_dpsim_history_autoloaded" not in st.session_state:
         logger.debug("Run-history auto-load skipped: %s", _autoload_exc)
 
 
-# ─── Sidebar (Global Settings + Analysis Tools) ──────────────────────────
+# ─── Scientific Mode (top-bar widget; replaces sidebar radio) ─────────────
+# v0.4.19 (D2): rendered as an anchor-pill segmented control matching
+# the Diff/Evidence/History style — three buttons inside one rounded
+# pill, active button filled with the accent colour. Click sets
+# ``?dpsim_mode={key}``; we consume the param at the top of app.py
+# (before inject_global_css / render_shell) so the new mode flows into
+# ``model_mode_enum`` on the same rerun.
+_SCIENTIFIC_MODE_KEY = "dpsim_scientific_mode"
+_SCIENTIFIC_MODE_QUERY = "dpsim_mode"
+_SCIENTIFIC_MODE_OPTIONS: tuple[tuple[str, str, str], ...] = (
+    ("empirical", "Empirical Engineering", ModelMode.EMPIRICAL_ENGINEERING.value),
+    ("hybrid", "Hybrid Coupled", ModelMode.HYBRID_COUPLED.value),
+    ("mechanistic", "Mechanistic Research", ModelMode.MECHANISTIC_RESEARCH.value),
+)
+_SCIENTIFIC_MODE_HELP = (
+    "Empirical Engineering: fast screening, suppresses model warnings. "
+    "Hybrid Coupled (default): phenomenological DN model with trust "
+    "warnings. Mechanistic Research: Flory-Rehner affine IPN model, "
+    "strictest trust gates."
+)
+
+# Consume ?dpsim_mode=… written by anchor clicks.
+_mode_q = st.query_params.get(_SCIENTIFIC_MODE_QUERY)
+if _mode_q in {k for k, _, _ in _SCIENTIFIC_MODE_OPTIONS}:
+    st.session_state[_SCIENTIFIC_MODE_KEY] = _mode_q
+    try:
+        del st.query_params[_SCIENTIFIC_MODE_QUERY]
+    except KeyError:
+        pass
+
+# Back-compat: previous radio stored the human label; coerce to key.
+_legacy_label_to_key = {
+    "Empirical Engineering": "empirical",
+    "Empirical": "empirical",
+    "Hybrid Coupled": "hybrid",
+    "Hybrid": "hybrid",
+    "Mechanistic Research": "mechanistic",
+    "Mechanistic": "mechanistic",
+}
+_current_mode_key = st.session_state.get(_SCIENTIFIC_MODE_KEY, "hybrid")
+if _current_mode_key in _legacy_label_to_key:
+    _current_mode_key = _legacy_label_to_key[_current_mode_key]
+    st.session_state[_SCIENTIFIC_MODE_KEY] = _current_mode_key
+
+_mode_map = {
+    "empirical": ModelMode.EMPIRICAL_ENGINEERING,
+    "hybrid": ModelMode.HYBRID_COUPLED,
+    "mechanistic": ModelMode.MECHANISTIC_RESEARCH,
+}
+model_mode_enum = _mode_map[_current_mode_key]
+
+
+def _render_scientific_mode_radio() -> None:
+    """Render the Scientific Mode anchor-pill in the top bar.
+
+    Visual style mirrors the Diff/Evidence/History segmented control:
+    one rounded pill enclosing three anchor-link buttons, with the
+    active option filled in the accent colour. Click on a non-active
+    option sets ``?dpsim_mode={key}`` and Streamlit reruns; the
+    consume block at the top of app.py reads the param before
+    ``inject_global_css`` / ``render_shell``, so the new mode is in
+    effect on the same rerun.
+    """
+    current = st.session_state.get(_SCIENTIFIC_MODE_KEY, "hybrid")
+
+    def _seg(key: str, label: str) -> str:
+        import html as _h
+        active = key == current
+        bg = "var(--dps-accent)" if active else "transparent"
+        fg = "var(--dps-slate-950)" if active else "var(--dps-text-muted)"
+        return (
+            f'<a href="?{_SCIENTIFIC_MODE_QUERY}={key}" target="_self" '
+            f'title="{_h.escape(_SCIENTIFIC_MODE_HELP)}" '
+            f'style="display:inline-flex;align-items:center;'
+            f'justify-content:center;padding:0 10px;height:20px;'
+            f'border-radius:3px;background:{bg};color:{fg};'
+            f'font-family:var(--dps-font-sans);font-size:11px;'
+            f'font-weight:600;text-decoration:none;cursor:pointer;'
+            f'letter-spacing:0.02em;transition:background-color 120ms;'
+            f'white-space:nowrap;">{label}</a>'
+        )
+
+    st.markdown(
+        '<div class="dps-mode-seg" style="display:inline-flex;'
+        "align-items:center;gap:0;padding:2px;height:26px;"
+        "background:var(--dps-surface-2);"
+        "border:1px solid var(--dps-border);border-radius:4px;"
+        'max-width:100%;overflow:hidden;">'
+        + "".join(_seg(k, lbl) for k, lbl, _ in _SCIENTIFIC_MODE_OPTIONS)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+# ─── Sidebar (now lean — scientific mode lives in the top bar) ────────────
 
 st.sidebar.header("Global Settings")
-
-model_mode = st.sidebar.radio(
-    "Scientific Mode",
-    ["Empirical Engineering", "Hybrid Coupled", "Mechanistic Research"],
-    index=1,
-    help="Empirical: fast screening, suppresses model warnings. "
-         "Hybrid: default, phenomenological DN model with trust warnings. "
-         "Mechanistic: Flory-Rehner affine IPN model, strictest trust gates.",
+st.sidebar.caption(
+    "Scientific Mode now lives at the top of the page — see the radio "
+    "row right of the recipes search input."
 )
-_mode_map = {
-    "Empirical Engineering": ModelMode.EMPIRICAL_ENGINEERING,
-    "Hybrid Coupled": ModelMode.HYBRID_COUPLED,
-    "Mechanistic Research": ModelMode.MECHANISTIC_RESEARCH,
-}
-model_mode_enum = _mode_map[model_mode]
 
 with st.sidebar:
     st.divider()
@@ -526,6 +614,7 @@ if _direction == "a":
         manual_pdf_button=_render_manual_pdf_buttons,
         stage_status_map=_status_map,
         direction_switch_renderer=render_direction_switch,
+        scientific_mode_renderer=_render_scientific_mode_radio,
     )
 else:
     # Direction B — triptych. v0.4.12: the 7-stage tab strip is now
@@ -548,6 +637,7 @@ else:
         evidence_stages=_evidence_stages,
         manual_pdf_button=_render_manual_pdf_buttons,
         direction_switch_renderer=render_direction_switch,
+        scientific_mode_renderer=_render_scientific_mode_radio,
     )
     _b_evidence_map = {s.stage_id: s.tier for s in _evidence_stages}
     _b_active = _render_stage_spine(

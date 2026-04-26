@@ -131,6 +131,7 @@ def render_top_bar(
     evidence_stages: list[StageEvidence] | None = None,
     manual_pdf_button: Callable[[], None] | None = None,
     direction_switch_renderer: Callable[[], None] | None = None,
+    scientific_mode_renderer: Callable[[], None] | None = None,
 ) -> None:
     """Render the top application bar.
 
@@ -165,7 +166,12 @@ def render_top_bar(
     # v0.4.19 (B6): widened cols[8] from 0.4 → 0.6 — the previous
     # ratio gave each icon's sub-column only ~16 px of width, clipping
     # the 26 px-wide download-button chrome.
-    cols = st.columns([0.55, 0.6, 2.4, 1.8, 1.8, 1.6, 1.4, 0.7, 0.6])
+    # v0.4.19 (D1/D2): added a 10th column at index 4 for the
+    # Scientific Mode segmented pill (Empirical Engineering / Hybrid
+    # Coupled / Mechanistic Research). The pill needs ~470 px to fit
+    # the full labels; cols[4] = 3.5 / total ≈ 12.25 ≈ 463 px at the
+    # 1620 px main width. Other ratios trimmed to compensate.
+    cols = st.columns([0.5, 0.55, 1.4, 1.0, 3.5, 1.0, 1.2, 1.4, 1.1, 0.7])
 
     with cols[0]:
         st.html(
@@ -228,12 +234,19 @@ def render_top_bar(
         )
 
     with cols[4]:
-        # F-15b: run-history ghost button — clicking it opens the rail
-        # extras expander by setting a session-state flag. Cheap; the
-        # actual history lives in run_rail.
-        _render_run_history_ghost_button()
+        # v0.4.19 (D1): Scientific Mode radio — moved here from the
+        # sidebar. Sits immediately right of the search input, matching
+        # the user's intent of a "global lifecycle gate" surfaced at
+        # the top of every page rather than tucked into a sidebar.
+        if scientific_mode_renderer is not None:
+            scientific_mode_renderer()
 
     with cols[5]:
+        # F-15b: run-history ghost button — clicking it opens the rail
+        # extras expander by setting a session-state flag.
+        _render_run_history_ghost_button()
+
+    with cols[6]:
         if evidence_stages:
             st.html(
                 '<div style="display:flex;align-items:center;'
@@ -242,16 +255,16 @@ def render_top_bar(
                 + '</div>'
             )
 
-    with cols[6]:
+    with cols[7]:
         # Diff / Evidence / History segmented (v0.4.15).
         _render_top_bar_view_segmented()
 
-    with cols[7]:
-        # v0.4.19 (B2): theme toggle now lives alone in cols[7]; the
-        # manual-icons render in cols[8] to the right.
+    with cols[8]:
+        # v0.4.19 (B2): theme toggle now lives alone in this column;
+        # the manual-icons render in the next column to the right.
         _render_theme_toggle()
 
-    with cols[8]:
+    with cols[9]:
         # v0.4.19 (B2): icon-only Manual + Appendix-J download buttons
         # in their own column so they share the same row as the
         # DARK/LIGHT pill (matches the canonical Direction-A reference).
@@ -520,6 +533,7 @@ def render_shell(
     manual_pdf_button: Callable[[], None] | None = None,
     stage_status_map: dict[str, str] | None = None,
     direction_switch_renderer: Callable[[], None] | None = None,
+    scientific_mode_renderer: Callable[[], None] | None = None,
 ) -> None:
     """Render the full Direction-A shell."""
     render_top_bar(
@@ -529,6 +543,7 @@ def render_shell(
         evidence_stages=evidence_stages,
         manual_pdf_button=manual_pdf_button,
         direction_switch_renderer=direction_switch_renderer,
+        scientific_mode_renderer=scientific_mode_renderer,
     )
     # Build per-stage evidence map from evidence_stages so the spine can
     # show inline tier badges.
