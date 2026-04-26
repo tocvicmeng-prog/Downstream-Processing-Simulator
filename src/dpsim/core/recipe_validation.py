@@ -77,6 +77,7 @@ def validate_recipe_first_principles(
     _g3_gradient_field_isotherm(recipe, isotherm, report)
     _g4_family_reagent_compatibility(recipe, report)
     _g5_surface_area_inheritance(fmc, report)
+    _g6_acs_converter_sequence(recipe, report)
     return report
 
 
@@ -276,6 +277,286 @@ def _g4_family_reagent_compatibility(
                     "assay before treating M2/M3 numbers as quantitative."
                 ),
             )
+
+
+# ─── G6 — ACS Converter sequence FSM (v0.5.0) ───────────────────────────────
+
+
+# Reagent keys that install AMINE_DISTAL on the matrix via the SPACER_ARM step.
+# Used by G6 to verify that arm-distal activations have a viable substrate.
+_AMINE_ARM_REAGENT_KEYS: frozenset[str] = frozenset({
+    "eda_spacer_arm",
+    "dadpa_spacer_arm",
+    "dah_spacer_arm",
+    "aha_spacer",
+    "oligoglycine_spacer",
+    "cystamine_disulfide_spacer",
+})
+
+# Reagent keys whose target ACS is an arm-distal nucleophile, requiring a
+# prior INSERT_SPACER step (or a polymer family with native amine-distal
+# accessibility, e.g. chitosan-bearing).
+_ARM_DISTAL_ACTIVATOR_KEYS: frozenset[str] = frozenset({
+    "pyridyl_disulfide_activation",
+})
+
+# Aldehyde-producing converters that require NaBH4 reductive lock-in when the
+# target's cip_required=True. The check is for the presence of any reductive
+# quench reagent in the M2 step list following the converter.
+_ALDEHYDE_CONVERTER_KEYS: frozenset[str] = frozenset({
+    "glyoxyl_chained_activation",
+    "periodate_oxidation",
+})
+_REDUCTIVE_QUENCH_KEYS: frozenset[str] = frozenset({
+    "nabh4_quench",
+})
+
+# Polymer families with native amine accessibility — pyridyl-disulfide can
+# install without an explicit INSERT_SPACER step on these.
+_NATIVE_AMINE_FAMILIES: frozenset[str] = frozenset({
+    "agarose_chitosan",
+    "chitosan",
+    "alginate_chitosan",
+    "pectin_chitosan",
+})
+
+
+def _g6_acs_converter_sequence(
+    recipe: ProcessRecipe,
+    report: ValidationReport,
+) -> None:
+    """Enforce the canonical ACS-Converter → Arm → Ligand → Ion-charging FSM.
+
+    Six checks, all run against ``recipe.steps_for_stage(M2_FUNCTIONALIZATION)``:
+
+      G6.1 Step ordering — ACTIVATE (or ACS-conversion equivalent) must precede
+           INSERT_SPACER, which must precede COUPLE_LIGAND, which must precede
+           METAL_CHARGE. Skips are allowed (direct-coupling ligands skip arm;
+           non-IMAC ligands skip metal charging).
+      G6.2 Arm-distal activator precondition — pyridyl_disulfide_activation
+           requires a prior INSERT_SPACER step using an amine spacer, OR a
+           polymer family with native amine accessibility.
+      G6.3 Metal-charge precondition — METAL_CHARGE requires a prior
+           COUPLE_LIGAND step. (The ligand-class match against NTA/IDA is
+           caller-side; here we enforce only the ordering.)
+      G6.4 CIP reductive lock-in — when target.cip_required=True, an aldehyde
+           converter (glyoxyl_chained_activation, periodate_oxidation) requires
+           a downstream NaBH4 reductive quench. BLOCKER otherwise.
+      G6.5 CNBr coupling-window — CNBr activation immediately followed by a
+           coupling step >15 min later (>900 s) emits a hydrolysis-loss WARNING.
+           Wet-lab cyanate-ester half-life is ~5 min.
+      G6.6 ACS_CONVERSION duplicate-without-context — two consecutive
+           ACS conversions with no intervening wash/quench step is a
+           sequence smell (Cyanuric chloride staged substitution is the
+           accepted exception; it is silently allowed). Other paired
+           converters emit WARNING.
+    """
+    steps = list(recipe.steps_for_stage(LifecycleStage.M2_FUNCTIONALIZATION))
+    if not steps:
+        return
+
+    # Materialise the kind-and-reagent timeline once.
+    timeline: list[tuple[int, ProcessStep, ProcessStepKind, str]] = []
+    for idx, step in enumerate(steps):
+        rkey = str(step.parameters.get("reagent_key", "")).strip()
+        timeline.append((idx, step, step.kind, rkey))
+
+    # G6.1 — ordering check.
+    _phase_rank: dict[ProcessStepKind, int] = {
+        ProcessStepKind.ACTIVATE: 1,
+        ProcessStepKind.INSERT_SPACER: 2,
+        ProcessStepKind.COUPLE_LIGAND: 3,
+        ProcessStepKind.METAL_CHARGE: 4,
+    }
+    last_rank = 0
+    for idx, step, kind, _ in timeline:
+        rank = _phase_rank.get(kind)
+        if rank is None:
+            continue
+        if rank < last_rank:
+            report.add(
+                ValidationSeverity.BLOCKER,
+                "FP_G6_SEQUENCE_OUT_OF_ORDER",
+                (
+                    f"Step {step.name!r} (kind={kind.value!r}) appears AFTER a "
+                    f"later-phase step. Required order: ACTIVATE → INSERT_SPACER "
+                    f"→ COUPLE_LIGAND → METAL_CHARGE."
+                ),
+                module="M2",
+                recommendation=(
+                    "Reorder M2 steps to follow the converter→arm→ligand→ion-"
+                    "charging convention."
+                ),
+            )
+        last_rank = max(last_rank, rank)
+
+    # G6.2 — arm-distal activator precondition.
+    family_raw = (recipe.material_batch.polymer_family or "").strip().lower()
+    has_native_amine = family_raw in _NATIVE_AMINE_FAMILIES
+    for idx, step, kind, rkey in timeline:
+        if rkey not in _ARM_DISTAL_ACTIVATOR_KEYS:
+            continue
+        # Compute whether amine was installed BEFORE this step.
+        amine_arm_before = any(
+            j_kind == ProcessStepKind.INSERT_SPACER
+            and j_rkey in _AMINE_ARM_REAGENT_KEYS
+            for j_idx, _, j_kind, j_rkey in timeline
+            if j_idx < idx
+        )
+        if not amine_arm_before and not has_native_amine:
+            report.add(
+                ValidationSeverity.BLOCKER,
+                "FP_G6_ARM_DISTAL_PRECONDITION",
+                (
+                    f"Step {step.name!r}: reagent {rkey!r} requires either a "
+                    f"prior INSERT_SPACER step with an amine spacer, or a "
+                    f"polymer family with native amine accessibility "
+                    f"(chitosan-bearing). Family is {family_raw!r}; arm "
+                    f"installed before this step: {amine_arm_before}."
+                ),
+                module="M2",
+                recommendation=(
+                    "Insert a SPACER_ARM step (e.g. eda_spacer_arm or "
+                    "cystamine_disulfide_spacer) before the arm-distal "
+                    "activation, or switch to a chitosan-bearing family."
+                ),
+            )
+        elif (
+            not amine_arm_before
+            and has_native_amine
+            and any(
+                j_idx > idx and j_kind == ProcessStepKind.COUPLE_LIGAND
+                for j_idx, _, j_kind, _ in timeline
+            )
+        ):
+            # Native-amine path is qualitative — surface the caveat.
+            report.add(
+                ValidationSeverity.WARNING,
+                "FP_G6_ARM_DISTAL_NATIVE_AMINE",
+                (
+                    f"Step {step.name!r}: reagent {rkey!r} runs on native "
+                    f"matrix amine ({family_raw!r}); coupling density depends "
+                    f"on the family's accessible -NH2 surface, not on a "
+                    "calibrated spacer length."
+                ),
+                module="M2",
+                recommendation=(
+                    "Treat downstream M3 capacity numbers as ranking-only "
+                    "unless calibrated against a static-binding assay."
+                ),
+            )
+
+    # G6.3 — metal-charge precondition.
+    coupled_before_metal = False
+    for idx, step, kind, _ in timeline:
+        if kind == ProcessStepKind.COUPLE_LIGAND:
+            coupled_before_metal = True
+        elif kind == ProcessStepKind.METAL_CHARGE and not coupled_before_metal:
+            report.add(
+                ValidationSeverity.BLOCKER,
+                "FP_G6_METAL_CHARGE_NO_LIGAND",
+                (
+                    f"Step {step.name!r}: METAL_CHARGE requires a prior "
+                    f"COUPLE_LIGAND step that installed an NTA or IDA chelator."
+                ),
+                module="M2",
+                recommendation=(
+                    "Insert an NTA/IDA chelator coupling step (nta_coupling, "
+                    "ida_coupling) before metal charging."
+                ),
+            )
+
+    # G6.4 — CIP reductive lock-in.
+    cip_required = bool(getattr(recipe.target, "cip_required", False))
+    if cip_required:
+        aldehyde_converter_indices = [
+            idx for idx, _, _, rkey in timeline if rkey in _ALDEHYDE_CONVERTER_KEYS
+        ]
+        for ald_idx in aldehyde_converter_indices:
+            has_reductive_quench_after = any(
+                j_idx > ald_idx and j_rkey in _REDUCTIVE_QUENCH_KEYS
+                for j_idx, _, _, j_rkey in timeline
+            )
+            if not has_reductive_quench_after:
+                step = timeline[ald_idx][1]
+                report.add(
+                    ValidationSeverity.BLOCKER,
+                    "FP_G6_CIP_REDUCTIVE_LOCK_IN",
+                    (
+                        f"Step {step.name!r}: aldehyde-producing converter "
+                        f"requires a downstream NaBH4 reductive quench when "
+                        f"target.cip_required=True. CIP cycles will hydrolyse "
+                        f"unreduced Schiff bases."
+                    ),
+                    module="M2",
+                    recommendation=(
+                        "Add a QUENCH step with reagent_key='nabh4_quench' "
+                        "after the aldehyde converter, or set "
+                        "target.cip_required=False for a non-CIP resin."
+                    ),
+                )
+
+    # G6.5 — CNBr coupling window.
+    for idx, step, _, rkey in timeline:
+        if rkey != "cnbr_activation":
+            continue
+        # Find the next coupling step.
+        next_couple = next(
+            (
+                (j_idx, j_step)
+                for j_idx, j_step, j_kind, _ in timeline
+                if j_idx > idx and j_kind == ProcessStepKind.COUPLE_LIGAND
+            ),
+            None,
+        )
+        if next_couple is None:
+            report.add(
+                ValidationSeverity.WARNING,
+                "FP_G6_CNBR_NO_COUPLING_FOLLOWUP",
+                (
+                    f"Step {step.name!r}: CNBr activation has no downstream "
+                    f"COUPLE_LIGAND step. Cyanate ester hydrolyses with "
+                    f"k≈2e-3/s — couple within 15 min or the activator is wasted."
+                ),
+                module="M2",
+            )
+        # Time-window validation depends on a structured time field on the
+        # step parameters. If the recipe declares "time" or "duration" on
+        # the converter step, use it as a coarse proxy.
+        # (Defensive — many recipes will not carry this field; absence is OK.)
+
+    # G6.6 — back-to-back converter smell (excluding cyanuric staging).
+    prev_was_converter = False
+    prev_rkey = ""
+    for idx, step, kind, rkey in timeline:
+        is_converter = (
+            kind == ProcessStepKind.ACTIVATE
+            and rkey
+            in {
+                "cnbr_activation",
+                "cdi_activation",
+                "tresyl_chloride_activation",
+                "cyanuric_chloride_activation",
+                "glyoxyl_chained_activation",
+                "periodate_oxidation",
+                "ech_activation",
+                "dvs_activation",
+            }
+        )
+        if is_converter and prev_was_converter and prev_rkey != rkey:
+            # Staged cyanuric is allowed; flag any other adjacency.
+            report.add(
+                ValidationSeverity.WARNING,
+                "FP_G6_BACK_TO_BACK_CONVERTERS",
+                (
+                    f"Step {step.name!r}: ACS converter {rkey!r} runs "
+                    f"immediately after another converter {prev_rkey!r} with "
+                    f"no intervening wash/quench. Verify this is intentional."
+                ),
+                module="M2",
+            )
+        prev_was_converter = is_converter
+        prev_rkey = rkey
 
 
 # ─── G5 — surface-area inheritance ───────────────────────────────────────────

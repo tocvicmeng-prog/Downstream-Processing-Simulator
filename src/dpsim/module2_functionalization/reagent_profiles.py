@@ -85,6 +85,9 @@ ALLOWED_FUNCTIONAL_MODES: frozenset[str] = frozenset({
     "oligonucleotide",       # sequence-specific DNA/RNA affinity
     "click_handle",          # CuAAC / SPAAC modular ligand-library handles
     "material_as_ligand",    # amylose-MBP, chitin-CBD — polymer is the affinity matrix
+    # v0.5.0 additions — first-class ACS conversion + arm-distal activation.
+    "acs_converter",         # CNBr/CDI/Tresyl/Cyanuric/Glyoxyl/Periodate matrix-side ACS swap
+    "arm_activator",         # pyridyl-disulfide and other arm-distal activations
 })
 
 ALLOWED_CHEMISTRY_CLASSES: frozenset[str] = frozenset({
@@ -118,6 +121,9 @@ ALLOWED_CHEMISTRY_CLASSES: frozenset[str] = frozenset({
     "cdi_amine",             # CDI-activated imidazolyl carbonate + amine ligand
     "glyoxyl_multipoint",    # multi-point Lys coupling via glyoxyl-agarose
     "phenol_radical",        # HRP/H2O2 tyramine-radical coupling
+    # v0.5.0 additions
+    "thiol_disulfide_exchange",  # protein -SH + pyridyl disulfide → mixed disulfide + 2-thiopyridone
+    "tresyl_amine",          # tresyl/tosyl SN2 displacement by amine ligand
 })
 
 
@@ -273,6 +279,19 @@ class ReagentProfile:
     confidence_tier: str = "semi_quantitative"
     calibration_source: str = ""
     hazard_class: str = ""
+
+    # ── v0.5.0 ACS Converter fields ──
+    # Periodate (NaIO4) and glyoxyl-chained activation cleave one vicinal-diol
+    # pair into TWO aldehydes, so the downstream ALDEHYDE/GLYOXYL inventory
+    # must be doubled relative to sites_consumed on the source -OH profile.
+    # _solve_activation_step reads this multiplier when creating the product
+    # ACSProfile; default 1.0 preserves 1:1 behaviour for all other reagents.
+    aldehyde_multiplier: float = 1.0
+
+    # Wet-lab observable label, surfaced into reaction_diagnostics so the
+    # evidence-tier pipeline can anchor calibration on a real bench
+    # measurement (e.g. "A_343_pyridine_2_thione" for pyridyl-disulfide).
+    wetlab_observable: str = ""
 
 
 # ─── Phase B Reagent Library (4 profiles) ─────────────────────────────
@@ -1960,7 +1979,7 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "cnbr_activation": ReagentProfile(
         name="Cyanogen bromide (OH activation)",
         cas="506-68-3",
-        reaction_type="activation",
+        reaction_type="acs_conversion",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.CYANATE_ESTER,
         k_forward=1e-3,
@@ -1970,13 +1989,14 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         ph_optimum=11.0,
         temperature_default=277.15,    # 4 °C — low T to suppress hydrolysis
         time_default=600.0,            # 10 min
-        functional_mode="activator",
+        functional_mode="acs_converter",
         chemistry_class="cnbr_amine",
         ph_min=10.0, ph_max=12.0,
         temperature_min=273.15, temperature_max=283.15,
         confidence_tier="semi_quantitative",
         calibration_source="Kohn & Wilchek (1981) Anal. Biochem. 115:375",
         hazard_class="acute_toxic_carcinogen",
+        wetlab_observable="A_260_supernatant_isourea",
         notes=(
             "Classic Sepharose affinity activation. CNBr forms cyanate "
             "ester / imidocarbonate intermediate that couples primary "
@@ -1994,7 +2014,7 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "cdi_activation": ReagentProfile(
         name="1,1′-Carbonyldiimidazole (OH activation)",
         cas="530-62-1",
-        reaction_type="activation",
+        reaction_type="acs_conversion",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.IMIDAZOLYL_CARBONATE,
         k_forward=5e-4,
@@ -2004,12 +2024,13 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         ph_optimum=9.0,
         temperature_default=298.15,
         time_default=3600.0,
-        functional_mode="activator",
+        functional_mode="acs_converter",
         chemistry_class="cdi_amine",
         ph_min=7.5, ph_max=10.0,
         confidence_tier="semi_quantitative",
         calibration_source="Hearn (1981) Methods Enzymol. 135:102",
         hazard_class="moisture_sensitive",
+        wetlab_observable="A_232_imidazole_release",
         notes=(
             "Modern CNBr alternative. CDI activates hydroxyls in "
             "anhydrous DMSO/dioxane to imidazolyl carbonate, which "
@@ -2058,7 +2079,7 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "periodate_oxidation": ReagentProfile(
         name="Sodium periodate (vicinal diol → aldehyde)",
         cas="7790-28-5",
-        reaction_type="activation",
+        reaction_type="acs_conversion",
         target_acs=ACSSiteType.HYDROXYL,    # vicinal diol; consumed pair
         product_acs=ACSSiteType.ALDEHYDE,
         k_forward=2e-3,
@@ -2068,13 +2089,16 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         ph_optimum=5.0,
         temperature_default=277.15,    # 4 °C — slow chain scission
         time_default=3600.0,
-        functional_mode="activator",
+        functional_mode="acs_converter",
         chemistry_class="aldehyde_amine",   # downstream coupling is via aldehyde
         ph_min=3.5, ph_max=7.0,
         temperature_min=273.15, temperature_max=298.15,
         confidence_tier="semi_quantitative",
         calibration_source="Bobbitt (1956) Adv. Carbohydr. Chem. 11:1",
         hazard_class="strong_oxidizer",
+        # v0.5.0: Malaprade cleavage of one diol pair yields two aldehydes.
+        aldehyde_multiplier=2.0,
+        wetlab_observable="TNBS_schiff_base_titration",
         notes=(
             "Malaprade oxidation: cleaves vicinal diols (2 OH on adjacent "
             "carbons) to a pair of aldehydes. Foundational for oriented "
@@ -2155,23 +2179,24 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "cyanuric_chloride_activation": ReagentProfile(
         name="Cyanuric chloride (triazine activation)",
         cas="108-77-0",
-        reaction_type="activation",
+        reaction_type="acs_conversion",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.TRIAZINE_REACTIVE,
-        k_forward=3e-3,                # very fast at first chloride
+        k_forward=3e-3,                # first-Cl rate; remaining 2 Cl lumped (2-stage default)
         E_a=30000.0,
         stoichiometry=1.0,
         hydrolysis_rate=5e-4,
         ph_optimum=9.0,
         temperature_default=277.15,    # 4 °C — slow di/trisubstitution
         time_default=1800.0,
-        functional_mode="activator",
+        functional_mode="acs_converter",
         chemistry_class="dye_triazine",
         ph_min=8.0, ph_max=10.5,
         temperature_min=273.15, temperature_max=288.15,
         confidence_tier="semi_quantitative",
         calibration_source="Korpela & Mäntsälä (1968) Anal. Biochem. 23:381",
         hazard_class="reactive_corrosive",
+        wetlab_observable="UV_265_triazine_substitution",
         notes=(
             "2,4,6-Trichloro-1,3,5-triazine activation of polysaccharide "
             "OH gives a dichlorotriazine support. The remaining 2 chlorines "
@@ -2498,7 +2523,7 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "glyoxyl_chained_activation": ReagentProfile(
         name="Glyoxyl-agarose (multipoint enzyme support)",
         cas="N/A (composite chemistry)",
-        reaction_type="activation",
+        reaction_type="acs_conversion",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.GLYOXYL,
         k_forward=1e-3,                # rate-limiting periodate step
@@ -2508,11 +2533,16 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         ph_optimum=10.0,                # multipoint Lys coupling at high pH
         temperature_default=298.15,
         time_default=14400.0,
-        functional_mode="activator",
+        functional_mode="acs_converter",
         chemistry_class="glyoxyl_multipoint",
         ph_min=9.5, ph_max=11.0,
         confidence_tier="semi_quantitative",
         calibration_source="Mateo et al. (2007) Biotechnol. Bioeng. 96:5",
+        # The chained glycidol→periodate pathway also produces 2 aldehydes per
+        # original diol pair on the glyceryl-ether overlay; keep consistent
+        # with periodate_oxidation downstream-doubling semantics.
+        aldehyde_multiplier=2.0,
+        wetlab_observable="hydroxylamine_aldehyde_titration",
         notes=(
             "Two-step activation: glycidol coats agarose -OH with "
             "glyceryl ether (giving 1,2-diol termini); periodate then "
@@ -2991,7 +3021,7 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "tresyl_chloride_activation": ReagentProfile(
         name="Tresyl chloride (OH → sulfonate leaving)",
         cas="1648-55-7",
-        reaction_type="activation",
+        reaction_type="acs_conversion",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.SULFONATE_LEAVING,
         k_forward=2e-3,
@@ -3001,13 +3031,14 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         ph_optimum=8.0,
         temperature_default=277.15,    # low T to suppress hydrolysis
         time_default=600.0,
-        functional_mode="activator",
-        chemistry_class="amine_covalent",
+        functional_mode="acs_converter",
+        chemistry_class="tresyl_amine",
         ph_min=7.0, ph_max=9.0,
         temperature_min=273.15, temperature_max=283.15,
         confidence_tier="semi_quantitative",
         calibration_source="Nilsson & Mosbach (1981) Methods Enzymol. 104:56",
         hazard_class="reactive_corrosive",
+        wetlab_observable="F_NMR_sulfonate_signal",
         notes=(
             "2,2,2-Trifluoroethanesulfonyl chloride activation of "
             "hydroxyls. Couples primary amines (and thiols) directly "
@@ -3020,11 +3051,16 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     # ── AC6 Pyridyl disulfide activation — reversible thiol capture.
     # Brocklehurst et al. 1973 Biochem. J. 133:573.
     "pyridyl_disulfide_activation": ReagentProfile(
-        name="Pyridyl disulfide activation (reversible thiol)",
-        cas="2127-03-9 (DTNB family)",
-        reaction_type="activation",
+        name="Pyridyl disulfide activation (arm-distal disulfide-reactive)",
+        cas="2127-03-9 (2,2'-dipyridyl disulfide / Aldrithiol-2)",
+        # v0.5.0 fix: this is an ARM-DISTAL activation, not a matrix-side ACS
+        # converter. Pre-condition: AMINE_DISTAL > 0 from a prior SPACER_ARM
+        # step. Output is an electrophilic pyridyl-disulfide-loaded support
+        # (NOT a free thiol). Coupling chemistry is thiol-disulfide EXCHANGE,
+        # not reduction; reduction is what occurs at elution with DTT/TCEP.
+        reaction_type="arm_activation",
         target_acs=ACSSiteType.AMINE_DISTAL,
-        product_acs=ACSSiteType.THIOL,
+        product_acs=ACSSiteType.PYRIDYL_DISULFIDE,
         k_forward=1e-3,
         E_a=30000.0,
         stoichiometry=1.0,
@@ -3032,18 +3068,24 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         ph_optimum=7.5,
         temperature_default=298.15,
         time_default=3600.0,
-        functional_mode="activator",
-        chemistry_class="reduction",
+        functional_mode="arm_activator",
+        chemistry_class="thiol_disulfide_exchange",
         ph_min=6.5, ph_max=8.5,
         confidence_tier="semi_quantitative",
-        calibration_source="Brocklehurst et al. (1973) Biochem. J. 133:573",
+        calibration_source="Brocklehurst et al. (1973) Biochem. J. 133:573; Carlsson et al. (1978) Biochem. J. 173:723",
+        hazard_class="reversible_redox",
+        wetlab_observable="A_343_pyridine_2_thione",
         notes=(
-            "Activated thiol-Sepharose. Pyridyl disulfide on distal "
-            "amine spacer captures protein thiols via disulfide exchange "
-            "(releases pyridine-2-thione, A343 detectable). Captured "
-            "protein released by 10 mM DTT or 5 mM TCEP. Useful for "
-            "analytical capture-and-release; pairs with K3 cystamine "
-            "spacer."
+            "Activated thiol-Sepharose. 2,2'-Dipyridyl disulfide reacts with "
+            "an arm-distal -NH2 (cystamine, EDA, or DADPA spacer) to install "
+            "an electrophilic pyridyl-disulfide handle on the matrix. "
+            "Coupling captures protein thiols via thiol-disulfide EXCHANGE "
+            "(NOT reduction), releasing pyridine-2-thione detectable at "
+            "A_343. Captured protein released at elution by 10 mM DTT or "
+            "5 mM TCEP — the reductive step, distinct from coupling. Pairs "
+            "with K3 cystamine spacer for fully reversible immobilization. "
+            "Pre-condition: SPACER_ARM step must run first to install "
+            "AMINE_DISTAL inventory."
         ),
     ),
 
@@ -3149,6 +3191,139 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
             "followed by reduction (NaBH4 / NaBH3CN) to lock the network. "
             "For most chitosan-amine crosslinking, glutaraldehyde or "
             "genipin is preferred."
+        ),
+    ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # v0.5.0 closed-loop coupler reagents — pair with the 7 ACS converters
+    # so every converter output ACS has at least one downstream consumer.
+    # Hermanson, Bioconjugate Techniques 3rd ed. (2013) §15–17 is the
+    # canonical reference for the kinetic regimes of all four.
+    # ═══════════════════════════════════════════════════════════════════
+
+    # AC-CL1 Generic amine ligand → CDI-activated support (imidazolyl carbonate).
+    # Closes the CDI loop (gap 1: previously zero target_acs=IMIDAZOLYL_CARBONATE).
+    "generic_amine_to_imidazolyl_carbonate": ReagentProfile(
+        name="Generic amine → CDI-activated support (carbamate)",
+        cas="N/A (class reagent)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.IMIDAZOLYL_CARBONATE,
+        product_acs=None,
+        k_forward=4e-4,
+        E_a=45000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=2e-4,
+        ph_optimum=8.5,
+        temperature_default=298.15,
+        time_default=14400.0,
+        functional_mode="affinity_ligand",
+        chemistry_class="cdi_amine",
+        ph_min=7.5, ph_max=9.5,
+        confidence_tier="semi_quantitative",
+        calibration_source="Hearn (1981) Methods Enzymol. 135:102; Hermanson §15.5",
+        notes=(
+            "Closes the CDI ACS loop. Any primary-amine-bearing ligand "
+            "(Protein A/G/L, lectins, peptides, dye-amines) couples to a "
+            "CDI-imidazolyl-carbonate support yielding a neutral carbamate. "
+            "Hydrolysis is the only competing reaction; runs side-by-side "
+            "with coupling at pH 8.5."
+        ),
+    ),
+
+    # AC-CL2 Generic amine ligand → tresyl-activated support (sulfonate displacement).
+    # Closes the tresyl/tosyl loop (gap 1: previously zero target_acs=SULFONATE_LEAVING).
+    "generic_amine_to_sulfonate": ReagentProfile(
+        name="Generic amine → tresyl-activated support (SN2 displacement)",
+        cas="N/A (class reagent)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.SULFONATE_LEAVING,
+        product_acs=None,
+        k_forward=8e-4,
+        E_a=40000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=3e-4,
+        ph_optimum=8.5,
+        temperature_default=298.15,
+        time_default=10800.0,
+        functional_mode="affinity_ligand",
+        chemistry_class="tresyl_amine",
+        ph_min=7.5, ph_max=9.5,
+        confidence_tier="semi_quantitative",
+        calibration_source="Nilsson & Mosbach (1981) Methods Enzymol. 104:56; Hermanson §15.7",
+        notes=(
+            "Closes the tresyl ACS loop. Primary amines (and thiols) "
+            "displace the sulfonate leaving group via SN2 to give a "
+            "stable C-N bond. Faster than CDI, comparable to NHS-ester "
+            "kinetics, neutral product (no isourea charge, unlike CNBr)."
+        ),
+    ),
+
+    # AC-CL3 Protein -SH → pyridyl-disulfide support (thiol-disulfide exchange).
+    # Closes the pyridyl-disulfide loop (gap 1: previously zero target_acs=PYRIDYL_DISULFIDE).
+    "protein_thiol_to_pyridyl_disulfide": ReagentProfile(
+        name="Protein thiol → pyridyl-disulfide support (reversible)",
+        cas="N/A (class reagent)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.PYRIDYL_DISULFIDE,
+        product_acs=None,
+        k_forward=2e-3,
+        E_a=25000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=1e-7,         # mixed disulfide is hydrolytically stable
+        ph_optimum=7.5,
+        temperature_default=298.15,
+        time_default=3600.0,
+        functional_mode="affinity_ligand",
+        chemistry_class="thiol_disulfide_exchange",
+        ph_min=6.5, ph_max=8.5,
+        is_macromolecule=True,
+        ligand_mw=20000.0,             # generic Cys-tagged protein default
+        activity_retention=0.85,
+        binding_model_hint="near_irreversible",
+        confidence_tier="semi_quantitative",
+        calibration_source="Carlsson et al. (1978) Biochem. J. 173:723; Hermanson §17.4",
+        hazard_class="reversible_redox",
+        wetlab_observable="A_343_pyridine_2_thione",
+        notes=(
+            "Closes the pyridyl-disulfide loop. Any free protein thiol "
+            "(Cys-tagged proteins, glutathione, terminal-Cys peptides) "
+            "displaces 2-thiopyridone from the support's S-S bridge, "
+            "forming a mixed disulfide. Stoichiometric A_343 release is "
+            "the canonical assay. Eluted by 10 mM DTT or 5 mM TCEP — "
+            "fully reversible capture for analytical workflows."
+        ),
+    ),
+
+    # AC-CL4 Generic amine ligand → CNBr-activated support (cyanate ester).
+    # Strengthens the CNBr loop (gap 6: only oligonucleotide_dna_coupling
+    # consumed CYANATE_ESTER; the canonical "any amine ligand → CNBr-Sepharose"
+    # use case was missing).
+    "generic_amine_to_cyanate_ester": ReagentProfile(
+        name="Generic amine → CNBr-activated support (isourea linkage)",
+        cas="N/A (class reagent)",
+        reaction_type="coupling",
+        target_acs=ACSSiteType.CYANATE_ESTER,
+        product_acs=None,
+        k_forward=2e-3,
+        E_a=35000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=2e-3,         # competes hard with coupling — short window
+        ph_optimum=8.5,
+        temperature_default=277.15,    # cold-room coupling per Cuatrecasas
+        time_default=900.0,            # 15 min — must beat hydrolysis
+        functional_mode="affinity_ligand",
+        chemistry_class="cnbr_amine",
+        ph_min=7.5, ph_max=10.0,
+        temperature_min=273.15, temperature_max=283.15,
+        confidence_tier="semi_quantitative",
+        calibration_source="Cuatrecasas (1970) J. Biol. Chem. 245:3059; Kohn & Wilchek (1981) Anal. Biochem. 115:375",
+        notes=(
+            "Closes the CNBr ACS loop for the canonical 'any amine ligand "
+            "to CNBr-Sepharose' use case. Forms an isourea linkage "
+            "(positive charge at neutral pH — note the ion-exchange "
+            "background versus CDI's neutral carbamate). Time window is "
+            "short: cyanate ester hydrolyses with k≈2e-3/s at 4 °C, "
+            "pH 11; couple within 15 min of activation."
         ),
     ),
 

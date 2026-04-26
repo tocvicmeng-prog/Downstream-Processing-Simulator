@@ -325,9 +325,10 @@ class TestV9_2_ACSExpansion:
     used by the v9.1 schema, and that the enum roster has the expected size."""
 
     def test_enum_size(self):
-        # v9.1 had 13 sites; v9.2 adds 12 → 25 total
-        assert len(ACSSiteType) == 25, (
-            f"Expected 25 ACS site types (13 v9.1 + 12 v9.2), got {len(ACSSiteType)}"
+        # v9.1 had 13 sites; v9.2 adds 12 → 25; v0.5.0 adds PYRIDYL_DISULFIDE → 26
+        assert len(ACSSiteType) == 26, (
+            f"Expected 26 ACS site types (13 v9.1 + 12 v9.2 + 1 v0.5.0), "
+            f"got {len(ACSSiteType)}"
         )
 
     def test_v9_2_members_exist(self):

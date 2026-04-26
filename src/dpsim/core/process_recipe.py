@@ -81,6 +81,10 @@ class TargetProductProfile:
         "Targets describe process-development intent; they are not evidence "
         "that a formulation is achievable without calibration."
     )
+    # v0.5.0 — when True, downstream resin must survive CIP / sanitisation
+    # cycles. G6 enforces a reductive lock-in (NaBH4 quench) on aldehyde-
+    # producing converters (glyoxyl, periodate) when this flag is set.
+    cip_required: bool = False
 
 
 @dataclass

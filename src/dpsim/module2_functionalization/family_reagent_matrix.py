@@ -691,6 +691,626 @@ FAMILY_REAGENT_MATRIX: tuple[FamilyReagentEntry, ...] = (
         PolymerFamily.STARCH, "stmp_secondary", "compatible",
         "STMP phosphate-crosslinks starch -OH; standard food-grade modification.",
     ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # v0.5.0 — ACS Converter × Family compatibility (closes G4 gap 3).
+    # 7 converters × 21 polymer families = 147 entries below.
+    # Compatibility patterns (per scientific-advisor M2 audit, 2026-04-27):
+    #   HYDROXYL-targeting converters (cnbr, cdi, tresyl, cyanuric, glyoxyl):
+    #     C: agarose-class, dextran-class, cellulose, amylose, pullulan, starch
+    #     Q: chitosan-bearing, sulfate-rich, carboxylate-rich combos, chitin
+    #     I: alginate (no surface -OH), PLGA (chain-end only)
+    #   Periodate (vicinal-diol):
+    #     C: vicinal-diol-rich (dextran, amylose, pullulan, starch, HA, AD, AC)
+    #     Q: trans-diols and partial diols (agarose, cellulose, chitosan)
+    #     I: no diols (alginate, PLGA), scission-prone (KC, PC)
+    #   Pyridyl-disulfide (arm-distal — requires prior amine arm):
+    #     C: native -NH2 or readily-amine-arm families (chitosan-bearing)
+    #     Q: any family with a viable amine-arm path (most -OH families)
+    #     I: alginate (no amine path), PLGA (low density)
+    # ═══════════════════════════════════════════════════════════════════
+
+    # ── cnbr_activation × 21 families ───────────────────────────────────
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_CHITOSAN, "cnbr_activation", "compatible",
+        "Canonical CNBr-Sepharose chemistry (Cuatrecasas 1970); agarose -OH dominates the activation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE, "cnbr_activation", "incompatible",
+        "Alginate exposes -COOH on the gel surface; ring -OH is inaccessible to CNBr in alkaline aqueous conditions.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CELLULOSE, "cnbr_activation", "compatible",
+        "Cellulose -OH is a classical CNBr substrate (regenerated cellulose affinity media).",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PLGA, "cnbr_activation", "incompatible",
+        "PLGA chain-end -OH density is too low for usable CNBr activation; alkaline pH 11 also degrades the polyester.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE, "cnbr_activation", "compatible",
+        "Pure agarose -OH is the textbook CNBr substrate (Sepharose 4B).",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITOSAN, "cnbr_activation", "qualitative_only",
+        "Chitosan C3/C6 -OH react, but chitosan -NH2 also reacts with cyanate ester; selectivity poor.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.DEXTRAN, "cnbr_activation", "compatible",
+        "Dextran -OH activates cleanly under CNBr (Sephadex affinity media).",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AMYLOSE, "cnbr_activation", "compatible",
+        "Amylose α-1,4-glucan -OH behaves analogously to dextran under CNBr.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.HYALURONATE, "cnbr_activation", "qualitative_only",
+        "HA -OH activates under CNBr but pH 11 risks chain scission; -COOH side groups also affect surface charge.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.KAPPA_CARRAGEENAN, "cnbr_activation", "qualitative_only",
+        "κ-Carrageenan -OH reacts but sulfate-ester groups dominate surface chemistry; alkaline conditions risk desulfation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_DEXTRAN, "cnbr_activation", "compatible",
+        "Both agarose and dextran -OH activate under CNBr; canonical Capto-class capping chemistry.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_ALGINATE, "cnbr_activation", "qualitative_only",
+        "CNBr targets the agarose -OH only; alginate -COOH is inert and dilutes the activated surface density.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE_CHITOSAN, "cnbr_activation", "qualitative_only",
+        "CNBr targets chitosan -OH but cyanate-ester selectivity is poor in the presence of -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITIN, "cnbr_activation", "qualitative_only",
+        "Native chitin's NHAc dominates; the small -OH fraction does react but yields are low.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "cnbr_activation", "qualitative_only",
+        "Pectin galacturonate ring -OH reacts, but -COOH is the dominant native ACS; better routes exist.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "cnbr_activation", "qualitative_only",
+        "Gellan -OH activates, but K⁺-gelation chemistry and -COOH dominate the canonical workflow.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "cnbr_activation", "compatible",
+        "Pullulan α-1,4/α-1,6 glucan -OH activates cleanly under CNBr.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "cnbr_activation", "compatible",
+        "Starch -OH activates under CNBr; classical for porous starch affinity beads.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "cnbr_activation", "qualitative_only",
+        "PEC carries both pectin -COOH and chitosan -NH2/-OH; CNBr selectivity poor across the composite.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "cnbr_activation", "qualitative_only",
+        "Gellan -OH is the only viable target; alginate -COOH is inert.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "cnbr_activation", "compatible",
+        "Both layers expose -OH; pullulan and dextran each activate cleanly under CNBr.",
+    ),
+
+    # ── cdi_activation × 21 families ────────────────────────────────────
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_CHITOSAN, "cdi_activation", "compatible",
+        "CDI activates agarose -OH in anhydrous DMSO/dioxane; neutral carbamate product (no isourea charge, unlike CNBr).",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE, "cdi_activation", "incompatible",
+        "Alginate -COOH does not react with CDI under standard conditions; ring -OH is inaccessible.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CELLULOSE, "cdi_activation", "compatible",
+        "Cellulose -OH activates with CDI; classical for hydrogel-based affinity supports.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PLGA, "cdi_activation", "incompatible",
+        "PLGA chain-end -OH density too low; aprotic solvent also dissolves the polyester.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE, "cdi_activation", "compatible",
+        "Agarose -OH is a textbook CDI substrate (modern alternative to CNBr).",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITOSAN, "cdi_activation", "qualitative_only",
+        "Chitosan -OH activates but -NH2 competes for the imidazolyl carbonate.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.DEXTRAN, "cdi_activation", "compatible",
+        "Dextran -OH activates with CDI; standard preparation route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AMYLOSE, "cdi_activation", "compatible",
+        "Amylose -OH activates analogously to dextran.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.HYALURONATE, "cdi_activation", "qualitative_only",
+        "HA -OH activates but -COOH side groups affect downstream coupling kinetics.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.KAPPA_CARRAGEENAN, "cdi_activation", "qualitative_only",
+        "κ-Carrageenan -OH activates but sulfate-ester chemistry interferes; the K⁺-gelation route is the canonical bead chemistry.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_DEXTRAN, "cdi_activation", "compatible",
+        "Both -OH-rich layers activate cleanly with CDI.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_ALGINATE, "cdi_activation", "qualitative_only",
+        "CDI targets the agarose -OH only; alginate -COOH is inert.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE_CHITOSAN, "cdi_activation", "qualitative_only",
+        "CDI targets chitosan -OH; -NH2 competes but at lower rate than CNBr.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITIN, "cdi_activation", "qualitative_only",
+        "Chitin -OH limited; NHAc dominates surface chemistry.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "cdi_activation", "qualitative_only",
+        "Pectin -OH activates but -COOH is the dominant native ACS.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "cdi_activation", "qualitative_only",
+        "Gellan -OH activates; secondary chemistry to K⁺-gelation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "cdi_activation", "compatible",
+        "Pullulan -OH activates cleanly with CDI.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "cdi_activation", "compatible",
+        "Starch -OH activates with CDI; works for crosslinked starch microbeads.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "cdi_activation", "qualitative_only",
+        "Mixed -COOH/-NH2/-OH composite; CDI activates -OH but selectivity is poor.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "cdi_activation", "qualitative_only",
+        "Gellan -OH is the only viable target; alginate -COOH inert.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "cdi_activation", "compatible",
+        "Both layers -OH-rich; CDI activates uniformly.",
+    ),
+
+    # ── tresyl_chloride_activation × 21 families ────────────────────────
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_CHITOSAN, "tresyl_chloride_activation", "compatible",
+        "Tresyl chloride activates agarose -OH in anhydrous acetone; SN2 displacement gives stable C-N bond.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE, "tresyl_chloride_activation", "incompatible",
+        "Alginate -COOH does not react with tresyl chloride; surface -OH inaccessible.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CELLULOSE, "tresyl_chloride_activation", "compatible",
+        "Cellulose -OH (C2/C3/C6) activates cleanly with tresyl chloride.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PLGA, "tresyl_chloride_activation", "incompatible",
+        "PLGA chain-end -OH density too low; acetone slurry dissolves the polyester.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE, "tresyl_chloride_activation", "compatible",
+        "Pure agarose -OH activates under tresyl chloride; produces a neutral SN2-substrate similar to CNBr without cyanate-ester decomposition.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITOSAN, "tresyl_chloride_activation", "qualitative_only",
+        "Chitosan -OH activates but -NH2 also reacts with sulfonyl chloride; selectivity poor.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.DEXTRAN, "tresyl_chloride_activation", "compatible",
+        "Dextran -OH activates cleanly with tresyl chloride.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AMYLOSE, "tresyl_chloride_activation", "compatible",
+        "Amylose -OH analogous to dextran.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.HYALURONATE, "tresyl_chloride_activation", "qualitative_only",
+        "HA -OH activates but -COOH groups affect surface charge; aprotic solvent slurry can dehydrate gel.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.KAPPA_CARRAGEENAN, "tresyl_chloride_activation", "qualitative_only",
+        "κ-Carrageenan -OH activates but sulfate-ester groups interfere.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_DEXTRAN, "tresyl_chloride_activation", "compatible",
+        "Both layers' -OH activate cleanly under tresyl chloride.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_ALGINATE, "tresyl_chloride_activation", "qualitative_only",
+        "Tresyl targets agarose -OH only; alginate -COOH inert.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE_CHITOSAN, "tresyl_chloride_activation", "qualitative_only",
+        "Tresyl targets chitosan -OH; -NH2 competes.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITIN, "tresyl_chloride_activation", "qualitative_only",
+        "Chitin -OH limited; NHAc dominant.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "tresyl_chloride_activation", "qualitative_only",
+        "Pectin -OH activates but -COOH is the canonical ACS.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "tresyl_chloride_activation", "qualitative_only",
+        "Gellan -OH activates; secondary to K⁺-gelation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "tresyl_chloride_activation", "compatible",
+        "Pullulan -OH activates cleanly with tresyl chloride.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "tresyl_chloride_activation", "compatible",
+        "Starch -OH activates with tresyl chloride.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "tresyl_chloride_activation", "qualitative_only",
+        "Mixed composite; tresyl selectivity poor.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "tresyl_chloride_activation", "qualitative_only",
+        "Gellan -OH only viable target.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "tresyl_chloride_activation", "compatible",
+        "Both layers -OH-rich.",
+    ),
+
+    # ── cyanuric_chloride_activation × 21 families ──────────────────────
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_CHITOSAN, "cyanuric_chloride_activation", "compatible",
+        "Cyanuric chloride activates agarose -OH at 0–5 °C; canonical for Reactive Blue 2 / Procion Red HE-3B dye supports.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE, "cyanuric_chloride_activation", "incompatible",
+        "Alginate ring -OH inaccessible; -COOH does not react with triazine chlorides.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CELLULOSE, "cyanuric_chloride_activation", "compatible",
+        "Cellulose -OH is the original cotton-dyeing triazine substrate.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PLGA, "cyanuric_chloride_activation", "incompatible",
+        "PLGA chain-end -OH density too low.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE, "cyanuric_chloride_activation", "compatible",
+        "Pure agarose -OH activates with cyanuric chloride at 0–5 °C; canonical Blue Sepharose chemistry.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITOSAN, "cyanuric_chloride_activation", "qualitative_only",
+        "Chitosan -OH activates; -NH2 reacts at higher T (second-Cl substitution).",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.DEXTRAN, "cyanuric_chloride_activation", "compatible",
+        "Dextran -OH activates cleanly; classical CDR preparation route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AMYLOSE, "cyanuric_chloride_activation", "compatible",
+        "Amylose -OH analogous to dextran.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.HYALURONATE, "cyanuric_chloride_activation", "qualitative_only",
+        "HA -OH activates; -COOH side groups dilute the activated surface.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.KAPPA_CARRAGEENAN, "cyanuric_chloride_activation", "qualitative_only",
+        "κ-Carrageenan -OH activates but sulfate-ester interference is significant.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_DEXTRAN, "cyanuric_chloride_activation", "compatible",
+        "Both layers' -OH activate cleanly.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_ALGINATE, "cyanuric_chloride_activation", "qualitative_only",
+        "Triazine targets agarose -OH only.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE_CHITOSAN, "cyanuric_chloride_activation", "qualitative_only",
+        "Triazine targets chitosan -OH; -NH2 reacts at higher T.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITIN, "cyanuric_chloride_activation", "qualitative_only",
+        "Chitin -OH limited; NHAc inert to triazine.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "cyanuric_chloride_activation", "qualitative_only",
+        "Pectin -OH activates; -COOH is the dominant native ACS.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "cyanuric_chloride_activation", "qualitative_only",
+        "Gellan -OH activates; secondary to K⁺-gelation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "cyanuric_chloride_activation", "compatible",
+        "Pullulan -OH activates cleanly with cyanuric chloride.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "cyanuric_chloride_activation", "compatible",
+        "Starch -OH activates with cyanuric chloride; common in textile-grade modified starch.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "cyanuric_chloride_activation", "qualitative_only",
+        "Mixed composite; selectivity poor.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "cyanuric_chloride_activation", "qualitative_only",
+        "Gellan -OH only viable target.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "cyanuric_chloride_activation", "compatible",
+        "Both layers -OH-rich; uniform triazine activation.",
+    ),
+
+    # ── glyoxyl_chained_activation × 21 families ────────────────────────
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_CHITOSAN, "glyoxyl_chained_activation", "compatible",
+        "Glyoxyl-agarose is the canonical multipoint enzyme support (Mateo 2007); agarose -OH overlay route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE, "glyoxyl_chained_activation", "incompatible",
+        "Alginate ring -OH inaccessible to glycidol; -COOH does not enter the chained route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CELLULOSE, "glyoxyl_chained_activation", "compatible",
+        "Cellulose -OH supports glycidol etherification followed by periodate cleavage.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PLGA, "glyoxyl_chained_activation", "incompatible",
+        "PLGA chain-end -OH density too low; alkaline glycidol step degrades the polyester.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE, "glyoxyl_chained_activation", "compatible",
+        "Pure agarose is the textbook glyoxyl substrate (Mateo et al. 2007 protocol).",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITOSAN, "glyoxyl_chained_activation", "qualitative_only",
+        "Chitosan -OH supports glycidol etherification but -NH2 reacts in parallel; periodate cleavage poor selectivity.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.DEXTRAN, "glyoxyl_chained_activation", "compatible",
+        "Dextran -OH supports the chained glyoxyl route; less common than agarose but mechanistically equivalent.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AMYLOSE, "glyoxyl_chained_activation", "compatible",
+        "Amylose -OH analogous to dextran.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.HYALURONATE, "glyoxyl_chained_activation", "qualitative_only",
+        "HA -OH supports glycidol but pH 11 step risks chain scission.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.KAPPA_CARRAGEENAN, "glyoxyl_chained_activation", "qualitative_only",
+        "κ-Carrageenan -OH supports glycidol but periodate step degrades sulfated chain.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_DEXTRAN, "glyoxyl_chained_activation", "compatible",
+        "Both layers' -OH support glycidol+periodate; uniform aldehyde density.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_ALGINATE, "glyoxyl_chained_activation", "qualitative_only",
+        "Glyoxyl targets agarose -OH only; alginate inert.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE_CHITOSAN, "glyoxyl_chained_activation", "qualitative_only",
+        "Glycidol targets chitosan -OH; -NH2 competes.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITIN, "glyoxyl_chained_activation", "qualitative_only",
+        "Chitin -OH limited.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "glyoxyl_chained_activation", "qualitative_only",
+        "Pectin -OH supports glycidol; -COOH inert to chained route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "glyoxyl_chained_activation", "qualitative_only",
+        "Gellan -OH supports glycidol; secondary chemistry to K⁺-gelation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "glyoxyl_chained_activation", "compatible",
+        "Pullulan -OH supports the full glycidol+periodate chained route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "glyoxyl_chained_activation", "compatible",
+        "Starch -OH supports glycidol etherification; periodate yields clean glyoxyl.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "glyoxyl_chained_activation", "qualitative_only",
+        "Mixed composite; selectivity poor.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "glyoxyl_chained_activation", "qualitative_only",
+        "Gellan -OH only viable target.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "glyoxyl_chained_activation", "compatible",
+        "Both layers -OH-rich; uniform glyoxyl coverage.",
+    ),
+
+    # ── periodate_oxidation × 21 families ───────────────────────────────
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_CHITOSAN, "periodate_oxidation", "compatible",
+        "AC has accessible vicinal diols on both layers; periodate gives clean aldehyde with bounded chain scission.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE, "periodate_oxidation", "incompatible",
+        "Alginate guluronate/mannuronate ring -OH are trans (axial-equatorial); no vicinal-diol pairs for Malaprade cleavage.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CELLULOSE, "periodate_oxidation", "qualitative_only",
+        "Cellulose has limited vicinal-diol fraction (mostly C2/C3 trans); oxidation is slow and chain-scission-prone above 30%.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PLGA, "periodate_oxidation", "incompatible",
+        "PLGA polyester has no vicinal diols.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE, "periodate_oxidation", "qualitative_only",
+        "Agarose has some vicinal diols on the 3,6-anhydrogalactose unit but oxidation degrades gel mechanics quickly.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITOSAN, "periodate_oxidation", "qualitative_only",
+        "Chitosan glucosamine C3-C4 cis-diol oxidises but NHAc on residual chitin units interferes.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.DEXTRAN, "periodate_oxidation", "compatible",
+        "Dextran α-1,6 backbone exposes abundant vicinal diols on each glucose unit; canonical Malaprade substrate.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AMYLOSE, "periodate_oxidation", "compatible",
+        "Amylose α-1,4 backbone has C2-C3 cis-diols on each glucose; standard periodate route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.HYALURONATE, "periodate_oxidation", "compatible",
+        "HA glucuronate ring has cis-diols accessible; oxidised HA + ADH is a published hydrogel route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.KAPPA_CARRAGEENAN, "periodate_oxidation", "incompatible",
+        "Sulfated galactose; periodate degrades sulfate-ester chain to fragments not coupling-suitable.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_DEXTRAN, "periodate_oxidation", "compatible",
+        "Dextran shell oxidises cleanly; agarose core minimally affected at controlled doses.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_ALGINATE, "periodate_oxidation", "qualitative_only",
+        "Agarose component has limited diols; alginate inert.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE_CHITOSAN, "periodate_oxidation", "qualitative_only",
+        "Chitosan glucosamine cis-diol oxidises; alginate inert.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITIN, "periodate_oxidation", "qualitative_only",
+        "Chitin NHAc dominates; the small glucosamine fraction has cis-diols.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "periodate_oxidation", "qualitative_only",
+        "Galacturonate ring has cis-diols; oxidation also opens the ring (chain scission).",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "periodate_oxidation", "qualitative_only",
+        "Gellan glucose+glucuronate units have diols but glucuronate -COOH affects scission kinetics.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "periodate_oxidation", "compatible",
+        "Pullulan exposes vicinal diols on each glucose; standard periodate substrate.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "periodate_oxidation", "compatible",
+        "Starch α-1,4 backbone has C2-C3 cis-diols; classical dialdehyde-starch chemistry.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "periodate_oxidation", "incompatible",
+        "Both components are scission-prone under periodate; PEC integrity degrades unacceptably.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "periodate_oxidation", "qualitative_only",
+        "Gellan diols oxidise; alginate inert.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "periodate_oxidation", "compatible",
+        "Both glucan layers expose abundant cis-diols.",
+    ),
+
+    # ── pyridyl_disulfide_activation × 21 families (arm-distal) ─────────
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_CHITOSAN, "pyridyl_disulfide_activation", "compatible",
+        "Chitosan -NH2 readily supports cystamine/EDA arm; pyridyl-disulfide installs cleanly on the arm-distal -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE, "pyridyl_disulfide_activation", "incompatible",
+        "Alginate has no native amine path and no surface -OH to install one; arm-distal activation has no substrate.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CELLULOSE, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires prior ECH/CDI/CNBr + amine-spacer step; pyridyl-disulfide installs on the resulting AMINE_DISTAL.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PLGA, "pyridyl_disulfide_activation", "incompatible",
+        "Insufficient amine-arm density achievable on PLGA chain ends.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires prior ECH/CDI/CNBr + amine-spacer step before pyridyl-disulfide.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITOSAN, "pyridyl_disulfide_activation", "compatible",
+        "Native chitosan -NH2 can be directly used as the arm-distal substrate (no spacer needed for surface-bound -NH2).",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.DEXTRAN, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires prior amine-arm installation via ECH or CDI route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AMYLOSE, "pyridyl_disulfide_activation", "qualitative_only",
+        "Same arm-installation prerequisite as dextran.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.HYALURONATE, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires prior EDC/NHS+EDA arm or ECH+amine arm; arm density may be low on HA.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.KAPPA_CARRAGEENAN, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires prior amine-arm installation; sulfate-ester chemistry interferes with most arm routes.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_DEXTRAN, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires prior amine-arm; either layer can host the arm.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.AGAROSE_ALGINATE, "pyridyl_disulfide_activation", "qualitative_only",
+        "Arm installs on agarose -OH route; pyridyl-disulfide then on arm-distal -NH2.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.ALGINATE_CHITOSAN, "pyridyl_disulfide_activation", "compatible",
+        "Chitosan native -NH2 supports direct pyridyl-disulfide installation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.CHITIN, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires deacetylated patches or amine arm via ECH; viable but uncommon.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires prior EDC/NHS+EDA arm on -COOH or ECH+amine on -OH.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN, "pyridyl_disulfide_activation", "qualitative_only",
+        "Same arm prerequisite as pectin.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires prior amine-arm via ECH/CDI route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.STARCH, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires prior amine-arm; starch + ECH + EDA is a published route.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "pyridyl_disulfide_activation", "compatible",
+        "Chitosan -NH2 in the PEC supports direct pyridyl-disulfide installation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires arm installation on gellan -OH; alginate inert to arm chemistry.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "pyridyl_disulfide_activation", "qualitative_only",
+        "Requires prior amine-arm on either glucan layer.",
+    ),
 )
 
 

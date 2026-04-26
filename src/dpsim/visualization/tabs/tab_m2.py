@@ -99,13 +99,20 @@ _BUCKET_TO_MODES: dict[str, tuple[str, ...]] = {
     # v9.1 baseline buckets — preserved verbatim for session-state
     # continuity; their contents grow to absorb the v9.2-v9.4 additions.
     "Secondary Crosslinking": ("crosslinker",),
-    "Hydroxyl Activation": ("activator",),
+    # v0.5.0: "Hydroxyl Activation" renamed to "ACS Conversion" to match
+    # the user's mental model and the new ACS_CONVERSION step type. The
+    # bucket absorbs both the v9.1 "activator" mode (ECH/DVS) and the new
+    # v0.5.0 "acs_converter" mode (CNBr/CDI/Tresyl/Cyanuric/Glyoxyl/Periodate).
+    "ACS Conversion": ("activator", "acs_converter"),
     "Ligand Coupling": (
         "iex_ligand", "hic_ligand", "imac_chelator",
         "gst_affinity", "heparin_affinity",
     ),
     "Protein Coupling": ("affinity_ligand", "biotin_affinity"),
     "Spacer Arm": ("spacer", "heterobifunctional_crosslinker"),
+    # v0.5.0: arm-distal activation (pyridyl-disulfide and successors).
+    # Renders between Spacer Arm and Ligand Coupling in the workflow.
+    "Arm-distal Activation": ("arm_activator",),
     "Metal Charging": ("metal_charging",),
     "Protein Pretreatment": ("protein_pretreatment",),
     "Washing": ("washing",),
@@ -127,10 +134,14 @@ _BUCKET_TO_MODES: dict[str, tuple[str, ...]] = {
 # v0.3.4 buckets at the bottom.
 _BUCKET_DISPLAY_ORDER: tuple[str, ...] = (
     "Secondary Crosslinking",
-    "Hydroxyl Activation",
+    # v0.5.0: was "Hydroxyl Activation" — renamed to "ACS Conversion" to
+    # match the user-facing mental model. Spacer Arm and Arm-distal
+    # Activation render in this canonical workflow order.
+    "ACS Conversion",
+    "Spacer Arm",
+    "Arm-distal Activation",
     "Ligand Coupling",
     "Protein Coupling",
-    "Spacer Arm",
     "Metal Charging",
     "Protein Pretreatment",
     "Washing",
@@ -504,7 +515,13 @@ def render_tab_m2(tab_container, _smgr) -> None:
                     # hydroxyl-targeted crosslinkers (stmp_secondary) work alongside
                     # the amine-targeted default (genipin_secondary, glutaraldehyde_secondary).
                     "Secondary Crosslinking": (ModificationStepType.SECONDARY_CROSSLINKING, None),
-                    "Hydroxyl Activation": (ModificationStepType.ACTIVATION, ACSSiteType.HYDROXYL),
+                    # v0.5.0: "Hydroxyl Activation" renamed to "ACS Conversion".
+                    # ACTIVATION step type is kept (silent alias for ACS_CONVERSION),
+                    # so v0.4.x recipes using ECH/DVS continue to dispatch correctly.
+                    "ACS Conversion": (ModificationStepType.ACTIVATION, ACSSiteType.HYDROXYL),
+                    # v0.5.0: arm-distal activation (e.g. pyridyl-disulfide on amine
+                    # arm). target_acs left to the reagent profile (typically AMINE_DISTAL).
+                    "Arm-distal Activation": (ModificationStepType.ARM_ACTIVATION, None),
                     "Ligand Coupling": (ModificationStepType.LIGAND_COUPLING, None),
                     "Protein Coupling": (ModificationStepType.PROTEIN_COUPLING, None),
                     "Spacer Arm": (ModificationStepType.SPACER_ARM, None),

@@ -145,15 +145,20 @@ class TestPreviouslyMissingReagentsNowSurface:
         ("glyoxal_dialdehyde", "Secondary Crosslinking"),
         ("hrp_h2o2_tyramine", "Secondary Crosslinking"),
         ("bis_epoxide_crosslinking", "Secondary Crosslinking"),
-        # v9.x activators folded into existing Hydroxyl Activation bucket
-        ("cnbr_activation", "Hydroxyl Activation"),
-        ("cdi_activation", "Hydroxyl Activation"),
-        ("edc_nhs_activation", "Hydroxyl Activation"),
-        ("periodate_oxidation", "Hydroxyl Activation"),
-        ("tresyl_chloride_activation", "Hydroxyl Activation"),
-        ("cyanuric_chloride_activation", "Hydroxyl Activation"),
-        ("glyoxyl_chained_activation", "Hydroxyl Activation"),
-        ("pyridyl_disulfide_activation", "Hydroxyl Activation"),
+        # v0.5.0: "Hydroxyl Activation" renamed to "ACS Conversion"; the
+        # bucket now absorbs both the legacy "activator" mode (ECH/DVS,
+        # EDC/NHS) and the new "acs_converter" mode (CNBr/CDI/Tresyl/
+        # Cyanuric/Glyoxyl/Periodate). Pyridyl-disulfide moves to
+        # "Arm-distal Activation" (it is an arm-distal activator, not a
+        # matrix-side ACS converter).
+        ("cnbr_activation", "ACS Conversion"),
+        ("cdi_activation", "ACS Conversion"),
+        ("edc_nhs_activation", "ACS Conversion"),
+        ("periodate_oxidation", "ACS Conversion"),
+        ("tresyl_chloride_activation", "ACS Conversion"),
+        ("cyanuric_chloride_activation", "ACS Conversion"),
+        ("glyoxyl_chained_activation", "ACS Conversion"),
+        ("pyridyl_disulfide_activation", "Arm-distal Activation"),
         # v9.x affinity ligands folded into existing Protein Coupling bucket
         ("calmodulin_cbp_tap_coupling", "Protein Coupling"),
         ("jacalin_coupling", "Protein Coupling"),

@@ -67,6 +67,10 @@ class ACSSiteType(Enum):
     CYANATE_ESTER:   CNBr-activated agarose intermediate (cyanate ester / imidocarbonate).
     IMIDAZOLYL_CARBONATE: CDI-activated support; carbamate-forming on amine ligand coupling.
     SULFONATE_LEAVING: Tresyl/tosyl-activated hydroxyl support; sulfonate leaving group.
+    PYRIDYL_DISULFIDE: 2-pyridyl disulfide-loaded electrophilic support installed on
+                      an amine-distal spacer arm (arm-distal activation, not matrix-side
+                      ACS conversion). Reacts with protein -SH via thiol-disulfide
+                      exchange, releasing pyridine-2-thione (A_343 observable).
     """
     AMINE_PRIMARY = "amine_primary"
     HYDROXYL = "hydroxyl"
@@ -97,6 +101,8 @@ class ACSSiteType(Enum):
     CYANATE_ESTER = "cyanate_ester"             # CNBr-activated
     IMIDAZOLYL_CARBONATE = "imidazolyl_carbonate"  # CDI-activated
     SULFONATE_LEAVING = "sulfonate_leaving"     # tresyl/tosyl-activated
+    # v0.5.0 — arm-distal pyridyl-disulfide electrophile (thiol-disulfide exchange).
+    PYRIDYL_DISULFIDE = "pyridyl_disulfide"     # arm-distal disulfide-reactive support
 
 
 # ─── ACSProfile Dataclass ──────────────────────────────────────────────
@@ -321,16 +327,17 @@ def initialize_acs_from_m1(
     Returns:
         Dictionary mapping ACSSiteType to ACSProfile for AMINE_PRIMARY and HYDROXYL.
 
-        Note (v9.2): the function returns profiles only for natively present
-        groups (AMINE_PRIMARY on chitosan, HYDROXYL on agarose). All other
-        ACSSiteType members (CARBOXYL, EPOXIDE, ALDEHYDE, ..., and the v9.2
+        Note (v9.2 + v0.5.0): the function returns profiles only for natively
+        present groups (AMINE_PRIMARY on chitosan, HYDROXYL on agarose). All
+        other ACSSiteType members (CARBOXYL, EPOXIDE, ALDEHYDE, ..., the v9.2
         additions SULFATE_ESTER, THIOL, AZIDE, ALKYNE, AMINOOXY, CIS_DIOL,
         TRIAZINE_REACTIVE, GLYOXYL, CYANATE_ESTER, IMIDAZOLYL_CARBONATE,
-        SULFONATE_LEAVING, PHENOL_TYRAMINE) are produced by activation or
-        coupling chemistry; they are added to the inventory by reaction-engine
-        steps, not by this initializer. Tier-2 materials with native sulfate
-        or thiol content (κ-carrageenan, cysteine-modified supports) will
-        extend ``_group_specs`` when those PolymerFamily entries land.
+        SULFONATE_LEAVING, PHENOL_TYRAMINE, and the v0.5.0 PYRIDYL_DISULFIDE)
+        are produced by activation, ACS-conversion, arm-activation, or coupling
+        chemistry; they are added to the inventory by reaction-engine steps,
+        not by this initializer. Tier-2 materials with native sulfate or
+        thiol content (κ-carrageenan, cysteine-modified supports) will extend
+        ``_group_specs`` when those PolymerFamily entries land.
 
     Raises:
         ValueError: If surface model has not been computed (zero areas).

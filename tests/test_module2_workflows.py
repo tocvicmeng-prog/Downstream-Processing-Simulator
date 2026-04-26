@@ -912,6 +912,8 @@ def test_all_25_profiles_have_required_metadata():
             "crosslinking", "activation", "coupling", "protein_coupling", "blocking",
             "spacer", "spacer_arm", "heterobifunctional",
             "metal_charging", "metal_stripping", "protein_pretreatment", "washing",
+            # v0.5.0 — first-class ACS conversion + arm-distal activation.
+            "acs_conversion", "arm_activation",
         ), f"{key}: invalid reaction_type '{profile.reaction_type}'"
 
 
@@ -1031,14 +1033,21 @@ def test_fmc_biotin_stoich_2_5():
 
 
 def test_profile_count():
-    """Canonical profile count — 59 v9.1 + 18 v9.2 + 13 v9.3 + 4 v9.4 = 94 total."""
+    """Canonical profile count — v0.5.0 ACS Converter epic adds 4 closed-loop
+    couplers (CDI/Tresyl/Pyridyl-disulfide/CNBr generic amine routes)."""
     # v9.1 baseline: 59 profiles (post-P3 alternate M2 chemistries).
     # v9.2 M1-M9 Tier-1 additions: 18 profiles.
     # v9.3 Tier-2 additions: 13 profiles.
     # v9.4 Tier-3 additions: 4 profiles (Al³⁺ trivalent gelant, borax
     # reversible crosslinker, glyoxal dialdehyde, calmodulin CBP/TAP).
-    assert len(REAGENT_PROFILES) == 94, \
-        f"Expected 94 profiles (59 v9.1 + 18 v9.2 + 13 v9.3 + 4 v9.4), got {len(REAGENT_PROFILES)}"
+    # v0.4.x interim drift (post-v9.4 minor adds): 2 profiles.
+    # v0.5.0 closed-loop couplers: 4 profiles
+    # (generic_amine_to_imidazolyl_carbonate, generic_amine_to_sulfonate,
+    #  protein_thiol_to_pyridyl_disulfide, generic_amine_to_cyanate_ester).
+    assert len(REAGENT_PROFILES) == 100, (
+        f"Expected 100 profiles (59 v9.1 + 18 v9.2 + 13 v9.3 + 4 v9.4 + "
+        f"2 v0.4.x interim + 4 v0.5.0), got {len(REAGENT_PROFILES)}"
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════════

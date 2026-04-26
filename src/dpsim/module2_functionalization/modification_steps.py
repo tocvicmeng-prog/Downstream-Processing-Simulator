@@ -85,6 +85,14 @@ class ModificationStepType(Enum):
     METAL_CHARGING = "metal_charging"      # v5.9.1: loads metal onto IMAC chelator
     PROTEIN_PRETREATMENT = "protein_pretreatment"  # v5.9.2: reduces protein disulfides
     WASHING = "washing"                    # v5.9.4: removes residual reagents
+    # v0.5.0 — first-class ACS conversion (matrix-side polysaccharide ACS swap).
+    # Architecturally a peer of ACTIVATION; ACTIVATION is kept as a silent
+    # alias for v0.4.x recipes that still use ECH/DVS as ModificationStepType.
+    # ACTIVATION. Both step types dispatch to _solve_activation_step.
+    ACS_CONVERSION = "acs_conversion"
+    # v0.5.0 — arm-distal activation (e.g. pyridyl-disulfide on a -NH2 arm).
+    # Pre-condition: acs_state must contain AMINE_DISTAL or CARBOXYL_DISTAL > 0.
+    ARM_ACTIVATION = "arm_activation"
 
 
 # ─── Data classes ──────────────────────────────────────────────────────
@@ -198,9 +206,14 @@ def solve_modification_step(
     acs_before = _snapshot_acs(acs_state)
 
     # --- Validate reagent compatibility BEFORE any early returns (Codex R3-F1) ---
+    # v0.5.0: ACTIVATION and ACS_CONVERSION accept both reaction_type strings —
+    # this is the silent-alias mechanism that lets v0.4.x recipes (ECH/DVS as
+    # ACTIVATION) and new recipes (CNBr/CDI/Tresyl/etc. as ACS_CONVERSION) coexist.
     _STEP_ALLOWED_RTYPES = {
         ModificationStepType.SECONDARY_CROSSLINKING: {"crosslinking"},
-        ModificationStepType.ACTIVATION: {"activation"},
+        ModificationStepType.ACTIVATION: {"activation", "acs_conversion"},
+        ModificationStepType.ACS_CONVERSION: {"acs_conversion", "activation"},
+        ModificationStepType.ARM_ACTIVATION: {"arm_activation"},
         ModificationStepType.LIGAND_COUPLING: {"coupling"},
         ModificationStepType.PROTEIN_COUPLING: {"protein_coupling"},
         ModificationStepType.QUENCHING: {"blocking"},
@@ -280,6 +293,25 @@ def solve_modification_step(
             reagent_profile, V_bead,
         )
     elif step.step_type == ModificationStepType.ACTIVATION:
+        result = _solve_activation_step(
+            step, acs_state, target_profile, acs_concentration,
+            reagent_profile, V_bead,
+        )
+    elif step.step_type == ModificationStepType.ACS_CONVERSION:
+        # v0.5.0: ACS_CONVERSION is a peer of ACTIVATION dispatching to the
+        # same solver. The chemistry is identical — both consume target ACS
+        # and produce a new product ACS. The split is for sequence-FSM
+        # legibility and UI bucketing (matrix-side ACS swap is now a
+        # first-class concept distinct from "Hydroxyl Activation").
+        result = _solve_activation_step(
+            step, acs_state, target_profile, acs_concentration,
+            reagent_profile, V_bead,
+        )
+    elif step.step_type == ModificationStepType.ARM_ACTIVATION:
+        # v0.5.0: arm-distal activation (e.g. 2,2'-dipyridyl disulfide on a
+        # cystamine/EDA arm). Pre-condition is checked at FSM level; here we
+        # delegate to the activation solver because the chemistry is again
+        # second-order consumption of the arm-distal nucleophile.
         result = _solve_activation_step(
             step, acs_state, target_profile, acs_concentration,
             reagent_profile, V_bead,
@@ -591,10 +623,15 @@ def _solve_activation_step(
     reagent_for_coupling = step.stoichiometry * sites_consumed / V_bead
     reagent_hydrolyzed = max(reagent_consumed_total - reagent_for_coupling, 0.0)
 
-    # Product sites: coupling produces activated sites on the surface
+    # Product sites: coupling produces activated sites on the surface.
+    # v0.5.0: vicinal-diol cleavage (periodate, glyoxyl-chained) produces TWO
+    # aldehydes per consumed diol pair. The reagent profile's
+    # aldehyde_multiplier (default 1.0; 2.0 for periodate/glyoxyl) scales the
+    # downstream product inventory without altering source-side conservation.
     product_type = step.product_acs or reagent_profile.product_acs
     if product_type is not None:
-        product_sites = sites_consumed  # 1:1 stoichiometry for activation
+        product_multiplier = getattr(reagent_profile, "aldehyde_multiplier", 1.0)
+        product_sites = sites_consumed * product_multiplier
 
         if product_type in acs_state:
             # Add to existing product profile

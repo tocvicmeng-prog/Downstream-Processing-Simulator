@@ -301,6 +301,118 @@ class FunctionalMediaContract:
         return violations
 
 
+# ─── v0.5.0 ACS Converter sequence FSM (in-module helper) ──────────────────
+
+
+# Mirrors the recipe-level G6 in core/recipe_validation.py; see that file's
+# _g6_acs_converter_sequence for the canonical implementation. This helper
+# accepts a ModificationStep list directly, useful for unit tests and any
+# M2-internal caller that does not go through ProcessRecipe.
+_ARM_DISTAL_REAGENT_KEYS = frozenset({"pyridyl_disulfide_activation"})
+_AMINE_ARM_REAGENT_KEYS = frozenset({
+    "eda_spacer_arm", "dadpa_spacer_arm", "dah_spacer_arm",
+    "aha_spacer", "oligoglycine_spacer", "cystamine_disulfide_spacer",
+})
+_ALDEHYDE_CONVERTER_KEYS = frozenset({
+    "glyoxyl_chained_activation", "periodate_oxidation",
+})
+_REDUCTIVE_QUENCH_KEYS = frozenset({"nabh4_quench"})
+
+
+def validate_sequence(
+    steps: list[ModificationStep],
+    *,
+    polymer_family: str = "",
+    cip_required: bool = False,
+) -> list[str]:
+    """Run the ACS-Converter sequence FSM over a list of ModificationStep.
+
+    Returns a list of violation messages (empty = valid). Mirrors the
+    recipe-level G6 guardrail without depending on ProcessRecipe.
+
+    Args:
+        steps: ordered list of M2 modification steps.
+        polymer_family: lowercase PolymerFamily.value for native-amine check.
+        cip_required: when True, aldehyde converters require NaBH4 reduction.
+    """
+    violations: list[str] = []
+    if not steps:
+        return violations
+
+    _phase_rank = {
+        ModificationStepType.ACTIVATION: 1,
+        ModificationStepType.ACS_CONVERSION: 1,
+        ModificationStepType.ARM_ACTIVATION: 2,
+        ModificationStepType.SPACER_ARM: 2,
+        ModificationStepType.LIGAND_COUPLING: 3,
+        ModificationStepType.PROTEIN_COUPLING: 3,
+        ModificationStepType.METAL_CHARGING: 4,
+    }
+
+    # Ordering check.
+    last_rank = 0
+    for step in steps:
+        rank = _phase_rank.get(step.step_type)
+        if rank is None:
+            continue
+        if rank < last_rank:
+            violations.append(
+                f"Step {step.reagent_key!r} ({step.step_type.value}) follows "
+                f"a later-phase step. Required: ACS_CONVERSION → SPACER_ARM/"
+                f"ARM_ACTIVATION → LIGAND_COUPLING → METAL_CHARGING."
+            )
+        last_rank = max(last_rank, rank)
+
+    # Arm-distal precondition.
+    _native_amine_families = {
+        "agarose_chitosan", "chitosan", "alginate_chitosan", "pectin_chitosan",
+    }
+    has_native_amine = polymer_family.lower() in _native_amine_families
+    for idx, step in enumerate(steps):
+        if step.reagent_key not in _ARM_DISTAL_REAGENT_KEYS:
+            continue
+        amine_arm_before = any(
+            j_step.step_type == ModificationStepType.SPACER_ARM
+            and j_step.reagent_key in _AMINE_ARM_REAGENT_KEYS
+            for j_step in steps[:idx]
+        )
+        if not amine_arm_before and not has_native_amine:
+            violations.append(
+                f"Step {step.reagent_key!r}: arm-distal activator requires "
+                f"a prior SPACER_ARM step with an amine spacer or a native-"
+                f"amine polymer family. Family={polymer_family!r}."
+            )
+
+    # Metal-charge precondition.
+    coupled_before = False
+    for step in steps:
+        if step.step_type in (ModificationStepType.LIGAND_COUPLING,
+                              ModificationStepType.PROTEIN_COUPLING):
+            coupled_before = True
+        elif step.step_type == ModificationStepType.METAL_CHARGING and not coupled_before:
+            violations.append(
+                f"Step {step.reagent_key!r}: METAL_CHARGING requires a prior "
+                "LIGAND_COUPLING that installed an NTA or IDA chelator."
+            )
+
+    # CIP reductive lock-in.
+    if cip_required:
+        for idx, step in enumerate(steps):
+            if step.reagent_key not in _ALDEHYDE_CONVERTER_KEYS:
+                continue
+            has_reductive_quench = any(
+                j_step.reagent_key in _REDUCTIVE_QUENCH_KEYS
+                for j_step in steps[idx + 1:]
+            )
+            if not has_reductive_quench:
+                violations.append(
+                    f"Step {step.reagent_key!r}: aldehyde converter requires "
+                    f"a downstream NaBH4 quench (cip_required=True)."
+                )
+
+    return violations
+
+
 def build_functional_media_contract(
     microsphere: FunctionalMicrosphere,
 ) -> FunctionalMediaContract:

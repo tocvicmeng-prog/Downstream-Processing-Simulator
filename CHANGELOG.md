@@ -1,5 +1,81 @@
 # Changelog
 
+## v0.5.0 — M2 ACS Converter epic (2026-04-27)
+
+Closes the 7 ranked gaps from the M2 ACS-converter audit; the Scientific
+Advisor verdict flips PARTIAL → READY. Joint redesign plan authored by
+Scientific Advisor + Architect + Dev Orchestrator; full handover at
+`docs/handover/HANDOVER_v0_5_0_ACS_CONVERTER.md`.
+
+### Architectural changes
+
+- New `ModificationStepType.ACS_CONVERSION` (matrix-side polysaccharide
+  ACS swap) and `ARM_ACTIVATION` (arm-distal pyridyl-disulfide-class
+  installation). Legacy `ACTIVATION` retained as silent alias so
+  v0.4.x recipes using ECH/DVS load unchanged.
+- New `ACSSiteType.PYRIDYL_DISULFIDE` member; pyridyl-disulfide
+  `product_acs` corrected from chemically inverted `THIOL` to
+  `PYRIDYL_DISULFIDE`, and `chemistry_class` from incorrect
+  `"reduction"` to canonical `"thiol_disulfide_exchange"`.
+- 6 matrix-side converters (CNBr / CDI / Tresyl / Cyanuric / Glyoxyl /
+  Periodate) retagged `reaction_type="acs_conversion"` with
+  `functional_mode="acs_converter"`. ECH/DVS continue to dispatch
+  through the same solver.
+- Sequence-enforcing FSM in a new G6 first-principles guardrail
+  (`core/recipe_validation.py::_g6_acs_converter_sequence`), plus an
+  in-module `orchestrator.validate_sequence()` helper. Enforces the
+  canonical ACS Converter → Linker Arm → Ligand → Ion-charging order
+  with skip-allowed and arm-distal precondition checks.
+- New `TargetProductProfile.cip_required` flag that gates a hard
+  requirement for NaBH₄ reductive lock-in after aldehyde-producing
+  converters (glyoxyl-chained, periodate).
+
+### Closed-loop reagents (4 new)
+
+| reagent_key | target_acs | Closes loop |
+|---|---|---|
+| `generic_amine_to_imidazolyl_carbonate` | IMIDAZOLYL_CARBONATE | CDI → amine ligand |
+| `generic_amine_to_sulfonate` | SULFONATE_LEAVING | Tresyl → amine ligand |
+| `protein_thiol_to_pyridyl_disulfide` | PYRIDYL_DISULFIDE | Pyridyl-disulfide → protein -SH |
+| `generic_amine_to_cyanate_ester` | CYANATE_ESTER | CNBr → any amine ligand (canonical 15-min window) |
+
+### Bench-fidelity fixes
+
+- New `aldehyde_multiplier` field on `ReagentProfile` (default 1.0; set
+  to 2.0 on `periodate_oxidation` and `glyoxyl_chained_activation`).
+  Fixes the 2× under-counting of aldehydes from Malaprade vicinal-diol
+  cleavage that previously made downstream ALDEHYDE inventory wrong.
+- New `wetlab_observable` field on `ReagentProfile` (e.g.,
+  `A_343_pyridine_2_thione` for pyridyl-disulfide activation, used to
+  anchor evidence-tier calibration to a real bench measurement).
+
+### Family-reagent matrix expansion
+
+- 147 new entries (7 converters × 21 polymer families) in
+  `family_reagent_matrix.py`, closing the G4 guardrail gap that let
+  CNBr-on-PLGA, periodate-on-alginate, etc. silently bypass.
+
+### UI
+
+- M2 Chemistry bucket "Hydroxyl Activation" renamed to "ACS Conversion"
+  (absorbs both legacy `activator` mode and new `acs_converter` mode).
+- New M2 bucket "Arm-distal Activation" for `arm_activator` mode
+  (pyridyl-disulfide and successors). Renders between Spacer Arm and
+  Ligand Coupling in `_BUCKET_DISPLAY_ORDER`.
+
+### Tests
+
+- `tests/test_v0_5_0_acs_converter.py` (NEW): 50-test gauntlet across
+  enum expansion, dispatch, pyridyl-disulfide chemistry correctness,
+  periodate stoichiometry, sequence FSM, closed-loop pairing, family-
+  matrix coverage. All green.
+- `tests/test_module2_acs.py`: ACS enum size bumped 25 → 26.
+- `tests/test_module2_workflows.py`: profile count 94 → 100;
+  `reaction_type` allowlist gains `"acs_conversion"` and `"arm_activation"`.
+- `tests/test_v0_3_4_m2_dropdown_coverage.py`: bucket-rename + pyridyl-
+  disulfide → "Arm-distal Activation".
+- 308 targeted tests green; CI gates (ruff=0, mypy=0) hold.
+
 ## v0.4.19 — Direction-A standalone alignment + Streamlit 1.55 fixes (2026-04-26)
 
 Three intertwined efforts that took the v0.4.x Direction-A shell from
