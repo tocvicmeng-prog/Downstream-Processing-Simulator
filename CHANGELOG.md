@@ -1,5 +1,113 @@
 # Changelog
 
+## v0.4.19 — Direction-A standalone alignment + Streamlit 1.55 fixes (2026-04-26)
+
+Three intertwined efforts that took the v0.4.x Direction-A shell from
+"port-of-the-Streamlit-tabs" to a faithful realization of the
+canonical `DPSim UI Optimization _standalone_.html` reference, while
+fixing several Streamlit 1.55 regressions that had silently broken
+styling, navigation, and the M3 stage.
+
+### v0.4.x polish (P1–P10, single bundle)
+
+- **P1** Help icon shrunk to inline 14×14 px `<details>` glyph
+  (replaces the full-row `st.popover` chrome). `labeled_widget` and
+  `param_row` now emit label + help + badge + unit on one row.
+- **P2** M1 Hardware live tip-speed chip + vertical v_tip / Re / We
+  metrics rail beside the impeller cross-section; derived volumes
+  readout (Total / φ_d / O:W) with inversion warning. Uses real
+  `StirrerGeometry.impeller_diameter` and paraffin-oil properties.
+- **P3** M1 vessel-mode planned roadmap strip (Membrane M1.5,
+  Microfluidic M2.0 surfaced as not-yet-selectable); wet-lab caveats
+  card pre-Run; Targets card promoted out of the collapsed expander.
+- **P4** M3 derived-geometry strip (V_bed / u_super / τ_void); M2
+  pre-Run status strip with green/amber/red readiness signal.
+- **P5** M1 Calibration banner with Open Stage 07 button.
+- **P6** Non-A+C Hardware (alginate / cellulose / PLGA) gets the
+  same chip + Re/We rail + volumes readout.
+- **P7** M3 Monte-Carlo uncertainty card promoted out of the sidebar
+  popover via `render_uncertainty_panel(as_card=True)`.
+- **P8** M2 ACS state pre-Run preview card with placeholder cells.
+- **P9** M2 reagent-bucket overview grid (17-bucket auto-fill grid
+  with active-bucket highlighting from the per-step expander loop).
+- **P10** **Streamlit 1.55 CSS-injection regression**: `st.html`
+  silently strips `<style>` and `<script>` tags. Switched
+  `inject_global_css` and the `app.py` shell-overrides block to
+  `st.markdown(..., unsafe_allow_html=True)`. Without this fix the
+  entire `tokens.css` was being dropped; the page only looked themed
+  because Streamlit's own dark theme covered for the missing styles.
+
+### Standalone alignment (A1–A5, B1–B6, C1, D1–D2)
+
+- **A1** Pipeline spine collapsed from two-row (visual chrome +
+  click-button overlay) to single integrated row. Each stage cell
+  is an `<a href="?dpsim_stage={id}">` anchor; server consumes the
+  param at render top, calls `set_active_stage`, cleans the URL.
+- **A2** Dark/Light toggle actually flips theme. Replaced the JS-
+  stripped `<script>` class-flip with server-side CSS reinjection —
+  `inject_global_css(theme=...)` emits a second `<style>` block
+  overriding `:root` vars when light. Theme query consumed BEFORE
+  CSS injection so it takes effect on the same rerun.
+- **A3** UI A|B switch rebuilt as a single HTML pill. Diff /
+  Evidence / History segmented and the legacy DARK / LIGHT toggle
+  also rebuilt as anchor pills (the previous nested-column
+  `st.button` patterns wrapped to one-letter-per-line at typical
+  widescreen widths).
+- **A4** Polymer family selector migrated from horizontal radio
+  grid to compact dropdown showing chemistry classification.
+- **A5** Evidence rollup card always renders (placeholder M1/M2/M3
+  rows pre-run); per-row layout uses the canonical Ladder pattern
+  (36 px label │ 1 fr progress-bar │ auto badge) with bar width =
+  tier_rank/5 × 100% in tier-specific colour.
+- **B1** Right rail recovery on M3. The duplicate
+  `render_uncertainty_panel()` call from the sidebar Analysis Tools
+  popover was registering widgets with the same fixed keys as the
+  new M3 primary card, raising `StreamlitDuplicateElementKey` and
+  silently killing the right rail's render — user-visible as "rail
+  vanishes on M3". Sidebar copy removed.
+- **B2** Manual + Appendix J as compact 26 × 26 px icon-only
+  download buttons in their own column right of the DARK/LIGHT
+  pill (was vertically stacked text buttons that pushed the rail
+  down).
+- **B3** Theme toggle as single fidelity-matched button. Replaces
+  the `[DARK | LIGHT]` segmented pill with one button showing a
+  colored dot (teal for dark, amber for light) + current-mode
+  label, click toggles. Matches the standalone byte-for-byte.
+- **B4** Removed the `stHeader` border-bottom that was painting a
+  faint horizontal line across the page through the brand /
+  breadcrumb / search input.
+- **B5** Hidden `stHeader` and `stSidebarHeader` entirely. Even
+  with no border the empty headers were reserving 60 px of dead
+  vertical space at the top of the page with non-clickable
+  decorative icons behind them.
+- **B6** Manual + Appendix J icon clipping fix. cols[8] sub-columns
+  gave each icon only 16 px while the button chrome was 26 px wide.
+  Widened cols[8] and re-scoped the icon-button CSS via the
+  `[data-testid="stMain"]` ancestor.
+- **C1** Resin Lifetime Projection promoted from sidebar popover
+  into a primary M3 card matching the MC uncertainty card pattern.
+  `render_lifetime_panel` gained the `as_card=False` kwarg.
+- **D1/D2** Scientific Mode (Empirical Engineering / Hybrid Coupled
+  / Mechanistic Research) moved from sidebar radio to a top-bar
+  segmented pill matching the Diff/Evidence/History style. Lives
+  at cols[4], immediately right of the recipes search input. Click
+  sets `?dpsim_mode={key}`; consumed at app.py top so
+  `model_mode_enum` is in effect on the same rerun.
+
+### Quality
+
+- `ruff check src/dpsim/visualization/` clean
+- 248 / 248 UI tests pass (`test_ui_v0_4_0_modules` + chrome smoke +
+  ui contract + ui workflow + ui recipe + enum-CI + M2 dropdown
+  coverage)
+- Visual verification in headless Chromium against
+  `streamlit run src/dpsim/visualization/app.py` confirmed: spine
+  renders single integrated row, theme flips correctly server-
+  side, all top-bar pills render as compact horizontal anchor
+  links, family is a dropdown with classification subline,
+  evidence ladder shows M1/M2/M3 placeholder rows pre-run, right
+  rail present on all 7 stages.
+
 ## v0.3.8 — Release Tooling Refresh (Installer + Portable ZIP) (2026-04-25)
 
 Refreshes the Windows release-build pipeline to match the v0.3.x state

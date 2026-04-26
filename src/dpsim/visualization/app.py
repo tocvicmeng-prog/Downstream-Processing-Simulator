@@ -605,7 +605,7 @@ _direction = get_direction()
 
 if _direction == "a":
     render_shell(
-        version="0.4.2",
+        version="0.4.19",
         breadcrumb_recipe="protein_a_pilot.toml",
         modified=_diffs_pending > 0,
         evidence_stages=_evidence_stages,
@@ -631,7 +631,7 @@ else:
         set_triptych_focus,
     )
     _render_top_bar(
-        version="0.4.2",
+        version="0.4.19",
         breadcrumb_recipe="protein_a_pilot.toml",
         modified=_diffs_pending > 0,
         evidence_stages=_evidence_stages,
