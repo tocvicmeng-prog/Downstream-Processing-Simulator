@@ -166,12 +166,19 @@ def render_top_bar(
     # v0.4.19 (B6): widened cols[8] from 0.4 → 0.6 — the previous
     # ratio gave each icon's sub-column only ~16 px of width, clipping
     # the 26 px-wide download-button chrome.
-    # v0.4.19 (D1/D2): added a 10th column at index 4 for the
-    # Scientific Mode segmented pill (Empirical Engineering / Hybrid
-    # Coupled / Mechanistic Research). The pill needs ~470 px to fit
-    # the full labels; cols[4] = 3.5 / total ≈ 12.25 ≈ 463 px at the
-    # 1620 px main width. Other ratios trimmed to compensate.
-    cols = st.columns([0.5, 0.55, 1.4, 1.0, 3.5, 1.0, 1.2, 1.4, 1.1, 0.7])
+    # v0.4.19 (D3): top-bar widths rebalanced after measuring each
+    # cell's actual content at 1920 × 1200 viewport (1620 px main
+    # width, 144 px of 9× column gaps, ~1476 px effective content).
+    # The doubled search bar is the user-facing change (cols[3]
+    # 107 → 257 px); other ratios fit each cell to its 1-line content
+    # so brand, UI A|B, breadcrumb, Diff/Evidence/History pill, theme
+    # toggle, and the manual-icons pair all render without wrapping.
+    #
+    # Layout clusters (left → right):
+    #   LEFT    [brand] [UI A|B] [breadcrumb] [search]
+    #   MIDDLE  [scientific mode pill]
+    #   RIGHT   [history] [evidence] [view seg] [theme] [manual icons]
+    cols = st.columns([0.8, 0.85, 1.4, 2.6, 3.85, 1.0, 0.6, 1.95, 0.85, 0.55])
 
     with cols[0]:
         st.html(
