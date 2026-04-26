@@ -144,14 +144,26 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
     color: var(--dps-text);
 }
 
-/* Header bar (Streamlit's auto top toolbar): blend with bg, no
- * border. v0.4.19: previous border-bottom rule was painting a
- * 1px horizontal line all the way across the page above the
- * brand / search / Diff toggle row. Removed to match the
- * canonical Direction-A reference (no top-edge separator). */
-[data-testid="stHeader"] {
-    background: transparent !important;
-    border-bottom: none !important;
+/* Header bar (Streamlit's auto top toolbar): hidden entirely.
+ * v0.4.19 (B5): even with border-bottom: none the empty stHeader
+ * still reserved 60 px of vertical space at the top of the page —
+ * a dead band with unclickable decorative icons behind it that
+ * the user perceived as a phantom header. Hide the whole element
+ * (header + matching sidebar header) so the content starts at the
+ * absolute top edge, matching the canonical Direction-A reference. */
+[data-testid="stHeader"],
+[data-testid="stSidebarHeader"] {
+    display: none !important;
+}
+/* Reclaim the vertical space that stHeader / stSidebarHeader were
+ * reserving — Streamlit pads the main + sidebar containers from
+ * the top to make room for these chrome elements. */
+[data-testid="stMain"] > div:first-child,
+[data-testid="stMainBlockContainer"] {
+    padding-top: 0 !important;
+}
+[data-testid="stSidebarContent"] {
+    padding-top: 1rem !important;
 }
 
 /* Sidebar — slate-900 surface, slate-700 border. */
