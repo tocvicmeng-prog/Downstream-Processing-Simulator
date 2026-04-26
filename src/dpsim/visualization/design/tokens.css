@@ -144,10 +144,14 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
     color: var(--dps-text);
 }
 
-/* Header bar (Streamlit's auto top toolbar): blend with bg, no border. */
+/* Header bar (Streamlit's auto top toolbar): blend with bg, no
+ * border. v0.4.19: previous border-bottom rule was painting a
+ * 1px horizontal line all the way across the page above the
+ * brand / search / Diff toggle row. Removed to match the
+ * canonical Direction-A reference (no top-edge separator). */
 [data-testid="stHeader"] {
     background: transparent !important;
-    border-bottom: 1px solid var(--dps-border) !important;
+    border-bottom: none !important;
 }
 
 /* Sidebar — slate-900 surface, slate-700 border. */
