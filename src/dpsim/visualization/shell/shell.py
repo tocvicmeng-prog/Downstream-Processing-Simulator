@@ -80,42 +80,45 @@ def _consume_theme_query() -> None:
 
 
 def _render_theme_toggle() -> None:
-    """Render the dark/light segmented switch as an anchor pill.
+    """Render the theme toggle as a single fidelity-matched button.
 
-    v0.4.19 (A3 follow-on): single HTML block. The previous
-    ``st.button``-in-2-columns approach got squashed at typical
-    widescreen widths (DARK / LIGHT wrapped to one letter per line).
+    v0.4.19 (B3): matches the canonical Direction-A ``ThemeToggle``
+    component exactly — ONE button (not a segmented pill) showing the
+    current mode with a colored dot indicator and the mode label.
+    Click toggles to the opposite mode.
 
-    A click sets ``?dpsim_theme=light`` (or ``=dark``);
+    Visual:
+        Dark mode: ●  DARK    (dot = teal accent)
+        Light mode: ●  LIGHT  (dot = amber-500)
+
+    A click sets ``?dpsim_theme={opposite}``;
     ``_consume_theme_query`` updates ``THEME_KEY`` on the next rerun
     so ``inject_global_css`` re-emits the appropriate ``:root`` vars.
     """
     _consume_theme_query()
     theme = get_theme()
-
-    def _seg(value: str, label: str) -> str:
-        active = value == theme
-        bg = "var(--dps-accent)" if active else "transparent"
-        fg = "var(--dps-slate-950)" if active else "var(--dps-text-muted)"
-        return (
-            f'<a href="?{_THEME_QUERY_KEY}={value}" target="_self" '
-            f'style="display:inline-flex;align-items:center;'
-            f'justify-content:center;padding:0 10px;height:20px;gap:5px;'
-            f'border-radius:3px;background:{bg};color:{fg};'
-            f'font-family:var(--dps-font-mono);font-size:10.5px;'
-            f'font-weight:600;text-decoration:none;cursor:pointer;'
-            f'letter-spacing:0.04em;transition:background-color 120ms;">'
-            f"{label}</a>"
-        )
-
+    is_light = theme == "light"
+    dot_color = (
+        "var(--dps-amber-500)" if is_light else "var(--dps-accent)"
+    )
+    label = "LIGHT" if is_light else "DARK"
+    next_theme = "dark" if is_light else "light"
     st.markdown(
-        '<div class="dps-theme-toggle" style="display:inline-flex;'
-        "align-items:center;gap:0;padding:2px;height:26px;"
-        "background:var(--dps-surface-2);"
-        "border:1px solid var(--dps-border);border-radius:4px;\">"
-        + _seg("dark", "DARK")
-        + _seg("light", "LIGHT")
-        + "</div>",
+        f'<a class="dps-theme-toggle" href="?{_THEME_QUERY_KEY}={next_theme}" '
+        f'target="_self" title="Toggle theme" '
+        f'style="display:inline-flex;align-items:center;gap:6px;'
+        f'padding:0 10px;height:26px;'
+        f'background:var(--dps-surface-2);'
+        f'border:1px solid var(--dps-border);'
+        f'border-radius:4px;color:var(--dps-text-muted);'
+        f'font-family:var(--dps-font-mono);font-size:11px;'
+        f'font-weight:600;letter-spacing:0.04em;'
+        f'text-decoration:none;cursor:pointer;'
+        f'transition:all 150ms ease-out;">'
+        f'<span style="width:8px;height:8px;border-radius:8px;'
+        f'background:{dot_color};display:inline-block;"></span>'
+        f"{label}"
+        "</a>",
         unsafe_allow_html=True,
     )
 
