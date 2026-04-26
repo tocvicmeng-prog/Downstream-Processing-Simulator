@@ -91,13 +91,26 @@ contract and calibration domain.
 
 ---
 
-## J.1 Hydroxyl Activation
+## J.1 ACS Conversion (formerly "Hydroxyl Activation")
 
-Polysaccharide matrices (agarose, sepharose, cellulose, dextran) present -OH
-groups on every sugar ring. These -OH groups are chemically inert under mild
-conditions. Activation converts -OH into a leaving group or a reactive
-electrophile so that downstream coupling (amine, thiol, hydroxyl, carboxyl)
-can proceed at room temperature and near-neutral pH.
+> **v0.5.0 rename note.** Up to v0.4.x this section was titled "Hydroxyl
+> Activation" because most of the canonical protocols (CNBr, CDI, ECH,
+> DVS, BDDE, Tresyl) start from a polysaccharide -OH. The v0.5.0 ACS
+> Converter epic generalises the framing: every protocol below converts
+> one ACS (Available Crosslinking Site) into a chemically distinct one,
+> and not all targets are -OH (periodate consumes vicinal diols; EDC/NHS
+> targets -COOH). The Streamlit dashboard surfaces this as the **ACS
+> Conversion** chemistry bucket. Pyridyl-disulfide, which is installed
+> on a pre-existing arm-distal amine rather than directly on the
+> polysaccharide, has its own protocol in §J.4.7 (Arm-distal Activation).
+
+Polysaccharide matrices (agarose, sepharose, cellulose, dextran) present
+hydroxyl, carboxyl, vicinal-diol, or amine functional groups on every sugar
+ring depending on the polymer family. These groups are usually chemically
+inert under mild conditions. Activation converts the matrix-side ACS into a
+leaving group or a reactive electrophile so that downstream coupling
+(amine, thiol, hydroxyl, carboxyl) can proceed at room temperature and
+near-neutral pH.
 
 Pick **one** activator. More aggressive activators = higher ligand-coupling
 density but also more matrix damage and more residual reactivity after
@@ -654,6 +667,287 @@ Lim S, Seib PA (1993) *Cereal Chem.* 70:137. Kasemsuwan T, Jane J (1996)
 (2004) *Carbohydr. Res.* 339:2391. Seal BL (1996) *Biomaterials* 17:1869.
 Salata GC, Kim JH, Chen C-H, McClements DJ (2015) *Int. J. Biol. Macromol.*
 81:1009. Van Wazer JR (1958) *Phosphorus and its Compounds*, vol. I.
+
+---
+
+### J.1.8  ACS Conversion — Cyanuric chloride (3-stage triazine substitution)
+
+**Purpose:** Activate matrix -OH to a dichlorotriazine handle, then
+sequentially substitute the remaining 2 Cl atoms — typically the second
+with a small ligand (dye, amine) and the third with a glycine quench.
+Canonical chemistry for Reactive Blue 2 / Procion Red HE-3B affinity
+supports.
+
+**Evidence tier:** `semi_quantitative` (per-stage rate constants are
+literature-anchored, not locally calibrated).
+
+**DPSim M2 key:** `cyanuric_chloride_activation`. v0.5.1 ships per-stage
+`(k_forward, E_a)` tuples on `ReagentProfile.staged_kinetics` and
+`ModificationStep.temperature_stage` (1-based) selects the active stage.
+`temperature_stage=0` falls back to base k_forward.
+
+**Based on:** Korpela & Mäntsälä (1968) *Anal. Biochem.* 23:381; Lowe &
+Pearson (1984) *Methods Enzymol.* 104:97; Hermanson Ch. 15.5.
+
+#### Safety — READ BEFORE HANDLING
+
+- GHS pictograms: corrosive, exclamation mark, environmental hazard.
+- H-codes: H302 (harmful if swallowed), H314 (severe burns), H335
+  (respiratory irritant), H410 (very toxic to aquatic life).
+- PPE: nitrile gloves (double), face shield, chemical apron, lab coat.
+  Fume hood mandatory.
+- Reacts violently with water → HCl release. Store under dry argon or
+  nitrogen; weigh quickly in the hood.
+- Waste: chlorinated organic-aqueous; neutralise rinses with solid
+  NaHCO₃ before pooling.
+
+#### What you need (per 10 mL wet gel)
+
+| Reagent | Amount | CAS | Storage |
+|---|---|---|---|
+| Cyanuric chloride (TCT) | 100–500 mg | 108-77-0 | 4 °C, dry, in dark |
+| Anhydrous acetone | 30 mL | 67-64-1 | Over molecular sieves |
+| Reactive dye (e.g. Cibacron Blue F3GA) | 50 mg | 12236-82-7 | 4 °C, dark |
+| Glycine | 200 mg | 56-40-6 | RT |
+
+#### Procedure (3-stage)
+
+**Stage 1 — install dichlorotriazine handle (1st Cl, 0–5 °C, k≈3×10⁻³).**
+
+1. PPE on. Fume hood mandatory.
+2. Dehydrate 10 mL wet gel through an acetone gradient (water → 30 % →
+   60 % → 100 % → anhydrous acetone, 30 mL each).
+3. Weigh 100–500 mg cyanuric chloride into a separate vial **in the
+   hood**. Dissolve in 5 mL ice-cold anhydrous acetone.
+4. Pour the dissolved TCT onto the dehydrated gel. Add 0.5 M Na₂CO₃
+   dropwise (~1 mL) to keep pH 9–10 as HCl is released.
+5. Rotate at 0–5 °C (ice bath), 30 min. Solution will turn pale yellow
+   as the dichlorotriazine accumulates.
+6. Wash with 5 × 30 mL ice-cold acetone, then 5 × 30 mL ice-cold water
+   to remove unreacted TCT. **Step 1 product: dichlorotriazine-loaded
+   matrix; surface this in the simulator with `temperature_stage=1`.**
+
+**Stage 2 — couple ligand (2nd Cl, 25 °C, k≈3×10⁻⁴).**
+
+7. Suspend the dichlorotriazine matrix in 10 mL pH 10.0 buffer (0.1 M
+   carbonate). Add the dye (50 mg) or amine ligand pre-dissolved in 5
+   mL of the same buffer.
+8. Rotate at 25 °C, 2 h. (For dyes, monitor A_λ_max of the supernatant;
+   uptake plateaus when the second Cl is consumed.)
+9. Wash with 5 × 30 mL water, then 5 × 30 mL 1 M NaCl, then 5 × 30 mL
+   water. Salt washes remove non-covalently adsorbed dye. **Step 2
+   product: monochlorotriazine-loaded ligand support; simulator
+   `temperature_stage=2`.**
+
+**Stage 3 — quench remaining Cl (3rd Cl, 60–80 °C, k≈3×10⁻⁵).**
+
+10. Add 200 mg glycine in 10 mL pH 9.0 carbonate buffer.
+11. Rotate at 60 °C (water bath), 4 h. Glycine consumes the third Cl,
+    converting it to a neutral N-glycyl bond.
+12. Wash with 5 × 30 mL water, store in 20 % ethanol at 4 °C. **Step 3
+    product: fully substituted triazine-dye support; simulator
+    `temperature_stage=3`.**
+
+#### Quality control
+
+- Dye loading: 5–20 µmol/mL wet gel (UV at λ_max in supernatant before
+  vs after coupling).
+- Cl content (ion chromatography of an HF/HClO₄ digest of 10 mg dry
+  matrix): < 0.1 % residual Cl after Stage 3 (any > 0.5 % indicates
+  incomplete glycine quench).
+
+#### Troubleshooting
+
+- **Dye washes off in salt rinse:** Stage 2 reaction did not run long
+  enough. Re-couple at 25 °C for 4–6 h, monitoring A_λ_max plateau.
+- **Stage 3 leaves residual Cl:** scale up the glycine to 1 M, hold at
+  80 °C, 6 h. Verify by Cl content < 0.1 %.
+- **Yellow / brown discolouration after Stage 1:** TCT was older than ~3
+  months, partially hydrolysed. Use a fresh, sealed bottle.
+
+#### References
+
+Korpela TK, Mäntsälä P (1968) *Anal. Biochem.* 23:381. Lowe CR, Pearson
+JC (1984) *Methods Enzymol.* 104:97. Hermanson (2013) Ch. 15.5.
+
+---
+
+### J.1.9  ACS Conversion — Glyoxyl-chained (glycidol → periodate → multipoint Lys)
+
+**Purpose:** Install glyoxyl (-CH₂-CHO) groups uniformly across the matrix
+surface, enabling **multipoint covalent immobilisation** of enzymes via
+several Lys residues simultaneously. Multipoint anchoring uplifts T_50
+by 10–20 °C versus single-point coupling — the canonical chemistry for
+industrial lipase, penicillin-G acylase, and CALB.
+
+**Evidence tier:** `semi_quantitative`.
+
+**DPSim M2 key:** `glyoxyl_chained_activation`. Carries
+`aldehyde_multiplier=2.0` (Malaprade cleavage produces 2 aldehydes per
+diol pair) and chain-scission penalty (threshold 0.40, max G_DN loss
+0.50).
+
+**Based on:** Mateo C et al. (2007) *Biotechnol. Bioeng.* 96:5; Pessela
+BCC et al. (2003) *Enzyme Microb. Technol.* 33:199; Guisán JM (1988)
+*Enzyme Microb. Technol.* 10:375.
+
+#### Safety
+
+- Glycidol (CAS 556-52-5): suspected carcinogen (H351), skin/eye
+  irritant. PPE: nitrile gloves, safety glasses, fume hood.
+- Sodium periodate (CAS 7790-28-5): strong oxidiser (H272), skin/eye
+  irritant (H315/H319). Avoid contact with reducing agents. Light-
+  sensitive — keep in dark.
+- Sodium borohydride (CAS 16940-66-2): flammable, water-reactive (H260),
+  hydrogen evolution. Use in well-ventilated hood; quench excess with
+  ice-cold water in a metal beaker, never glass.
+- Waste: separate organic glycidol waste from aqueous periodate; reduce
+  any periodate residues with sodium thiosulfate before disposal.
+
+#### What you need (per 10 mL wet gel)
+
+| Reagent | Amount | CAS | Storage |
+|---|---|---|---|
+| Glycidol | 1 mL | 556-52-5 | 4 °C, dark |
+| Sodium hydroxide | 0.4 g | 1310-73-2 | RT, dry |
+| Sodium periodate | 100 mg (5 mM) | 7790-28-5 | RT, dark |
+| Sodium borohydride | 50 mg | 16940-66-2 | Desiccated, –20 °C |
+| 0.1 M sodium bicarbonate, pH 10 | 50 mL | — | 4 °C |
+| 25 mM acetate, pH 5 | 50 mL | — | 4 °C |
+
+#### Procedure (16 h overnight + 2 h + 2 h reduction)
+
+1. PPE on.
+2. **Glycidol etherification (Step 1, 16 h, pH 11).** Suspend 10 mL wet
+   gel in 10 mL water + 0.4 g NaOH (final ~0.5 M). Add 1 mL glycidol
+   dropwise with stirring. Rotate at RT, 16 h. The matrix now bears
+   1,2-diol-terminated glyceryl ether tethers.
+3. Wash with 5 × 30 mL water until pH < 8.5.
+4. **Periodate oxidation (Step 2, 2 h, pH 5).** Suspend in 30 mL of 25
+   mM acetate buffer pH 5. Add 100 mg NaIO₄ (5 mM final). Cover with
+   foil (light-sensitive). Rotate at 4 °C, 2 h. Cleaves vicinal diols
+   to glyoxyl (-CH₂-CHO).
+5. Wash with 5 × 30 mL water, then 5 × 30 mL of pH 10 carbonate. The
+   matrix is now glyoxyl-activated; surface in the simulator as
+   `product_acs=GLYOXYL`.
+6. **Multipoint Lys coupling (pH 10, 24 h, 25 °C).** Add the enzyme
+   solution (1–10 mg/mL in pH 10 carbonate). Rotate at 25 °C, 24 h. At
+   pH 10, multiple deprotonated lysine ε-amines anchor simultaneously
+   to glyoxyl groups, forming Schiff bases.
+7. **NaBH₄ reductive lock-in (Step 4, 2 h).** **MANDATORY for any resin
+   intended for CIP cleaning.** Add 50 mg NaBH₄. Rotate at 4 °C, 2 h
+   (gentle hydrogen evolution; vent the cap). Reduces the Schiff bases
+   to stable secondary amines, locking the multipoint anchors.
+8. Wash with 5 × 30 mL pH 8 phosphate, then store in 20 % ethanol at
+   4 °C.
+
+#### Quality control
+
+- Glyoxyl density: 50–200 µmol/mL wet gel (titrate with hydroxylamine
+  hydrochloride, back-titrate the released HCl with 0.1 M NaOH).
+- Multipoint anchor count: T_50 thermal-deactivation assay; expect 5
+  + 5 × n_anchors °C uplift versus single-point coupling.
+- Residual aldehyde after NaBH₄: < 5 µmol/mL by Schiff-base TNBS assay.
+
+#### Troubleshooting
+
+- **Bead becomes very soft / fragments after Step 2:** periodate dose or
+  time too high. Drop NaIO₄ to 2 mM, time to 30 min. The simulator's
+  v0.5.1 chain-scission penalty triggers above 40 % conversion.
+- **No T_50 uplift versus single-point reference:** glycidol step
+  incomplete (insufficient -OH coverage of glyceryl ether). Extend Step
+  1 to 24 h; verify diol density before Step 2.
+- **Enzyme washes off after a few CIP cycles:** Step 4 NaBH₄ skipped
+  or under-dosed. Repeat with 100 mg NaBH₄, 4 h.
+
+#### References
+
+Guisán JM (1988) *Enzyme Microb. Technol.* 10:375. Mateo C, Palomo JM,
+Fernandez-Lorente G, Guisán JM, Fernandez-Lafuente R (2007) *Biotechnol.
+Bioeng.* 96:5. Pessela BCC, Mateo C, Fuentes M, Vian A, García JL,
+Carrascosa AV, Guisán JM, Fernández-Lafuente R (2003) *Enzyme Microb.
+Technol.* 33:199.
+
+---
+
+### J.1.10  ACS Conversion — Periodate-direct (vicinal-diol → aldehyde, Malaprade)
+
+**Purpose:** Cleave vicinal cis-diols on diol-rich polysaccharides
+(dextran, amylose, pullulan, starch, hyaluronate) directly to aldehyde
+pairs. Foundational route for hydrazide / aminooxy / amine + NaBH₃CN
+coupling and for oxidised-glycoprotein workflows.
+
+**Evidence tier:** `semi_quantitative`.
+
+**DPSim M2 key:** `periodate_oxidation`. Carries `aldehyde_multiplier=2.0`
+(one diol pair → two aldehydes — the v0.5.0 fix for the prior 1:1
+under-counting) and chain-scission penalty (threshold 0.30, max G_DN
+loss 0.70).
+
+**Based on:** Bobbitt JM (1956) *Adv. Carbohydr. Chem.* 11:1; Malaprade
+L (1928) *Bull. Soc. Chim. Fr.* 43:683; Painter T, Larsen B (1973) *Acta
+Chem. Scand.* 27:1957.
+
+#### Safety
+
+- Sodium periodate (CAS 7790-28-5): strong oxidiser (H272), skin/eye
+  irritant. Light-sensitive — store in dark. Keep separate from
+  reducing agents and organic solvents.
+- Hydrazide ligands (e.g. ADH, CAS 1071-93-8): low hazard; H315
+  (skin irritation).
+- Waste: reduce residual periodate with sodium thiosulfate before
+  disposal.
+
+#### What you need (per 10 mL wet diol-rich gel)
+
+| Reagent | Amount | CAS | Storage |
+|---|---|---|---|
+| Sodium periodate | 5–20 mM (50–200 mg) | 7790-28-5 | RT, dark |
+| 25 mM acetate, pH 5 | 30 mL | — | 4 °C |
+| Adipic acid dihydrazide (ADH) — typical capture | 200 mg | 1071-93-8 | RT |
+| Sodium cyanoborohydride | 50 mg (optional reductive cap) | 25895-60-7 | Desiccated, –20 °C |
+
+#### Procedure
+
+1. PPE on. Fume hood for periodate weighing.
+2. Suspend 10 mL wet gel in 30 mL acetate buffer pH 5.
+3. Add NaIO₄ to 5 mM (50 mg). For dose-response work, vary 2–20 mM.
+4. Cover with foil. Rotate at 4 °C, 1–2 h. **Do not exceed 30 % diol
+   conversion** if the bead's mechanical integrity matters — see the
+   v0.5.1 chain-scission penalty in §6.1.3 of the manual.
+5. Quench with sodium thiosulfate (100 mg) for 5 min to consume residual
+   IO₄⁻.
+6. Wash with 5 × 30 mL cold water until A_232 of the eluate is < 0.05.
+7. **Couple a hydrazide / aminooxy / amine ligand within 30 min** (the
+   support's aldehyde reactivity decays slowly but the surface adsorbs
+   atmospheric amines).
+8. Optional: reduce the resulting Schiff bases / hydrazones with NaBH₃CN
+   (50 mg, 2 h, pH 7) to lock the linkage permanently.
+
+#### Quality control
+
+- Aldehyde density: 20–100 µmol/mL wet gel (TNBS Schiff-base titration
+  or hydroxylamine back-titration).
+- Chain scission: monitor uronic-acid release into supernatant by
+  carbazole assay. Above 30 % conversion, scission progresses
+  monotonically.
+
+#### Troubleshooting
+
+- **Bead loses pressure tolerance:** scission penalty has triggered.
+  Drop NaIO₄ to 2–5 mM and time to 30 min.
+- **Subsequent hydrazone hydrolyses at low pH:** stabilise with NaBH₃CN
+  reduction (Step 8) — converts the labile hydrazone into a stable
+  alkylhydrazide.
+- **Inconsistent batch-to-batch oxidation:** NaIO₄ photolyses on
+  storage; verify with KI/starch assay before use, or use a fresh
+  ampoule.
+
+#### References
+
+Malaprade L (1928) *Bull. Soc. Chim. Fr.* 43:683. Bobbitt JM (1956)
+*Adv. Carbohydr. Chem.* 11:1. Painter T, Larsen B (1973) *Acta Chem.
+Scand.* 27:1957. Hermanson (2013) Ch. 2.5, 19.
 
 ---
 
@@ -1326,6 +1620,100 @@ O'Shannessy DJ et al. (1984) *J. Immunol. Methods* 75:11. Hermanson (2013) Ch. 1
 
 ---
 
+### J.3.6  Protein Coupling — Cys-tagged Protein A / G / L on pyridyl-disulfide support
+
+**Purpose:** Reversibly capture a site-directed Cys variant of Protein A,
+Protein G, or Protein L on a pyridyl-disulfide-loaded matrix via thiol-
+disulfide exchange. The ligand is held by a single mixed disulfide and
+released cleanly by reducing-agent elution, without leaching ligand into
+the eluate. Useful for analytical-scale Protein-A/G/L columns that need
+periodic ligand refresh, and for capturing Fab fragments (Protein L) or
+broader IgG subclasses (Protein G).
+
+**Evidence tier:** `semi_quantitative`.
+
+**DPSim M2 keys:**
+- `protein_a_thiol_to_pyridyl_disulfide` (42 kDa, Fc-IgG1 affinity).
+- `protein_g_thiol_to_pyridyl_disulfide` (22 kDa, broader Fc subclasses).
+- `protein_l_thiol_to_pyridyl_disulfide` (36 kDa, kappa-light-chain / Fab).
+
+All three carry `chemistry_class="thiol_disulfide_exchange"` and declare
+`A_343_pyridine_2_thione` as the wet-lab observable for evidence-tier
+calibration.
+
+**Based on:** Carlsson J, Drevin H, Axén R (1978) *Biochem. J.* 173:723;
+Brocklehurst K, Carlsson J, Kierstan MPJ, Crook EM (1973) *Biochem. J.*
+133:573; Hermanson (2013) Ch. 17.4; Nilson BHK et al. (1992) *Eur. J.
+Immunol.* 22:2547 (Protein L).
+
+#### Safety
+
+- Cys-tagged Protein A / G / L: low hazard. Store –80 °C, single-thaw.
+- DTT (CAS 3483-12-3) / TCEP (CAS 51805-45-9): used at elution, not
+  during coupling. Skin/eye irritant; PPE: nitrile gloves, safety
+  glasses.
+- Pyridine-2-thione, the byproduct of coupling: low hazard, but
+  unpleasant odour. Handle the column eluate in the hood.
+
+#### What you need (per 1 mL pyridyl-disulfide-loaded matrix from §J.4.7)
+
+| Reagent | Amount | CAS / source | Storage |
+|---|---|---|---|
+| Cys-tagged Protein A / G / L | 1–5 mg | Custom, recombinant | –80 °C |
+| Coupling buffer (50 mM Na phosphate, 150 mM NaCl, 1 mM EDTA, pH 7.5) | 20 mL | — | 4 °C |
+| TCEP (5 mM in coupling buffer, FRESH) | 2 mL | 51805-45-9 | Make fresh |
+| Storage buffer (PBS + 0.05 % NaN₃) | 20 mL | — | 4 °C |
+
+#### Procedure
+
+1. PPE on.
+2. **Reduce the protein's Cys-tag immediately before coupling.** Combine
+   1–5 mg Cys-tagged ligand with 100 µL of 5 mM TCEP in 1 mL coupling
+   buffer. Hold at 25 °C, 30 min. (TCEP does NOT need to be removed —
+   it does not reduce the matrix's pyridyl-disulfide.)
+3. Wash 1 mL pyridyl-disulfide-loaded gel (from §J.4.7) with 5 × 5 mL
+   coupling buffer to remove storage solvent.
+4. Add the reduced protein solution to the gel slurry. Total volume
+   ~ 2 mL. Rotate at 4 °C, 1 h.
+5. **Monitor the supernatant at 343 nm.** Pyridine-2-thione released
+   stoichiometrically as protein -SH displaces it. ε_343 = 8.08 mM⁻¹
+   cm⁻¹. Coupling is complete when A_343 plateaus.
+6. Wash with 10 × 5 mL coupling buffer, then 10 × 5 mL storage buffer.
+7. Store at 4 °C in storage buffer, ≤ 4 weeks.
+
+#### Quality control
+
+- Coupling yield (from A_343 release): 80–95 % of input ligand for
+  well-designed Cys-tag positions; < 50 % suggests buried Cys or
+  oxidised dimer.
+- Functional binding: load 1 mL human IgG (1 mg/mL) over the column;
+  expect breakthrough fractions to be < 5 % of feed concentration.
+- Ligand leaching (the headline benefit): elute with 10 mM DTT and
+  measure free protein in the eluate. < 0.1 % per cycle is typical;
+  multi-cycle ligand refresh is the use case.
+
+#### Troubleshooting
+
+- **Low coupling yield (< 50 %):** Cys-tag is buried in the folded
+  protein, or the protein has dimerised via the Cys. Run a non-reducing
+  SDS-PAGE on the input — a 2× MW band indicates dimer; reduce
+  thoroughly with TCEP, then desalt before coupling.
+- **A_343 plateau is reached but capture activity is low:** Cys-tag is
+  too close to the binding site, sterically blocking IgG/Fab. Move the
+  Cys to the C-terminus or insert a flexible linker.
+- **Capture activity drops after 5 cycles:** mixed disulfide is being
+  reduced over time by trace thiols in the buffer. Store under nitrogen
+  and add 1 mM EDTA to suppress metal-catalysed disulfide reduction.
+
+#### References
+
+Brocklehurst K, Carlsson J, Kierstan MPJ, Crook EM (1973) *Biochem. J.*
+133:573. Carlsson J, Drevin H, Axén R (1978) *Biochem. J.* 173:723.
+Nilson BHK, Sólomon A, Björck L, Akerström B (1992) *Eur. J. Immunol.*
+22:2547. Hermanson (2013) Ch. 17.4.
+
+---
+
 ## J.4 Spacer Arm
 
 Spacer arms are short bifunctional molecules inserted between the matrix
@@ -1561,6 +1949,110 @@ length).
 #### Refs
 
 Hermanson (2013) Ch. 18.
+
+---
+
+### J.4.7  Arm-distal Activation — Pyridyl-disulfide on amine arm (v0.5.0 ARM_ACTIVATION)
+
+**Purpose:** Convert an arm-distal -NH₂ (installed by §J.4.1 EDA, §J.4.4
+DADPA, or another amine spacer) into a pyridyl-disulfide-loaded
+electrophile that captures protein -SH via reversible thiol-disulfide
+exchange. This is **not** a matrix-side ACS conversion — the polysaccharide
+backbone is unchanged. The reaction installs an `R–S–S–pyridyl` handle at
+the arm's far end.
+
+**Evidence tier:** `semi_quantitative`.
+
+**DPSim M2 key:** `pyridyl_disulfide_activation`. Step type:
+`ModificationStepType.ARM_ACTIVATION`. Pre-condition: `acs_state` must
+contain `AMINE_DISTAL > 0` from a prior `SPACER_ARM` step, OR the polymer
+family must be chitosan-bearing (native -NH₂ surface). The G6 guardrail
+emits BLOCKER if neither is satisfied.
+
+**Important chemistry note (v0.5.0 fix).** Earlier DPSim revisions
+labelled the product as `THIOL` and the chemistry class as `"reduction"`.
+Both are wrong: a pyridyl-disulfide-loaded matrix carries an
+*electrophilic* `R–S–S–pyridyl` group, not a free thiol; coupling is
+*thiol-disulfide exchange*, not reduction. (Reduction is what happens at
+*elution* when DTT/TCEP cleaves the captured-protein disulfide.) The
+v0.5.0 reagent profile has been corrected to `product_acs=PYRIDYL_DISULFIDE`,
+`chemistry_class="thiol_disulfide_exchange"`.
+
+**Based on:** Carlsson J et al. (1978) *Biochem. J.* 173:723;
+Brocklehurst K et al. (1973) *Biochem. J.* 133:573; Hermanson Ch. 17.4.
+
+#### Safety
+
+- 2,2'-Dipyridyl disulfide / Aldrithiol-2 (CAS 2127-03-9): GHS exclamation
+  mark; H315 (skin irritant), H319 (eye irritant). PPE: nitrile gloves,
+  safety glasses.
+- Methanol (carrier solvent, CAS 67-56-1): flammable (H225), toxic
+  (H301/H311/H331). Fume hood for stock prep.
+- Pyridine-2-thione (the byproduct, A_343 = 8.08 mM⁻¹ cm⁻¹): low
+  hazard, mildly malodorous.
+- Waste: organic-aqueous; non-halogenated.
+
+#### What you need (per 10 mL amine-arm-loaded wet gel)
+
+| Reagent | Amount | CAS | Storage |
+|---|---|---|---|
+| 2,2'-Dipyridyl disulfide (Aldrithiol-2) | 100 mg | 2127-03-9 | 4 °C, dry, dark |
+| Methanol (anhydrous) | 5 mL | 67-56-1 | Fume hood |
+| Coupling buffer (0.1 M Na phosphate, 1 mM EDTA, pH 7.5) | 20 mL | — | 4 °C |
+| Storage buffer (PBS + 0.05 % NaN₃) | 20 mL | — | 4 °C |
+
+#### Procedure
+
+1. PPE on.
+2. **Verify the arm-distal -NH₂ density** before proceeding. Run a
+   ninhydrin (Kaiser) test on a 50 µL gel sample; expect a strong
+   purple-blue colour. Without this verification the simulator's G6
+   precondition check will block the run.
+3. Wash 10 mL amine-arm-loaded gel with 5 × 30 mL coupling buffer.
+4. Dissolve 100 mg 2,2'-dipyridyl disulfide in 5 mL methanol (in the
+   hood). Dilute into 20 mL coupling buffer. Final concentration ≈ 20
+   mM.
+5. Add the dipyridyl disulfide solution to the drained gel. Rotate at
+   25 °C, 1 h. Pyridine-2-thione is released stoichiometrically — track
+   A_343 of the supernatant; reaction is complete when A_343 plateaus.
+6. Wash with 10 × 30 mL coupling buffer, then 10 × 30 mL storage
+   buffer. Removes all unreacted dipyridyl disulfide and the released
+   pyridine-2-thione.
+7. Store at 4 °C in storage buffer, ≤ 2 weeks. The matrix is
+   *electrophilic* (S-S exchange-active). Avoid contact with reducing
+   agents (DTT, TCEP, β-mercaptoethanol) until intentional elution.
+
+#### Quality control
+
+- Pyridyl-disulfide loading: 10–50 µmol/mL wet gel (back-calculated from
+  A_343 release at coupling, ε_343 = 8.08 mM⁻¹ cm⁻¹).
+- Activity check: expose 100 µL gel to a known concentration of
+  glutathione (1 mM) and read pyridine-2-thione release at 343 nm; the
+  ratio of measured to theoretical loading is the active fraction.
+
+#### Troubleshooting
+
+- **No A_343 release:** the prior amine-arm step did not produce
+  AMINE_DISTAL > 0. Re-run §J.4.1 EDA or §J.4.4 DADPA, verify by
+  ninhydrin test before retrying.
+- **Loading drops after 1 week of storage:** PDS is being slowly
+  hydrolysed or reduced by trace contaminants. Tighten the EDTA dose
+  (1 mM → 5 mM) and store under nitrogen.
+- **A_343 release plateaus low (< 30 % of theoretical):** dipyridyl
+  disulfide bottle was old (yellow / brown discolouration). Use a fresh
+  ampoule.
+
+#### Downstream coupling
+
+After §J.4.7, the matrix is ready for §J.3.6 (Cys-tagged Protein A / G /
+L) or for any thiol-bearing ligand (glutathione, terminal-Cys peptides).
+Capture is reversible; elute with 10 mM DTT or 5 mM TCEP.
+
+#### References
+
+Brocklehurst K, Carlsson J, Kierstan MPJ, Crook EM (1973) *Biochem. J.*
+133:573. Carlsson J, Drevin H, Axén R (1978) *Biochem. J.* 173:723.
+Hermanson (2013) Ch. 17.4.
 
 ---
 

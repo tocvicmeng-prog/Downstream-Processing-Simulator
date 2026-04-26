@@ -4,7 +4,7 @@
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%20|%203.12-3776AB.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/Version-0.3.8-2DD4BF.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.5.1-2DD4BF.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011%20x64-0078D4.svg)](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases)
 
 > Turn a written lifecycle recipe into predicted microsphere-media behaviour **before** you touch the bench. Predictions carry units, evidence tier, assumptions, validation gates, and wet-lab caveats — every value tells you exactly how much to trust it.
@@ -48,12 +48,15 @@ The simulator exists for one reason: **screening**. It tells you what to expect,
 
 ## Functionalities at a Glance
 
-### Modelling capabilities (v0.3.8)
+### Modelling capabilities (v0.5.1)
 
 - **21 selectable polymer families** spanning the v9.1 baseline (agarose-chitosan, alginate, cellulose-NIPS, PLGA), the v9.2/v9.3 expansion (10 families), the v9.4 niche set (4 families), and the v9.5 multi-variant composites (3 families).
-- **96 functionalisation reagents** across **17 chemistry buckets** — secondary crosslinking, hydroxyl activation, ligand coupling (IEX/HIC/IMAC/GST/heparin), protein coupling (Protein A/G/L, streptavidin, lectins, oriented Cys variants), spacer arms, metal charging, protein pretreatment, washing, quenching, plus eight specialty buckets (click, dye pseudo-affinity, mixed-mode HCIC, thiophilic, boronate, peptide-affinity, oligonucleotide, material-as-ligand).
+- **103 functionalisation reagents** across **18 chemistry buckets** — secondary crosslinking, **ACS conversion** (replaces "hydroxyl activation"; covers ECH/DVS plus the 6 v0.5.0 ACS-converter routes CNBr/CDI/Tresyl/Cyanuric/Glyoxyl/Periodate), **arm-distal activation** (pyridyl-disulfide, v0.5.0), ligand coupling (IEX/HIC/IMAC/GST/heparin), protein coupling (Protein A/G/L canonical + Cys variants on maleimide and pyridyl-disulfide), spacer arms, metal charging, protein pretreatment, washing, quenching, plus eight specialty buckets (click, dye pseudo-affinity, mixed-mode HCIC, thiophilic, boronate, peptide-affinity, oligonucleotide, material-as-ligand).
 - **13 ion-gelant profiles** (per-family + freestanding) with biotherapeutic-safety flags.
-- **25 surface-chemistry site types** tracked through the M2 ACS state vector.
+- **26 surface-chemistry site types** tracked through the M2 ACS state vector (v0.5.0 added `PYRIDYL_DISULFIDE`).
+- **Sequence-enforcing FSM** (v0.5.0 G6 guardrail) — recipes are validated at load time against the canonical *ACS Converter → Linker Arm → Ligand → Ion-charging* order, with arm-distal preconditions, metal-charge preconditions, and CNBr 15-min coupling-window enforcement.
+- **Cyanuric-chloride 3-stage staged kinetics** (v0.5.1) — per-Cl rate constants for 1st (0–5 °C) / 2nd (25 °C) / 3rd (60–80 °C) substitution, each ~10× slower than the previous due to electron donation from prior substituents.
+- **Periodate / glyoxyl chain-scission penalty** (v0.5.1) — G_DN multiplicatively reduced when oxidative converters exceed their conversion threshold (periodate 30 % / 70 % max loss; glyoxyl-chained 40 % / 50 % max loss).
 - **Lumped Rate Model (LRM)** chromatography solver with axial-dispersion + film-mass-transfer + Langmuir adsorption physics.
 - **Monte-Carlo LRM uncertainty driver** (v0.3.0) — propagates posterior uncertainty in q_max / K_L / pH parameters through the LRM and reports P05/P50/P95 envelopes on every metric and curve, with reformulated convergence diagnostics (quantile-stability + inter-seed posterior overlap).
 - **Optional Bayesian posterior fitting** (v0.3.1) — fit Langmuir parameters from raw isotherm assay data via pymc/NUTS with mandatory R-hat / ESS / divergence convergence gates.
@@ -77,7 +80,7 @@ DPSim ships **three** installation paths. Pick the one that matches your situati
 
 Download from the GitHub Releases page:
 
-> [**Releases → DPSim-0.3.8-Setup.exe**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
+> [**Releases → DPSim-0.5.1-Setup.exe**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
 
 Double-click the `.exe`. The installer:
 
@@ -92,7 +95,7 @@ Double-click the `.exe`. The installer:
 
 Download from the same Releases page:
 
-> [**Releases → DPSim-0.3.8-Windows-x64-portable.zip**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
+> [**Releases → DPSim-0.5.1-Windows-x64-portable.zip**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
 
 Extract anywhere (e.g. `D:\Apps\DPSim`). Run `install.bat` once, then `launch_ui.bat` to start. To uninstall, delete the folder — no registry or Start-Menu trace.
 
@@ -440,7 +443,7 @@ The reagent library covers 96 chemistries. Several are classified as carcinogeni
 | File | Audience | Purpose |
 |---|---|---|
 | [`docs/user_manual/polysaccharide_microsphere_simulator_first_edition.md`](docs/user_manual/polysaccharide_microsphere_simulator_first_edition.md) | Operators, junior researchers | Comprehensive instruction manual: workflow, polymer families, M2 chemistry, M3 / MC, calibration, formulas, troubleshooting |
-| [`docs/user_manual/appendix_J_functionalization_protocols.md`](docs/user_manual/appendix_J_functionalization_protocols.md) | Wet-lab researchers | 96-reagent functionalisation protocols with SDS-lite hazard blocks |
+| [`docs/user_manual/appendix_J_functionalization_protocols.md`](docs/user_manual/appendix_J_functionalization_protocols.md) | Wet-lab researchers | 103-reagent functionalisation protocols with SDS-lite hazard blocks |
 | [`docs/quickstart.md`](docs/quickstart.md) | First-time users | One-page getting-started |
 | [`docs/configuration.md`](docs/configuration.md) | All users | TOML and `ProcessRecipe` parameter reference |
 | [`docs/INDEX.md`](docs/INDEX.md) | All users | Documentation navigation |
@@ -477,6 +480,9 @@ DPSim follows a **fork-line versioning** convention: `v0.x` is the DPSim fork's 
 | **v0.3.6** | 2026-04-25 | Closed all v0.3.x follow-ons | Click alkyne reference (24/25); low-N MC warning; joblib parallelism wired; solver-lambda helper; pectin DE / gellan K⁺ / pullulan STMP variants |
 | **v0.3.7** | 2026-04-25 | First Edition manual refresh | ~1100-line manual rewrite; Appendix J § J.11 addendum (13 new SDS-lite protocol stubs) |
 | **v0.3.8** | 2026-04-25 | Release tooling | Windows installer + portable ZIP build pipeline; `__DPSIM_VERSION__` placeholder discipline |
+| **v0.4.x** | 2026-04-26 | Direction-A standalone alignment + Streamlit 1.55 fixes | Pipeline-spine integration; theme toggle; M3 Resin Lifetime Projection; CSS-injection regression fix |
+| **v0.5.0** | 2026-04-27 | M2 ACS Converter epic | First-class `ACS_CONVERSION` + `ARM_ACTIVATION` step types; 7 ACS-converter reagents (CNBr / CDI / Tresyl / Cyanuric / Glyoxyl / Periodate / Pyridyl-disulfide) with closed-loop coupling; new `PYRIDYL_DISULFIDE` ACS member; 147-row family-reagent matrix expansion; G6 sequence FSM guardrail; periodate aldehyde-multiplier 2× fix; "Hydroxyl Activation" UI bucket renamed to "ACS Conversion" + new "Arm-distal Activation" bucket |
+| **v0.5.1** | 2026-04-27 | ACS Converter deferred-work follow-on | Cyanuric 3-stage staged kinetics; periodate / glyoxyl chain-scission penalty on G_DN; per-protein pyridyl-disulfide variants (Cys-Protein A / G / L); G6.5 strengthened to BLOCKER on > 15 min CNBr-to-coupling gap |
 
 The full per-release change log is in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -530,7 +536,7 @@ See `pyproject.toml` for the pinned versions.
 If you use DPSim in published work, please cite:
 
 ```
-Holocyte Pty Ltd. (2026). DPSim — Downstream Processing Simulator (v0.3.8).
+Holocyte Pty Ltd. (2026). DPSim — Downstream Processing Simulator (v0.5.1).
 GNU General Public License v3.0.
 https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator
 ```

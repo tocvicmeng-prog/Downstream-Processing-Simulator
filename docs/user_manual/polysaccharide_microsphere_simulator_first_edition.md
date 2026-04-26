@@ -347,22 +347,23 @@ Non-biotherapeutic-safe entries (Al³⁺) surface a red warning in the UI: **do 
 
 ## §6 M2 Chemistry Catalogue
 
-DPSim v0.3.6 organises **96 reagents** into **17 chemistry buckets** on the M2 page. The reagent set covers every chemistry class shipped through v9.1–v9.4. Pick a bucket first, then a reagent within it.
+DPSim v0.5.1 organises **103 reagents** into **18 chemistry buckets** on the M2 page. The reagent set covers every chemistry class shipped through v9.1–v9.5 plus the v0.5.0 ACS-Converter epic and the v0.5.1 deferred-work follow-on. Pick a bucket first, then a reagent within it.
 
-### §6.1 The 17 chemistry buckets
+### §6.1 The 18 chemistry buckets
 
 | Bucket | Reagents | Typical use |
 |---|---|---|
 | Secondary Crosslinking | 8 | Stability post-coupling (genipin, glutaraldehyde, STMP, glyoxal, …) |
-| Hydroxyl Activation | 11 | -OH → reactive intermediate (CNBr, CDI, ECH, DVS, BDGE, EDC/NHS, glyoxyl, …) |
+| **ACS Conversion** | 13 | Matrix-side ACS swap (CNBr, CDI, ECH, DVS, BDGE, EDC/NHS, Tresyl, Cyanuric chloride, Glyoxyl-chained, Periodate-direct, …). Renamed from "Hydroxyl Activation" in v0.5.0 to surface that the operation changes one polysaccharide ACS into a chemically distinct one — not all targets are -OH (e.g. periodate consumes vicinal diols; EDC/NHS targets -COOH). |
+| **Arm-distal Activation** | 1 | Pyridyl-disulfide on a pre-installed amine arm (v0.5.0). Pre-condition: SPACER_ARM step has produced AMINE_DISTAL > 0 OR the polymer family is chitosan-bearing (native -NH2 surface). |
 | Ligand Coupling | 12 | IEX, HIC, IMAC, GST-affinity, heparin-affinity ligands |
-| Protein Coupling | 18 | Protein A/G/L, streptavidin, lectins, oriented Cys-protein variants |
+| Protein Coupling | 21 | Protein A/G/L canonical + Cys-tagged variants on maleimide and pyridyl-disulfide (v0.5.1), streptavidin, lectins |
 | Spacer Arm | 19 | DADPA / DAH / EDA / PEG-diamine / SM(PEG)n / hydrazide / cystamine / oligoglycine |
 | Metal Charging | 7 | Ni²⁺ / Co²⁺ / Cu²⁺ / Zn²⁺ for IMAC + EDTA stripping |
 | Protein Pretreatment | 2 | TCEP / DTT reductions |
 | Washing | 2 | Wash buffer; triazine dye-leakage advisory |
 | Quenching | 4 | Ethanolamine / 2-mercaptoethanol / NaBH4 / acetic anhydride |
-| **Click Chemistry** | 2 | CuAAC / SPAAC (azide-side or alkyne-side resin) |
+| **Click Chemistry** | 4 | CuAAC / SPAAC (azide-side or alkyne-side resin) |
 | **Dye Pseudo-Affinity** | 2 | Cibacron Blue F3GA / Procion Red HE-3B |
 | **Mixed-Mode HCIC** | 1 | 4-Mercaptoethylpyridine (MEP HCIC) |
 | **Thiophilic** | 1 | 2-Mercaptoethanol thiophilic ligand (T-Sorb / T-Gel) |
@@ -371,7 +372,52 @@ DPSim v0.3.6 organises **96 reagents** into **17 chemistry buckets** on the M2 p
 | **Oligonucleotide** | 1 | Sequence-specific DNA affinity ligand |
 | **Material-as-Ligand** | 2 | Amylose (MBP-tag) / Chitin (CBD-intein) |
 
-The bold buckets are the v0.3.4 additions that surface chemistry classes that previously had no place to render.
+The v0.5.0 reorganisation changed the original "Hydroxyl Activation" label to "ACS Conversion" to honour the chemistry — every reagent in this bucket consumes one ACS type and produces another. Pyridyl-disulfide, which is installed on an arm-distal amine rather than directly on the polysaccharide, lives in its own "Arm-distal Activation" bucket. Both legacy `ModificationStepType.ACTIVATION` and the new `ACS_CONVERSION` resolve to the same solver, so v0.4.x recipes that use ECH/DVS continue to load unchanged.
+
+### §6.1.1 The canonical ACS Converter → Arm → Ligand → Ion-charging workflow (v0.5.0 G6 FSM)
+
+The simulator enforces a four-phase order for any recipe:
+
+```
+   ACS Conversion  →  Spacer Arm     →  Ligand Coupling  →  Metal Charging
+   (matrix-side       (optional;        (small ligand or    (only for
+    ACS swap;         skipped for       protein, direct or  NTA / IDA
+    e.g. -OH →        direct-couple     arm-mediated)       chelators)
+    epoxide)          ligands)
+        │                 │                  │                   │
+        ↓                 ↓                  ↓                   ↓
+   Quench/Wash → Quench → Quench → Quench (allowed at any post-INITIAL state)
+```
+
+Skips are allowed: a triazine-dye support skips arm; a HIC alkyl-amine ligand skips arm; a non-IMAC ligand skips metal charging. The G6 guardrail (`core/recipe_validation.py::_g6_acs_converter_sequence`) emits BLOCKER on illegal orderings (ligand-before-converter) and on missing preconditions (METAL_CHARGE without prior LIGAND_COUPLING that installed an NTA/IDA chelator; ARM_ACTIVATION without a prior amine arm OR a chitosan-bearing family).
+
+Two converter-specific safety rules are also encoded:
+
+- **CIP reductive lock-in (v0.5.0).** When `target.cip_required=True` and the recipe uses an aldehyde-producing converter (`glyoxyl_chained_activation` or `periodate_oxidation`), a downstream `nabh4_quench` step is mandatory. Without it, CIP cycles will hydrolyse the unreduced Schiff bases.
+- **CNBr 15-min coupling window (v0.5.1).** When CNBr activation precedes a ligand coupling step, the cumulative duration of any intervening steps (washes, equilibrations) is summed. > 15 min ⇒ BLOCKER (`FP_G6_CNBR_HYDROLYSIS_LOSS`); 7.5–15 min ⇒ WARNING (`FP_G6_CNBR_WINDOW_AT_RISK`); ≤ 7.5 min passes silently. Cyanate ester half-life at 4 °C / pH 11 is ~5 min, so longer gaps wipe out essentially all activated sites before coupling can run.
+
+### §6.1.2 Cyanuric chloride 3-stage staged kinetics (v0.5.1)
+
+Cyanuric chloride bears three sequentially substitutable Cl atoms, each ~10× slower than the previous due to electron donation from the already-installed substituents. To model this, `ReagentProfile.staged_kinetics` carries three `(k_forward, E_a)` tuples and `ModificationStep.temperature_stage` (1-based) selects the active one:
+
+| Stage | Temperature | k_forward (m³/(mol·s)) | E_a (kJ/mol) | Bench step |
+|---|---|---|---|---|
+| 1 | 0–5 °C | 3 × 10⁻³ | 30 | Install dichlorotriazine handle on the polysaccharide -OH |
+| 2 | 25 °C | 3 × 10⁻⁴ | 50 | Couple a small ligand (dye, amine) at the second Cl |
+| 3 | 60–80 °C | 3 × 10⁻⁵ | 70 | Drive the third Cl to completion (e.g. quench with glycine) |
+
+Recipes that drive only the first substitution leave `temperature_stage=0` and use the base `k_forward`. Per Lowe & Pearson (1984) *Methods Enzymol.* 104:97; Korpela & Mäntsälä (1968) *Anal. Biochem.* 23:381.
+
+### §6.1.3 Periodate / glyoxyl chain-scission penalty (v0.5.1)
+
+Above ~30 % oxidation, periodate progressively cleaves the polysaccharide backbone (uronic-acid release into supernatant; loss of bead mechanical integrity). The simulator captures this as a multiplicative G_DN penalty applied AFTER the additive rubber-elasticity sum from secondary crosslinking:
+
+| Reagent | Threshold | Max G_DN loss | Source |
+|---|---|---|---|
+| `periodate_oxidation` | 30 % conversion | 70 % at saturation | Bobbitt 1956; Painter 1973 |
+| `glyoxyl_chained_activation` | 40 % conversion | 50 % at saturation | Mateo 2007 (the glycidol overlay protects the backbone, raising the threshold) |
+
+The penalty composes multiplicatively across multiple oxidative steps: two 30 % scission events in series give a residual G_DN of 0.70 × 0.70 = 0.49 of nominal, not 0.40. Recipes that drive periodate to high conversion should expect a soft, scission-prone bead.
 
 ### §6.2 Chemistry-bucket workflow chart
 
