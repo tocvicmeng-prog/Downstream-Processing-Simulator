@@ -1150,9 +1150,23 @@ _REQUIRES_ACTIVATED = _COUPLING_TYPES | {
 # Rule 4: Allowed reaction_type values per step type (Codex P1-1 fix)
 _STEP_ALLOWED_REACTION_TYPES: dict[ModificationStepType, set[str]] = {
     ModificationStepType.SECONDARY_CROSSLINKING: {"crosslinking"},
-    ModificationStepType.ACTIVATION: {"activation"},
+    # v0.5.2 (codex P1-1 fix): the orchestrator's preflight allowlist must
+    # mirror the dispatcher's _STEP_ALLOWED_RTYPES so the silent-alias path
+    # (v0.4.x recipes using ACTIVATION step type with the new
+    # reaction_type="acs_conversion" reagents) doesn't get rejected before
+    # it ever reaches solve_modification_step.
+    ModificationStepType.ACTIVATION: {"activation", "acs_conversion"},
+    ModificationStepType.ACS_CONVERSION: {"acs_conversion", "activation"},
+    ModificationStepType.ARM_ACTIVATION: {"arm_activation"},
     ModificationStepType.LIGAND_COUPLING: {"coupling"},
-    ModificationStepType.PROTEIN_COUPLING: {"protein_coupling"},
+    # v0.5.2 (codex P1-2 fix): accept "coupling" alongside "protein_coupling"
+    # so the generic and per-protein pyridyl-disulfide couplers (which carry
+    # reaction_type="coupling" and functional_mode="affinity_ligand", and
+    # therefore surface in the Protein Coupling UI bucket) dispatch
+    # correctly. _solve_protein_coupling_step's steric-limit math collapses
+    # to ligand-coupling-equivalent when max_surface_density=0, so small-
+    # ligand cases stay correct under this expanded allowlist.
+    ModificationStepType.PROTEIN_COUPLING: {"protein_coupling", "coupling"},
     ModificationStepType.QUENCHING: {"blocking"},
     ModificationStepType.SPACER_ARM: {"spacer_arm", "heterobifunctional"},
     ModificationStepType.METAL_CHARGING: {"metal_charging", "metal_stripping"},

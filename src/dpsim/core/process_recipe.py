@@ -27,6 +27,13 @@ class ProcessStepKind(Enum):
     CROSSLINK = "crosslink"
     ACTIVATE = "activate"
     INSERT_SPACER = "insert_spacer"
+    # v0.5.2 (codex P2-1 fix): arm-distal activation is a distinct phase
+    # that runs AFTER spacer insertion. Previously pyridyl-disulfide steps
+    # had to be encoded as ACTIVATE, which G6.1 (phase rank 1) rejected
+    # after an INSERT_SPACER step (rank 2). Recipes using the canonical
+    # ACS_CONVERSION → SPACER_ARM → ARM_ACTIVATE → COUPLE_LIGAND path now
+    # validate cleanly. ARM_ACTIVATE has phase rank 2 in G6.1.
+    ARM_ACTIVATE = "arm_activate"
     COUPLE_LIGAND = "couple_ligand"
     METAL_CHARGE = "metal_charge"
     PROTEIN_PRETREATMENT = "protein_pretreatment"

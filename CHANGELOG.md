@@ -1,5 +1,72 @@
 # Changelog
 
+## v0.5.2 — M2 ACS Converter codex-review fixes (2026-04-27)
+
+Patch release for the v0.5.0 + v0.5.1 ACS Converter epic. Closes the four
+issues an independent OpenAI Codex code review surfaced — two of which
+silently broke v0.5.1 end-to-end through the UI, despite the v0.5.0/v0.5.1
+test suites passing (the existing tests went through `solve_modification_step`
+directly, bypassing the orchestrator preflight and the recipe-level G6 path
+that codex caught).
+
+### Fixed (codex P1 — release-breakers)
+
+- **P1-1: Orchestrator preflight rejected new ACS converters.** The
+  orchestrator's `_validate_workflow_ordering()` (`orchestrator.py:1151`)
+  carried its own `_STEP_ALLOWED_REACTION_TYPES` allowlist that v0.5.1 had
+  not updated. ACTIVATION still required `reaction_type="activation"`, so
+  every CNBr / CDI / Tresyl / Cyanuric / Glyoxyl / Periodate run through
+  the UI raised `ValueError` before dispatch could run the silent-alias
+  logic. Expanded ACTIVATION to accept both `"activation"` and
+  `"acs_conversion"`; added explicit ACS_CONVERSION + ARM_ACTIVATION
+  entries.
+- **P1-2: PROTEIN_COUPLING dispatch rejected the new pyridyl couplers.**
+  The 3 per-protein pyridyl-disulfide variants (`protein_a/g/l_thiol_to_
+  pyridyl_disulfide`) and the 4 closed-loop generic couplers all carry
+  `functional_mode="affinity_ligand"` (so they surface in the Protein
+  Coupling UI bucket) and `reaction_type="coupling"`. Both
+  `_STEP_ALLOWED_REACTION_TYPES` (orchestrator) and `_STEP_ALLOWED_RTYPES`
+  (dispatcher) only accepted `"protein_coupling"` for PROTEIN_COUPLING,
+  raising `ValueError` for all 7 reagents end-to-end. Expanded both
+  allowlists to accept `{"protein_coupling", "coupling"}`. The math in
+  `_solve_protein_coupling_step` collapses correctly to ligand-coupling-
+  equivalent when `max_surface_density=0`, so small-ligand routes stay
+  accurate.
+
+### Fixed (codex P2)
+
+- **P2-1: G6.1 phase ranking blocked the canonical arm-distal sequence.**
+  `ProcessStepKind` had no arm-distal-activation kind, so pyridyl-disulfide
+  steps had to be encoded as `ACTIVATE` (rank 1). After an `INSERT_SPACER`
+  step (rank 2), G6.1 emitted `FP_G6_SEQUENCE_OUT_OF_ORDER`, blocking
+  the documented `ACS_CONVERSION → SPACER_ARM → ARM_ACTIVATE → COUPLE_LIGAND`
+  path before G6.2 could even check the precondition. Added
+  `ProcessStepKind.ARM_ACTIVATE` (phase rank 3) and a reagent-key override
+  in G6.1: legacy recipes that encoded pyridyl-disulfide as `ACTIVATE` are
+  also rescued via the override (zero migration friction).
+- **P2-2: G6.5 CNBr time-window dropped units silently.** The intervening-
+  step duration sum used `_qty_value()`, which explicitly does no unit
+  conversion. A wash declared as `Quantity(30, "min")` was being summed as
+  30 seconds and bypassing the 15-min hydrolysis BLOCKER. Added a unit-
+  aware `_qty_to_seconds()` helper covering the standard lab time units
+  (s, min, h, ms) and pointed G6.5 at it. Unknown units fall back to the
+  pre-existing structural WARNING rather than silently skipping.
+
+### Tests
+
+- `tests/test_v0_5_2_codex_fixes.py` (NEW): 30-test gauntlet exercising
+  each fix end-to-end through the orchestrator preflight and recipe-level
+  G6 guardrail (the paths the v0.5.0/v0.5.1 tests bypassed).
+- 359 targeted tests green; ruff = 0; mypy = 0.
+
+### Migration
+
+- v0.5.1 users: bump to v0.5.2 immediately. v0.5.1 is functionally broken
+  for any recipe that reaches the orchestrator (every UI workflow). The
+  v0.5.1 release page on GitHub has been annotated as superseded.
+- No API breaks: the new `ProcessStepKind.ARM_ACTIVATE` is additive; the
+  reagent-key override in G6.1 keeps legacy recipes valid.
+
 ## v0.5.1 — M2 ACS Converter deferred-work follow-on (2026-04-27)
 
 Closes the four deferred items from `HANDOVER_v0_5_0_ACS_CONVERTER.md` §8.

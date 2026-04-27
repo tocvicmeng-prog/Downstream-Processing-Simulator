@@ -4,7 +4,7 @@
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%20|%203.12-3776AB.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/Version-0.5.1-2DD4BF.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.5.2-2DD4BF.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011%20x64-0078D4.svg)](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases)
 
 > Turn a written lifecycle recipe into predicted microsphere-media behaviour **before** you touch the bench. Predictions carry units, evidence tier, assumptions, validation gates, and wet-lab caveats — every value tells you exactly how much to trust it.
@@ -48,7 +48,7 @@ The simulator exists for one reason: **screening**. It tells you what to expect,
 
 ## Functionalities at a Glance
 
-### Modelling capabilities (v0.5.1)
+### Modelling capabilities (v0.5.2)
 
 - **21 selectable polymer families** spanning the v9.1 baseline (agarose-chitosan, alginate, cellulose-NIPS, PLGA), the v9.2/v9.3 expansion (10 families), the v9.4 niche set (4 families), and the v9.5 multi-variant composites (3 families).
 - **103 functionalisation reagents** across **18 chemistry buckets** — secondary crosslinking, **ACS conversion** (replaces "hydroxyl activation"; covers ECH/DVS plus the 6 v0.5.0 ACS-converter routes CNBr/CDI/Tresyl/Cyanuric/Glyoxyl/Periodate), **arm-distal activation** (pyridyl-disulfide, v0.5.0), ligand coupling (IEX/HIC/IMAC/GST/heparin), protein coupling (Protein A/G/L canonical + Cys variants on maleimide and pyridyl-disulfide), spacer arms, metal charging, protein pretreatment, washing, quenching, plus eight specialty buckets (click, dye pseudo-affinity, mixed-mode HCIC, thiophilic, boronate, peptide-affinity, oligonucleotide, material-as-ligand).
@@ -80,7 +80,7 @@ DPSim ships **three** installation paths. Pick the one that matches your situati
 
 Download from the GitHub Releases page:
 
-> [**Releases → DPSim-0.5.1-Setup.exe**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
+> [**Releases → DPSim-0.5.2-Setup.exe**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
 
 Double-click the `.exe`. The installer:
 
@@ -95,7 +95,7 @@ Double-click the `.exe`. The installer:
 
 Download from the same Releases page:
 
-> [**Releases → DPSim-0.5.1-Windows-x64-portable.zip**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
+> [**Releases → DPSim-0.5.2-Windows-x64-portable.zip**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
 
 Extract anywhere (e.g. `D:\Apps\DPSim`). Run `install.bat` once, then `launch_ui.bat` to start. To uninstall, delete the folder — no registry or Start-Menu trace.
 
@@ -483,6 +483,7 @@ DPSim follows a **fork-line versioning** convention: `v0.x` is the DPSim fork's 
 | **v0.4.x** | 2026-04-26 | Direction-A standalone alignment + Streamlit 1.55 fixes | Pipeline-spine integration; theme toggle; M3 Resin Lifetime Projection; CSS-injection regression fix |
 | **v0.5.0** | 2026-04-27 | M2 ACS Converter epic | First-class `ACS_CONVERSION` + `ARM_ACTIVATION` step types; 7 ACS-converter reagents (CNBr / CDI / Tresyl / Cyanuric / Glyoxyl / Periodate / Pyridyl-disulfide) with closed-loop coupling; new `PYRIDYL_DISULFIDE` ACS member; 147-row family-reagent matrix expansion; G6 sequence FSM guardrail; periodate aldehyde-multiplier 2× fix; "Hydroxyl Activation" UI bucket renamed to "ACS Conversion" + new "Arm-distal Activation" bucket |
 | **v0.5.1** | 2026-04-27 | ACS Converter deferred-work follow-on | Cyanuric 3-stage staged kinetics; periodate / glyoxyl chain-scission penalty on G_DN; per-protein pyridyl-disulfide variants (Cys-Protein A / G / L); G6.5 strengthened to BLOCKER on > 15 min CNBr-to-coupling gap |
+| **v0.5.2** | 2026-04-27 | Codex-review fixes (release-breakers in v0.5.1) | Orchestrator preflight + PROTEIN_COUPLING dispatch allowlists expanded for new ACS-conversion / arm-activation reagents; new `ProcessStepKind.ARM_ACTIVATE`; G6.1 phase-ranking + reagent-key override; G6.5 CNBr time-window now unit-aware (s / min / h via new `_qty_to_seconds`) |
 
 The full per-release change log is in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -536,7 +537,7 @@ See `pyproject.toml` for the pinned versions.
 If you use DPSim in published work, please cite:
 
 ```
-Holocyte Pty Ltd. (2026). DPSim — Downstream Processing Simulator (v0.5.1).
+Holocyte Pty Ltd. (2026). DPSim — Downstream Processing Simulator (v0.5.2).
 GNU General Public License v3.0.
 https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator
 ```

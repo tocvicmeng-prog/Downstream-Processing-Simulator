@@ -362,15 +362,28 @@ def _g6_acs_converter_sequence(
         timeline.append((idx, step, step.kind, rkey))
 
     # G6.1 — ordering check.
+    # v0.5.2 (codex P2-1 fix): ARM_ACTIVATE has phase rank 2.5 (after
+    # INSERT_SPACER, before COUPLE_LIGAND). Recipes that encode pyridyl-
+    # disulfide as the legacy ACTIVATE kind (pre-v0.5.2) get the same
+    # treatment via the reagent-key override below, so existing recipes
+    # don't suddenly start failing G6.1 once ARM_ACTIVATE lands.
     _phase_rank: dict[ProcessStepKind, int] = {
         ProcessStepKind.ACTIVATE: 1,
         ProcessStepKind.INSERT_SPACER: 2,
-        ProcessStepKind.COUPLE_LIGAND: 3,
-        ProcessStepKind.METAL_CHARGE: 4,
+        ProcessStepKind.ARM_ACTIVATE: 3,
+        ProcessStepKind.COUPLE_LIGAND: 4,
+        ProcessStepKind.METAL_CHARGE: 5,
     }
     last_rank = 0
-    for idx, step, kind, _ in timeline:
+    for idx, step, kind, rkey in timeline:
         rank = _phase_rank.get(kind)
+        # v0.5.2 (codex P2-1): backward-compat — if a step is encoded with
+        # ProcessStepKind.ACTIVATE but its reagent_key is an arm-distal
+        # activator, treat it as phase 3 (post-arm). This rescues legacy
+        # recipes that used the only kind available before ARM_ACTIVATE
+        # was added.
+        if rank == 1 and rkey in _ARM_DISTAL_ACTIVATOR_KEYS:
+            rank = 3
         if rank is None:
             continue
         if rank < last_rank:
@@ -533,13 +546,17 @@ def _g6_acs_converter_sequence(
         # against the post-activation hydrolysis window. If any step in
         # between lacks a "time" field we cannot quantify the gap and
         # fall back to the pre-existing structural WARNING.
+        # v0.5.2 (codex P2-2 fix): use _qty_to_seconds so a recipe
+        # declaring `Quantity(30, "min")` is treated as 1800 s, not 30 s.
+        # The previous _qty_value() call dropped units silently and let
+        # 30-min washes slip past the 15-min hydrolysis blocker.
         next_idx, next_step = next_couple
         intervening_time_s = 0.0
         time_quantified = True
         for j_idx, j_step, _, _ in timeline:
             if j_idx <= idx or j_idx >= next_idx:
                 continue
-            t = _qty_value(j_step.parameters.get("time"))
+            t = _qty_to_seconds(j_step.parameters.get("time"))
             if t is None:
                 time_quantified = False
                 break
@@ -671,6 +688,54 @@ def _qty_value(parameter: Any) -> float | None:
     if isinstance(parameter, Quantity):
         return float(parameter.value)
     if isinstance(parameter, (int, float)):
+        return float(parameter)
+    return None
+
+
+# v0.5.2 (codex P2-2 fix) — time-aware coercion. _qty_value() explicitly
+# strips units, which is fine for dimensionless fractions but wrong for
+# the CNBr 15-min coupling-window check in G6.5: a wash declared as
+# Quantity(30, "min") was being treated as 30 seconds and bypassing the
+# blocker.
+#
+# This mirrors the unit registry the rest of the codebase uses: seconds
+# are the SI canonical, minutes and hours are the common lab variants
+# the recipe DSL accepts.
+_TIME_UNIT_TO_SECONDS: dict[str, float] = {
+    "": 1.0,           # bare float / Quantity with empty unit -> assume seconds
+    "s": 1.0,
+    "sec": 1.0,
+    "second": 1.0,
+    "seconds": 1.0,
+    "min": 60.0,
+    "minute": 60.0,
+    "minutes": 60.0,
+    "h": 3600.0,
+    "hr": 3600.0,
+    "hour": 3600.0,
+    "hours": 3600.0,
+    "ms": 1e-3,
+    "millisecond": 1e-3,
+}
+
+
+def _qty_to_seconds(parameter: Any) -> float | None:
+    """Coerce a duration parameter to seconds, honouring the unit field.
+
+    Returns None if the parameter is missing OR carries a unit that is not
+    in the known time-unit registry (callers can decide whether to treat
+    that as 'unknown' and skip the check, or as 'invalid' and raise).
+    """
+    if parameter is None:
+        return None
+    if isinstance(parameter, Quantity):
+        unit = (getattr(parameter, "unit", "") or "").strip().lower()
+        factor = _TIME_UNIT_TO_SECONDS.get(unit)
+        if factor is None:
+            return None  # Unknown unit — caller decides how to handle.
+        return float(parameter.value) * factor
+    if isinstance(parameter, (int, float)):
+        # Bare number — assume seconds (the SI canonical for this code path).
         return float(parameter)
     return None
 

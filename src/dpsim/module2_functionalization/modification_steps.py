@@ -225,7 +225,15 @@ def solve_modification_step(
         ModificationStepType.ACS_CONVERSION: {"acs_conversion", "activation"},
         ModificationStepType.ARM_ACTIVATION: {"arm_activation"},
         ModificationStepType.LIGAND_COUPLING: {"coupling"},
-        ModificationStepType.PROTEIN_COUPLING: {"protein_coupling"},
+        # v0.5.2 (codex P1-2 fix): the per-protein pyridyl-disulfide variants
+        # and the closed-loop generic couplers carry reaction_type="coupling"
+        # and functional_mode="affinity_ligand" and therefore surface under
+        # the Protein Coupling UI bucket. Accept "coupling" alongside
+        # "protein_coupling" so dispatch through PROTEIN_COUPLING succeeds.
+        # _solve_protein_coupling_step degenerates correctly to ligand-
+        # coupling math when max_surface_density=0 (the default for the
+        # generic couplers), so small-ligand routes stay accurate.
+        ModificationStepType.PROTEIN_COUPLING: {"protein_coupling", "coupling"},
         ModificationStepType.QUENCHING: {"blocking"},
         ModificationStepType.SPACER_ARM: {"spacer_arm", "heterobifunctional"},
         ModificationStepType.METAL_CHARGING: {"metal_charging", "metal_stripping"},
