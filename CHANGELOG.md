@@ -1,5 +1,90 @@
 # Changelog
 
+## Unreleased — CAD geometry handoff + OpenFOAM CFD-PBE scaffolding (2026-05-01)
+
+Establishes the foundation for spatially-resolved ε-field forcing of the
+M1 Alopaeus breakage kernel, motivated by the 100 mL → 1 L scale-up
+trajectory.
+
+### Added — CAD geometry source of truth (`cad/`)
+
+- **Parametric CAD generator** (`cad/scripts/build_geometry.py`): single
+  CadQuery script reproducing the five wetted parts from `datatypes.py`
+  factories plus 2026-03-27 measurement photos and 2026-05-01 manual
+  review.
+- **STEP AP242 + STL output** (`cad/output/`):
+  - `stirrer_A_pitched_blade` — disk Ø 59 mm × 1 mm with 19 perimeter
+    tabs (10 UP + 9 DOWN, alternating; 90° perpendicular bend; 10°
+    tangential fan-pitch; parallelogram outline with 5° forward edge
+    tilt).
+  - `stirrer_B_rotor` — flat sheet "+" with offset finger pairs
+    (parallel-but-not-coincident), 3 mm root → 2 mm flat tip, R=1 mm
+    fillets at all corners, full 16 mm axial extent.
+  - `stirrer_B_stator` — Ø 32.03 × 18 mm with 36 Ø 3 mm perforations
+    in a 3 × 12 rectangular grid + Ø 10 mm shaft-passage hole in the
+    closed top.
+  - `beaker_100mm` — Ø 100 × 130 mm with R=10 inner-bottom fillet, R=5
+    outer-bottom fillet, 20°/5 mm outward-flared rim.
+  - `jacketed_vessel_92mm` — Ø 92 × 160 mm with closed top + shaft hole,
+    R=10 inner-bottom fillet, R=5 outer-bottom fillet, R=5 closure
+    fillets.
+- All STEP files validated for SolidWorks 2018+ import; STL deflection
+  tolerance 0.05 mm (well under the 0.1 mm fidelity target).
+- The legacy 25 mm rotor-stator was excluded from CAD modeling per
+  user direction (2026-05-01).
+
+### Added — OpenFOAM CFD-PBE pipeline scaffold (`cad/cfd/`)
+
+- Directory structure for two bench cases (Stirrer A, Stirrer B) with
+  per-case READMEs documenting operating points and PIV validation gates.
+- Helper scripts (`prepare_geometry.sh`, `run_case.sh`,
+  `extract_epsilon.py`) — stubs with implementation TODOs.
+- Master roadmap in `cad/cfd/README.md` covering geometry prep → mesh →
+  solve → ε extraction → zonal PBE coupling → PIV validation → 1 L
+  scale-up extrapolation. Estimated effort: 1–2 person-months for a CFD
+  engineer with prior OpenFOAM stirred-tank experience.
+
+### Added — CFD-PBE coupling stubs (`src/dpsim/cfd/`)
+
+- `zonal_pbe.py` — typed dataclasses for CFD-derived compartments and
+  zone-exchange flow rates; `integrate_pbe_with_zones` placeholder for
+  spatial PBE forcing.
+- `openfoam_io.py` — field readers and dictionary writers (TODOs).
+
+### Changed — `datatypes.py` Stirrer A factory (`pitched_blade_A`)
+
+Reflects the disk-style 19-tab geometry verified during the 2026-05-01
+CAD review:
+
+- `blade_count`: 6 → **19** (10 UP + 9 DOWN, alternating perpendicular
+  bend; the previous "6" was an estimate with the wrong geometric
+  interpretation).
+- `blade_height`: 0.010 m → **0.0085 m** (derived from the 18 mm caliper
+  measurement = 1 mm disk + 2 × 8.5 mm fins).
+- `blade_angle = 10.0` re-interpreted: now **tangential pitch from
+  radial** (fan-blade angle), not axial pitch. Affects how the angle is
+  consumed by the PBE solver's effective-tip-speed and shear-rate
+  estimates.
+- Updated docstring + enum comment to document the disk-style topology
+  and rotation-direction arrow.
+
+### Changed — UI widget caps
+
+- M1 Stirrer Speed slider max: 2000 → **2500 RPM** (Stirrer A path).
+  Rotor-stator paths unchanged at 9000 / 25000 RPM.
+- M1 Cooling Rate slider max: 15 / 20 → **50 °C/min** across the three
+  formulation panels (agarose-chitosan stirred + legacy, cellulose
+  NMMO).
+
+### Notes on validity
+
+- The new `blade_height = 0.0085` and `blade_count = 19` will shift the
+  M1 Po-derived ε estimate by ~5–15%; recalibration of the empirical
+  `power_number = 0.35` is **TODO** pending the first CFD run.
+- All `pitched_blade_A` consumers in the codebase use the factory output
+  (no hardcoded copies), so the upstream change propagates automatically.
+  Any test asserting `blade_count == 6` should be updated.
+
 ## v0.5.2 — M2 ACS Converter codex-review fixes (2026-04-27)
 
 Patch release for the v0.5.0 + v0.5.1 ACS Converter epic. Closes the four

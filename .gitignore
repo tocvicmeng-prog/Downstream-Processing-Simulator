@@ -1,4 +1,8 @@
 output/
+# Exception: parametric CAD output (STEP + STL) is the source of truth for
+# the CFD pipeline, not a regenerable build artifact. See cad/README.md.
+!cad/output/
+!cad/output/**
 .dpsim_tmp/
 .dpsim_cache/
 __pycache__/

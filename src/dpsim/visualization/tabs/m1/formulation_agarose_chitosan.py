@@ -140,7 +140,7 @@ def render_formulation_section(*, is_stirred: bool) -> AgaroseChitosanContext:
             help=get_help("m1.hardware.cool_rate"),
             unit="°C/min",
             widget=lambda: st.slider(
-                "Cooling Rate (C/min)", 0.1, 15.0, 0.67, step=0.1,
+                "Cooling Rate (C/min)", 0.1, 50.0, 0.67, step=0.1,
                 key="m1_cool_rate", label_visibility="collapsed",
             ),
         )
@@ -150,7 +150,7 @@ def render_formulation_section(*, is_stirred: bool) -> AgaroseChitosanContext:
             help=get_help("m1.hardware.cool_rate"),
             unit="°C/min",
             widget=lambda: st.slider(
-                "Cooling Rate (C/min)", 1.0, 20.0, 10.0, step=0.5,
+                "Cooling Rate (C/min)", 1.0, 50.0, 10.0, step=0.5,
                 key="m1_cool_rate_leg", label_visibility="collapsed",
             ),
         )

@@ -111,7 +111,7 @@ def _render_non_ac_family(*, tab_container, family, is_stirred_default, model_mo
                     help=get_help("m1.hardware.stir_rpm"),
                     unit="rpm",
                     widget=lambda: st.slider(
-                        "Stirrer Speed (RPM)", 800, 2000 if is_stirrer_A else 9000,
+                        "Stirrer Speed (RPM)", 800, 2500 if is_stirrer_A else 9000,
                         1300 if is_stirrer_A else 1800,
                         step=50 if is_stirrer_A else 100,
                         key="m1_rpm" if is_stirrer_A else "m1_rpm_rs",
@@ -554,7 +554,7 @@ def render_tab_m1(
                             help=get_help("m1.hardware.stir_rpm"),
                             unit="rpm",
                             widget=lambda: st.slider(
-                                "Stirrer Speed (RPM)", 800, 2000, 1300, step=50,
+                                "Stirrer Speed (RPM)", 800, 2500, 1300, step=50,
                                 key="m1_rpm", label_visibility="collapsed",
                             ),
                         )

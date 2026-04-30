@@ -79,7 +79,7 @@ def render_formulation_cellulose(*, is_stirred: bool) -> CelluloseContext:
             help="Applies to thermal solvents (NMMO) where demixing is triggered by quench. Drives the spinodal-decomposition timescale.",
             unit="°C/min",
             widget=lambda: st.slider(
-                "Coagulation-bath cooling rate (°C/min)", 0.1, 15.0, 2.0, step=0.1,
+                "Coagulation-bath cooling rate (°C/min)", 0.1, 50.0, 2.0, step=0.1,
                 key="m1v9_cell_cool_rate", label_visibility="collapsed",
             ),
         )

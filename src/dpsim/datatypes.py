@@ -158,7 +158,7 @@ class VesselType(Enum):
 
 class StirrerType(Enum):
     """Stirrer/impeller type."""
-    PITCHED_BLADE = "pitched_blade"             # Stirrer A — open impeller, ≤2000 RPM
+    PITCHED_BLADE = "pitched_blade"             # Stirrer A — 19-tab disk impeller, ≤2500 RPM
     ROTOR_STATOR_SMALL = "rotor_stator_small"   # Stirrer B — small homogeniser, ≤9000 RPM
     ROTOR_STATOR_LEGACY = "rotor_stator_legacy" # Original 25 mm rotor-stator
 
@@ -300,28 +300,38 @@ class StirrerGeometry:
 
     @classmethod
     def pitched_blade_A(cls) -> StirrerGeometry:
-        """Factory: Stirrer A — pitched-blade impeller.
+        """Factory: Stirrer A — disk-style 19-tab impeller.
 
-        Measured dimensions:
-          - Shaft Ø8 mm, fin outer Ø59 mm (root and top)
-          - Fin length 9 mm (⊥ axis), fin height 10 mm (∥ axis)
-          - Blade thickness 1 mm, 10° angle, alternately bent
-          - Opposite fin tip distance 18 mm
+        Verified against 2026-03-27 measurement photos and 2026-05-01 CAD
+        review (see cad/README.md):
+          - Disk Ø59 mm × 1 mm thick, central shaft Ø8 mm
+          - 19 tabs at the disk perimeter: 10 bent UP, 9 bent DOWN,
+            alternating around the circumference
+          - Each tab is bent perpendicular (90°) to the disk plane —
+            creates a tangential-facing wall
+          - Tab face has 10° tangential pitch from the radial line
+            (fan-blade angle, drives flow on rotation; arrow on disk
+            indicates rotation direction)
+          - Tab dimensions: 9 mm tangential × 8.5 mm axial × 1 mm thick
+          - Outer Ø 59 mm at the tip; total axial span 18 mm (top of UP
+            tips to bottom of DOWN tips)
         """
         return cls(
             stirrer_type=StirrerType.PITCHED_BLADE,
-            impeller_diameter=0.059,        # Ø59 mm outer diameter
+            impeller_diameter=0.059,        # Ø59 mm outer (tip-to-tip)
             shaft_diameter=0.008,           # Ø8 mm
-            blade_count=6,                  # estimated from photos (radial fins)
-            blade_angle=10.0,               # 10° from tangent
-            blade_thickness=0.001,          # 1 mm
-            blade_height=0.010,             # 10 mm parallel to axis
-            blade_length=0.009,             # 9 mm perpendicular to axis
-            # ASSUMPTION: Np ≈ 0.35 for small-angle (10°) alternately bent blades.
-            # Literature Np for 45° PBT is ~1.3; 10° with alternating bend is
-            # closer to a flat disc turbine with minimal axial pumping.
+            blade_count=19,                 # 10 UP + 9 DOWN, alternating
+            blade_angle=10.0,               # tangential pitch from radial
+            blade_thickness=0.001,          # 1 mm sheet metal
+            blade_height=0.0085,            # 8.5 mm axial (per 18 mm span)
+            blade_length=0.009,             # 9 mm tangential width of tab
+            # ASSUMPTION: Np ≈ 0.35 for small-angle (10°) tangentially-pitched
+            # tabs in alternating axial direction. Literature Np for 45° PBT
+            # is ~1.3; the disk-style 19-tab geometry with 10° fan pitch and
+            # alternating up/down acts more like a flat disc turbine with
+            # mixed axial pumping. Pending CFD validation (see cad/cfd/).
             power_number=0.35,
-            max_rpm=2000.0,
+            max_rpm=2500.0,
             has_stator=False,
             dissipation_ratio=5.0,          # typical for open impellers
         )
