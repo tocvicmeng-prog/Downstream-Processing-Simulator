@@ -576,7 +576,10 @@ def render_tab_m1(
                     # rigorous calculation. Properties used here are
                     # representative paraffin-oil at hot emulsification
                     # (see hardware_metrics module for values).
-                    from dpsim.visualization.components import render_impeller_xsec
+                    from dpsim.visualization.components import (
+                        render_impeller_xsec,
+                        render_impeller_xsec_v2,
+                    )
                     from dpsim.visualization.design import chrome
                     from dpsim.visualization.tabs.m1.hardware_metrics import (
                         compute_hardware_metrics,
@@ -587,24 +590,51 @@ def render_tab_m1(
                         rpm=float(rpm),
                         impeller_diameter_m=_impeller_d_m,
                     )
-                    st.html(chrome.eyebrow("Rushton cross-section · live"))
+                    if is_stirrer_A:
+                        st.html(chrome.eyebrow(
+                            "Stirrer A · 19-tab disk in 100 mL beaker · live"
+                        ))
+                    else:
+                        st.html(chrome.eyebrow("Rushton cross-section · live"))
                     _xsec_col, _rail_col = st.columns([1, 0.42])
                     with _xsec_col:
-                        render_impeller_xsec(
-                            rpm=float(rpm),
-                            impeller_d_mm=_hw_ctx.impeller_diameter_mm,
-                        )
+                        if is_stirrer_A:
+                            # v0.6.0: disk-style 19-tab Stirrer A in glass
+                            # beaker (geometry verified 2026-05-01 against
+                            # cad/output/). Four-state toggle button cycles:
+                            #   1 side opaque → 2 bottom opaque
+                            #   3 side transparent → 4 bottom transparent
+                            # Transparent views fade the agitator to
+                            # emphasise circulation flow + double-emulsion
+                            # droplet collisions.
+                            render_impeller_xsec_v2(rpm=float(rpm))
+                        else:
+                            render_impeller_xsec(
+                                rpm=float(rpm),
+                                impeller_d_mm=_hw_ctx.impeller_diameter_mm,
+                            )
                     with _rail_col:
                         render_metrics_rail(_hw_ctx)
-                    st.caption(
-                        "Standard Rushton-disk in baffled BSTR (D/T = 1/3). "
-                        "Conveys shear tier (`v_tip`), break-up zone (trailing-"
-                        "vortex pair behind each blade per Wu & Patterson 1989), "
-                        "and impeller-zone passage frequency (`f_pass`). Re/We "
-                        "use representative paraffin-oil properties (ρ≈850 "
-                        "kg/m³, μ≈5 mPa·s at 80 °C, σ≈25 mN/m); the PBE solver "
-                        "does its own rigorous calculation."
-                    )
+                    if is_stirrer_A:
+                        st.caption(
+                            "Disk-style impeller (Ø 59 mm × 1 mm sheet) with "
+                            "19 perimeter tabs alternating UP/DOWN, each at "
+                            "10° tangential pitch. Click the toggle button "
+                            "(top-right) to cycle through side / bottom / "
+                            "transparent views. Geometry sourced from "
+                            "`cad/output/stirrer_A_pitched_blade.step` "
+                            "(verified against 2026-03-27 measurement photos)."
+                        )
+                    else:
+                        st.caption(
+                            "Standard Rushton-disk in baffled BSTR (D/T = 1/3). "
+                            "Conveys shear tier (`v_tip`), break-up zone (trailing-"
+                            "vortex pair behind each blade per Wu & Patterson 1989), "
+                            "and impeller-zone passage frequency (`f_pass`). Re/We "
+                            "use representative paraffin-oil properties (ρ≈850 "
+                            "kg/m³, μ≈5 mPa·s at 80 °C, σ≈25 mN/m); the PBE solver "
+                            "does its own rigorous calculation."
+                        )
 
                     t_emul = labeled_widget(
                         "Emulsification time",

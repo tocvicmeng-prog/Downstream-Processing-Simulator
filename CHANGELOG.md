@@ -76,6 +76,23 @@ CAD review:
   formulation panels (agarose-chitosan stirred + legacy, cellulose
   NMMO).
 
+### Added — Stirrer A live cross-section v2 (M1 Hardware Emulsification box)
+
+- New embedded SVG component `render_impeller_xsec_v2` rendering the
+  verified 19-tab disk-style Stirrer A geometry inside the Ø 100 mm
+  glass beaker.
+- Single toggle button (top-right of the diagram) cycles through four
+  view states:
+  1. side-view cross-section · opaque agitator
+  2. bottom-up cross-section · opaque agitator
+  3. side-view cross-section · transparent agitator (emphasises
+     circulation flow + double-emulsion droplet collisions)
+  4. bottom-up cross-section · transparent agitator
+- Replaces the generic Rushton-turbine animation in the Stirrer A path;
+  the legacy Rushton SVG is retained for the rotor-stator path.
+- Geometry sourced from `cad/output/stirrer_A_pitched_blade.step` and
+  `cad/output/beaker_100mm.step` (CAD review 2026-05-01).
+
 ### Notes on validity
 
 - The new `blade_height = 0.0085` and `blade_count = 19` will shift the

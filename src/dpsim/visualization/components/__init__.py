@@ -12,6 +12,9 @@ from dpsim.visualization.components.column_xsec import (
     render_column_xsec,
 )
 from dpsim.visualization.components.impeller_xsec import render_impeller_xsec
+from dpsim.visualization.components.impeller_xsec_v2 import (
+    render_impeller_xsec_v2,
+)
 from dpsim.visualization.components.streamlit_components import (
     StopButtonState,
     stop_button,
@@ -23,6 +26,7 @@ __all__ = [
     "StopButtonState",
     "render_column_xsec",
     "render_impeller_xsec",
+    "render_impeller_xsec_v2",
     "stop_button",
     "triptych_panel",
 ]
