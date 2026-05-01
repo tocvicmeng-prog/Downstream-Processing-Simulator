@@ -1,5 +1,163 @@
 # Changelog
 
+## v0.6.2 — CFD-PBE zonal coupling end-to-end (2026-05-01)
+
+Closes the CFD-PBE coupling loop end-to-end: DPSim integrates a
+schema-v1.0 ``zones.json`` against the M1 PBE, an OpenFOAM case can
+produce one via the supplied dictionaries and post-processor, and
+the user manual is updated with operator-facing and advanced-reference
+chapters. The OpenFOAM-side pipeline is shipped as a starting point
+that requires iteration against a specific OpenFOAM build and a PIV
+validation campaign before predictions can be trusted for absolute
+scale-up (Appendix K §K.4.6 — full validation envelope).
+
+### Added — DPSim-side zonal PBE coupling (commit a5d984c)
+
+- **Schema v1.0** locked at ``cad/cfd/zones_schema.md``: variable-N
+  compartments, two ε per zone (``epsilon_avg`` for coalescence,
+  ``epsilon_breakage_weighted`` for breakage), one-way convective
+  exchanges with asymmetric source/target rates. Forward-compat
+  versioning policy documented.
+- **Pydantic v2 loader** (``src/dpsim/cfd/zonal_pbe.py``) with 11 hard
+  validation paths (schema_version, duplicate names, phantom exchange
+  targets, ε_brk < ε_avg, metadata aggregation mismatch within 1 %,
+  etc.) and soft advisory warnings for under-resolved CFD.
+- **Zonal integrator** ``integrate_pbe_with_zones``: per-zone
+  ``(n_zones × n_bins,)`` state on a shared fixed-pivot grid; reuses
+  Alopaeus and Coulaloglou-Tavlarides kernels from
+  ``level1_emulsification`` (single source of truth for kernel arithmetic);
+  asymmetric Q/V_from outflow + Q/V_to inflow exchange; LSODA via
+  ``solve_ivp``. **Bit-exact reduction to bare ``PBESolver`` in the
+  1-zone degenerate case** (0.000000 % rel error).
+- **Consistency check** ``consistency_check_with_volume_avg``:
+  30 %-tolerance gate against the legacy Po·N³·D⁵/V_tank empirical
+  estimate (Scientific Advisor 2026-05-01 guidance).
+- **CLI subcommand** ``dpsim cfd-zones`` with material overrides,
+  kernel preset, optional ``--legacy-eps`` cross-check, structured
+  results JSON output.
+- **31 pytest tests** (``tests/test_cfd_zonal_pbe.py``): loader happy
+  paths, 11 parametrised rejection paths, advisory warnings via
+  caplog, consistency-check edge cases, integrator input validation,
+  single-zone bit-exact equivalence, volume balance < 1e-3 on
+  Stirrer A and Stirrer B, breakage-zone bias, plus 2 subprocess-based
+  CLI smoke tests.
+
+### Added — OpenFOAM-side post-processing pipeline (commit 6b5d408)
+
+- **``cad/cfd/scripts/extract_epsilon.py``** — full implementation
+  (was a stub printing TODOs). Reads cell-centred ``epsilon`` / ``U`` /
+  ``V`` / ``C`` via fluidfoam, partitions cells by zone-config
+  selectors (``cellZone``, ``near_surface``, ``complement``), computes
+  ``ε_avg`` and ``ε_breakage_weighted`` per zone using a vendored
+  ``breakage_rate_alopaeus`` that matches DPSim's NumPy kernel
+  point-for-point (regression-tested), estimates inter-zone convective
+  flows via a KDTree boundary-cell heuristic (with
+  ``--exchanges-from-json`` override for production runs), emits
+  schema-v1.0 ``zones.json`` that round-trips through
+  ``CFDZonesPayload.model_validate``.
+- **``src/dpsim/cfd/openfoam_io.py``** — full implementation. Thin
+  wrappers around fluidfoam (``read_field``, ``list_time_directories``,
+  ``latest_time``, ``assert_field_consistent``) and a minimal FoamFile
+  dictionary writer (``write_dict`` with FoamFile header, nested
+  dicts, lists; refuses unsupported types).
+- **``cad/cfd/scripts/prepare_geometry.sh``** — STEP → STL via gmsh
+  (preferred) or FreeCAD CLI (fallback), with patch-name rewriting
+  to match the snappyHexMesh convention.
+- **``cad/cfd/scripts/run_case.sh``** — full 8-stage pipeline
+  orchestrator: blockMesh → surfaceFeatureExtract → snappyHexMesh →
+  checkMesh → decomposePar → mpirun pimpleDyMFoam → reconstructPar →
+  postProcess (writeCellCentres + writeCellVolumes for
+  ``extract_epsilon.py``).
+- **15 pytest tests** (``tests/test_cfd_extract_epsilon.py``) against
+  synthetic field arrays — no OpenFOAM dependency required.
+
+### Added — OpenFOAM case dictionaries (commit 6b5d408)
+
+- **Stirrer A** (``cad/cfd/cases/stirrer_A_beaker_100mL/``, full set):
+  ``system/{controlDict, fvSchemes, fvSolution, blockMeshDict,
+  snappyHexMeshDict, decomposeParDict}``;
+  ``constant/{transportProperties, turbulenceProperties,
+  dynamicMeshDict}``; ``0.org/{U, p, k, omega, nut}``;
+  ``zones_config.json`` (3-zone partition: impeller / near_wall /
+  bulk); ``README.md``. Targets pimpleDyMFoam at 1500 RPM,
+  ν = 5.81e-5 m²/s (paraffin), level-5 impeller refinement, 5 prism
+  layers, run-time field averaging from t = 2 s.
+- **Stirrer B** (``cad/cfd/cases/stirrer_B_beaker_100mL/``, delta from A):
+  ``system/{controlDict, snappyHexMeshDict}``,
+  ``zones_config.json`` (4-zone partition: impeller / slot_exit /
+  near_wall / bulk), ``README.md``. Targets 6000 RPM with deltaT
+  2.5e-5 (4× tighter for the higher rotation rate), level-6 impeller
+  refinement, level-4 slot-exit shell, 7 prism layers on impeller.
+
+### Added — User manual (commit f3f8695)
+
+- **First-edition manual §9** "CFD-PBE Zonal Coupling for M1 Scale-up"
+  (``polysaccharide_microsphere_simulator_first_edition.md``).
+  Nine sub-sections: §9.1 decision tree, §9.2 Jensen's-inequality /
+  two-ε rationale, §9.3 variable-N compartment model, §9.4 Stirrer A
+  3-zone worked example, §9.5 Stirrer B 4-zone with rotor-stator
+  loop (Padron 2005 / Hall 2011), §9.6 ``dpsim cfd-zones`` CLI,
+  §9.7 output interpretation + diagnostic gates, §9.8 validation
+  status + limitations + evidence-tier policy, §9.9 source-of-truth
+  pointers and references. Three Unicode block-diagram figures
+  in fenced code blocks (the renderer does not support raster
+  images — figures use the project-native approach).
+- **Appendix K** (``appendix_K_cfd_pbe_zonal_coupling.md``, new file):
+  advanced-project-report architecture covering executive summary,
+  objectives, mathematical framework with explicit Jensen's
+  inequality and convective-exchange asymmetry derivation, schema
+  spec walkthrough + evolution policy, OpenFOAM 7-phase pipeline,
+  per-phase status table, limitations + risk register, Vi
+  viscous-correction caveat (closes the F1 audit loop), reproducibility
+  checklist, full reference list, glossary.
+- **Audit addendum** (``DPSIM_UNIFIED_DOCUMENTATION_AUDIT_2026-04-25.md``):
+  append-only ``Addendum — Changes since 2026-04-25 (added 2026-05-01)``
+  section preserving the dated snapshot. Lists v0.6.0 + the new
+  CFD-PBE deltas, three new lifecycle-result interpretation gates
+  (PIV status, volume balance, ε consistency), three new
+  documentation-update gates.
+- **Build infrastructure**: ``build_pdf.py`` ``BUILD_TARGETS`` extended
+  with Appendix K. All four PDFs rebuilt cleanly with full Unicode
+  (Greek, super/sub, box-drawing characters).
+
+### References cited (no fabrications)
+
+Alopaeus 2002, Coulaloglou-Tavlarides 1977, Kumar-Ramkrishna 1996,
+Wang-Mao 2005, Padron 2005 (PhD), Hall 2011, Calabrese 1986,
+Metzner-Otto 1957, Utomo 2009.
+
+### Test totals
+
+48/48 pytest passing in ~28 s (33 zonal-PBE + 15 extract-epsilon /
+openfoam-io). The bit-exact 1-zone equivalence test is the strongest
+correctness gate: any drift would mean the zonal coupling has
+introduced numerical noise into the degenerate case.
+
+### Working-tree housekeeping
+
+- The byte-identical-content metadata churn on the three pre-existing
+  PDFs (carried over from a prior rebuild before this release) is
+  resolved as of commit f3f8695.
+- ``__version__`` in ``src/dpsim/__init__.py`` was stale at 0.5.2;
+  bumped to 0.6.2 alongside ``pyproject.toml`` in this release commit.
+
+### Known limitations / Phase 6 work pending
+
+- The OpenFOAM dicts are syntactically valid and parameter-sensible
+  per the README's specifications, but **not yet executed end-to-end**
+  against a real OpenFOAM install. Treat as a starting point for
+  iteration against your specific build, mesh-quality output, and
+  operating regime.
+- Until a PIV measurement campaign at bench scale validates the CFD
+  field, predictions through the zonal path inherit ``qualitative_trend``
+  evidence in the lifecycle ladder (see Appendix K §K.4.6).
+- The ε_breakage_weighted formulation evaluates ``g(d_ref, ε)`` at a
+  single ``d_ref``. Polydisperse systems with bimodal breakage may need
+  iterative refinement; flagged as a v1.0 limitation in Appendix K
+  §K.6.1.
+
+---
+
 ## v0.6.0 — CAD geometry handoff + OpenFOAM CFD-PBE scaffolding + Stirrer A xsec v2 (2026-05-01)
 
 Establishes the foundation for spatially-resolved ε-field forcing of the

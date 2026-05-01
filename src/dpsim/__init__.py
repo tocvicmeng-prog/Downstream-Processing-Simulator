@@ -21,7 +21,7 @@ Application code should use the lifecycle-layer entry points instead:
   - ``from dpsim.core.performance_recipe import performance_recipe_from_resolved``
 """
 
-__version__ = "0.5.2"
+__version__ = "0.6.2"
 
 from .lifecycle.orchestrator import (
     DownstreamProcessOrchestrator,
