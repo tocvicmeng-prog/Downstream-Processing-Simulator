@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "case_metadata": {
+    "case_name": "stirrer_B_beaker_100mL",
+    "stirrer_type": "rotor_stator_B",
+    "vessel": "beaker_100mm",
+    "rpm": 6000,
+    "fluid_temperature_K": 298.15,
+    "openfoam_solver": "pimpleDyMFoam",
+    "time_averaging_window_s": [1.0, 3.0],
+    "n_cells_total": 12500000,
+    "convergence_residual": 6.1e-6,
+    "epsilon_volume_weighted_avg_W_per_kg": 17.47
+  },
+  "zones": [
+    {
+      "name": "impeller",
+      "kind": "impeller_swept_volume",
+      "volume_m3": 1.8e-6,
+      "cell_count": 380000,
+      "epsilon_avg_W_per_kg": 220.0,
+      "epsilon_breakage_weighted_W_per_kg": 350.0,
+      "shear_rate_avg_per_s": 22000.0,
+      "centroid_xyz_m": [0.0, 0.0, 0.015],
+      "kolmogorov_length_m": 8.7e-6
+    },
+    {
+      "name": "slot_exit",
+      "kind": "stator_slot_exit",
+      "volume_m3": 4.5e-7,
+      "cell_count": 95000,
+      "epsilon_avg_W_per_kg": 850.0,
+      "epsilon_breakage_weighted_W_per_kg": 1200.0,
+      "shear_rate_avg_per_s": 38000.0,
+      "centroid_xyz_m": [0.018, 0.0, 0.015],
+      "kolmogorov_length_m": 5.2e-6,
+      "metadata": {"notes": "36 stator holes × 3 rows; ε aggregated within 2 mm of slot exit on stator outside"}
+    },
+    {
+      "name": "near_wall",
+      "kind": "near_wall",
+      "volume_m3": 1.45e-5,
+      "cell_count": 1800000,
+      "epsilon_avg_W_per_kg": 18.0,
+      "epsilon_breakage_weighted_W_per_kg": 25.0,
+      "shear_rate_avg_per_s": 1400.0,
+      "centroid_xyz_m": [0.045, 0.0, 0.04],
+      "kolmogorov_length_m": 3.1e-5
+    },
+    {
+      "name": "bulk",
+      "kind": "bulk",
+      "volume_m3": 8.325e-5,
+      "cell_count": 10225000,
+      "epsilon_avg_W_per_kg": 8.5,
+      "epsilon_breakage_weighted_W_per_kg": 11.0,
+      "shear_rate_avg_per_s": 480.0,
+      "centroid_xyz_m": [0.0, 0.0, 0.06],
+      "kolmogorov_length_m": 4.5e-5
+    }
+  ],
+  "exchanges": [
+    {"from_zone": "impeller", "to_zone": "slot_exit", "volumetric_flow_m3_per_s": 8.4e-5, "kind": "convective"},
+    {"from_zone": "slot_exit", "to_zone": "bulk", "volumetric_flow_m3_per_s": 8.4e-5, "kind": "convective"},
+    {"from_zone": "bulk", "to_zone": "impeller", "volumetric_flow_m3_per_s": 8.4e-5, "kind": "convective"},
+    {"from_zone": "bulk", "to_zone": "near_wall", "volumetric_flow_m3_per_s": 9.8e-6, "kind": "convective"},
+    {"from_zone": "near_wall", "to_zone": "bulk", "volumetric_flow_m3_per_s": 9.8e-6, "kind": "convective"}
+  ]
+}

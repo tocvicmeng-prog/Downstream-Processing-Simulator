@@ -1,0 +1,31 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  DPSim CFD-PBE — initial nut field (turbulent kinematic viscosity)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      nut;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 2 -1 0 0 0 0];
+
+internalField   uniform 0;
+
+boundaryField
+{
+    vessel_wall
+    {
+        type            nutkWallFunction;
+        value           uniform 0;
+    }
+    impeller_wall
+    {
+        type            nutkWallFunction;
+        value           uniform 0;
+    }
+}
+
+// ************************************************************************* //

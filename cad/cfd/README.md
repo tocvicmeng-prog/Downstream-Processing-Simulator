@@ -7,6 +7,11 @@ trajectory (per 2026-05-01 user direction).
 **Status**: Scaffold only. CAD geometry handoff complete (`cad/output/`).
 CFD case setup, mesh, solver runs, and PBE coupling are TODO.
 
+**Data contract**: The `zones.json` schema between `extract_epsilon.py`
+(OpenFOAM-side) and `src/dpsim/cfd/zonal_pbe.py` (DPSim-side) is locked at
+v1.0 — see [`zones_schema.md`](zones_schema.md) for the field-by-field
+specification, validation rules, and worked Stirrer A / Stirrer B examples.
+
 ---
 
 ## Pipeline overview

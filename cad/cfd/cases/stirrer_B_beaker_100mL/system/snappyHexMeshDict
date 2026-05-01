@@ -1,0 +1,172 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  DPSim CFD-PBE — snappyHexMesh for Stirrer B (rotor-stator).
+  Refinement: level 6 on impeller, level 5 on stator wall, level 4 inside
+  the slotExitZone shell capturing the high-shear region just outside
+  the 36 stator perforations. Prism layers on impeller, stator, vessel.
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      snappyHexMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+castellatedMesh true;
+snap            true;
+addLayers       true;
+
+geometry
+{
+    vessel_wall
+    {
+        type triSurfaceMesh;
+        file "vessel_wall.stl";
+    }
+    impeller_wall
+    {
+        type triSurfaceMesh;
+        file "impeller_wall.stl";
+    }
+    stator_wall
+    {
+        type triSurfaceMesh;
+        file "stator_wall.stl";
+    }
+
+    // Rotor swept-volume cylinder (inside the stator)
+    rotorZone
+    {
+        type        searchableCylinder;
+        point1      (0 0 0.010);
+        point2      (0 0 0.020);
+        radius      0.013;
+    }
+
+    // Slot-exit annular shell — cylindrical band just outside the stator
+    // (Stirrer B stator: Ø 32.03 mm, so r_outer ≈ 16 mm; shell from 16-18 mm).
+    slotExitZone
+    {
+        type        searchableCylinder;
+        point1      (0 0 0.008);
+        point2      (0 0 0.022);
+        radius      0.018;
+        // Inner radius is the stator surface; the annulus is enforced by
+        // listing slotExitZone before rotorZone in zones_config.json so
+        // that any cell that overlaps both is counted as rotor (impeller
+        // cellZone has priority via `cellZone` selector evaluation order).
+        // The remaining cells in this cylinder, outside the stator wall,
+        // are the slot-exit jet zone.
+    }
+}
+
+castellatedMeshControls
+{
+    maxLocalCells       4000000;
+    maxGlobalCells      15000000;
+    minRefinementCells  10;
+    maxLoadUnbalance    0.10;
+    nCellsBetweenLevels 3;
+
+    features ();
+
+    refinementSurfaces
+    {
+        vessel_wall
+        {
+            level (2 3);
+            patchInfo { type wall; }
+        }
+        impeller_wall
+        {
+            level (6 6);             // ~0.08 mm cells
+            patchInfo { type wall; }
+        }
+        stator_wall
+        {
+            level (5 5);             // ~0.16 mm — slot perforations
+            patchInfo { type wall; }
+        }
+    }
+
+    refinementRegions
+    {
+        rotorZone
+        {
+            mode    inside;
+            levels  ((1.0 5));
+        }
+        slotExitZone
+        {
+            mode    inside;
+            levels  ((1.0 4));       // level 4 in the slot-exit jet shell
+        }
+    }
+
+    locationInMesh   (0 0 0.065);
+
+    resolveFeatureAngle 30;
+    allowFreeStandingZoneFaces true;
+}
+
+snapControls
+{
+    nSmoothPatch    3;
+    tolerance       2.0;
+    nSolveIter      30;
+    nRelaxIter      5;
+    nFeatureSnapIter 10;
+    implicitFeatureSnap false;
+    explicitFeatureSnap true;
+    multiRegionFeatureSnap false;
+}
+
+addLayersControls
+{
+    relativeSizes       true;
+    expansionRatio      1.2;
+    finalLayerThickness 0.5;
+    minThickness        0.01;
+    nGrow               0;
+
+    layers
+    {
+        impeller_wall   { nSurfaceLayers 7; }
+        stator_wall     { nSurfaceLayers 5; }
+        vessel_wall     { nSurfaceLayers 5; }
+    }
+
+    featureAngle    60;
+    nSmoothSurfaceNormals 1;
+    nSmoothNormals  3;
+    nSmoothThickness 10;
+    maxFaceThicknessRatio 0.5;
+    maxThicknessToMedialRatio 0.3;
+    minMedianAxisAngle 90;
+    nBufferCellsNoExtrude 0;
+    nLayerIter      50;
+}
+
+meshQualityControls
+{
+    maxNonOrtho         65;
+    maxBoundarySkewness 20;
+    maxInternalSkewness 4;
+    maxConcave          80;
+    minVol              1e-13;
+    minTetQuality       -1e30;
+    minArea             -1;
+    minTwist            0.05;
+    minDeterminant      0.001;
+    minFaceWeight       0.05;
+    minVolRatio         0.01;
+    minTriangleTwist    -1;
+    nSmoothScale        4;
+    errorReduction      0.75;
+}
+
+debug           0;
+mergeTolerance  1e-6;
+
+// ************************************************************************* //

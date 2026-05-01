@@ -1,0 +1,72 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  DPSim CFD-PBE — controlDict for Stirrer B (rotor-stator).
+  6000 RPM, 100 mL beaker. Endtime shorter than Stirrer A because the
+  impeller rotation rate is 4× higher (3 s = 300 rotations).
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     pimpleDyMFoam;
+
+startFrom       startTime;
+startTime       0;
+
+stopAt          endTime;
+endTime         3.0;            // ~300 rotations at 6000 RPM
+
+// 6000 RPM = 100 rev/s; 1° per timestep at 100 rev/s = 1 / (100·360) ≈ 2.8e-5.
+// Slot-exit jets and prism layers (~0.05 mm cells) require tighter dt for
+// Courant control. Use deltaT 2.5e-5; maxCo 0.5 lets the adjustable solver
+// reduce further if needed.
+deltaT          2.5e-5;
+
+writeControl    adjustableRunTime;
+writeInterval   0.1;
+purgeWrite      0;
+writeFormat     ascii;
+writePrecision  8;
+writeCompression off;
+timeFormat      general;
+timePrecision   6;
+
+runTimeModifiable true;
+adjustTimeStep    true;
+maxCo             0.5;
+maxDeltaT         1.0e-4;
+
+functions
+{
+    fieldAverage1
+    {
+        type            fieldAverage;
+        libs            ("libfieldFunctionObjects.so");
+        writeControl    writeTime;
+        timeStart       1.0;     // discard first 1 s of transient
+        fields
+        (
+            U      { mean on; prime2Mean off; base time; }
+            epsilon{ mean on; prime2Mean off; base time; }
+            k      { mean on; prime2Mean off; base time; }
+        );
+    }
+
+    impellerPower
+    {
+        type            forces;
+        libs            ("libforces.so");
+        writeControl    timeStep;
+        writeInterval   100;
+        patches         (impeller_wall);
+        rho             rhoInf;
+        rhoInf          1020;
+        CofR            (0 0 0.015);   // Stirrer B impeller axial position
+    }
+}
+
+// ************************************************************************* //

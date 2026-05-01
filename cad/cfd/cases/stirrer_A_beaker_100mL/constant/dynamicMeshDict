@@ -1,0 +1,32 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  DPSim CFD-PBE — dynamicMeshDict for Stirrer A (AMI sliding mesh).
+  Rotates the cellZone 'rotorZone' (created by snappyHexMesh refinement
+  region) about the vertical axis at 1500 RPM = 157.08 rad/s.
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      dynamicMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dynamicFvMesh   dynamicMotionSolverFvMesh;
+
+motionSolverLibs ("libfvMotionSolvers.so");
+
+motionSolver    solidBody;
+
+cellZone        rotorZone;          // matches refinementRegion in snappy
+
+solidBodyMotionFunction rotatingMotion;
+
+rotatingMotionCoeffs
+{
+    origin          (0 0 0.025);    // mid-plane of impeller
+    axis            (0 0 1);
+    omega           157.0796;       // 1500 RPM = 1500/60 * 2π rad/s
+}
+
+// ************************************************************************* //

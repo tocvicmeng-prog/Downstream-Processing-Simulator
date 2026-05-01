@@ -103,3 +103,78 @@ Future documentation updates should be gated by:
 3. Cross-check of every lifecycle workflow statement against
    `src/dpsim/visualization/app.py` and `src/dpsim/visualization/ui_workflow.py`.
 4. PDF rebuild of every Markdown target in `docs/user_manual/build_pdf.py`.
+
+---
+
+## Addendum — Changes since 2026-04-25 (added 2026-05-01)
+
+This addendum records material changes to the documentation set that occurred
+*after* the 2026-04-25 audit was finalised. The audit body above is preserved
+as a point-in-time snapshot; this section is append-only.
+
+### Scope additions to the authoritative documentation set
+
+| Role | New authoritative file | Status |
+|---|---|---|
+| M1 CFD-PBE zonal coupling — operator chapter | `polysaccharide_microsphere_simulator_first_edition.md` §9 | New chapter inserted between §8 (Calibration) and Part III (Appendix) |
+| M1 CFD-PBE zonal coupling — advanced reference | `appendix_K_cfd_pbe_zonal_coupling.md` | New sibling appendix; registered in `build_pdf.py` BUILD_TARGETS |
+| `zones.json` schema v1.0 contract | `cad/cfd/zones_schema.md` | Locked 2026-05-01; semantic versioning policy documented |
+
+### Releases since the audit
+
+| Version | Date | Highlights |
+|---|---|---|
+| v0.6.0 | 2026-05-01 | CAD geometry source-of-truth for the 5 wetted parts (Stirrer A pitched-blade with 19-tab disk geometry verified by photo + manual review; Stirrer B rotor + stator with 36 perforations × 3 rows; 100 mm beaker; jacketed 92 mm vessel). OpenFOAM CFD-PBE pipeline scaffolding (`cad/cfd/`, `src/dpsim/cfd/`). Live Stirrer A cross-section animation with physically faithful flow / droplet behaviour |
+| post-v0.6.0 (commit a5d984c, 2026-05-01) | 2026-05-01 | DPSim-side CFD-PBE zonal coupling: schema v1.0, Pydantic-validated loader (11 hard-validation paths), `integrate_pbe_with_zones` integrator with bit-exact 1-zone reduction to legacy `PBESolver`, `consistency_check_with_volume_avg`, 31 library tests + 2 CLI smoke tests, `dpsim cfd-zones` subcommand |
+
+### Canonical-term additions
+
+In addition to the canonical terms listed above, the following terms are now
+authoritative in user-facing documentation:
+
+| Preferred term | Avoid |
+|---|---|
+| `epsilon_avg_W_per_kg` (volume-average ε, drives coalescence) | "average epsilon" without the per-kernel role |
+| `epsilon_breakage_weighted_W_per_kg` (breakage-frequency-weighted ε, drives breakage) | "weighted epsilon", "biased epsilon" |
+| Zone (well-mixed compartment in the CFD-PBE coupling) | "compartment" used loosely; reserve "compartment" for CFD-mesh subdivisions before zonal aggregation |
+| Convective exchange (one-way well-mixed droplet transport between zones) | "mixing flow", "circulation" |
+| Slot exit (rotor-stator-specific high-shear region just outside each stator hole) | "slot region", "stator zone" |
+| `qualitative_trend` evidence for unvalidated CFD predictions | implying CFD predictions are quantitatively reliable before PIV validation |
+
+### Scientific and operational boundaries (extension)
+
+The 2026-04-25 audit listed eight interpretation gates for lifecycle results.
+The CFD-PBE coupling adds three more, applicable when M1 is run via the
+zonal path:
+
+- PIV validation status of the underlying CFD field (no PIV → predictions inherit `qualitative_trend`).
+- `volume_balance_relative_error` < 1e-3 (mass conservation across breakage / coalescence / exchange).
+- Consistency check vs the legacy Po·N³·D⁵/V_tank empirical estimate (default 30 % relative tolerance per Scientific Advisor guidance, 2026-05-01).
+
+### Documentation-update gating (extension)
+
+In addition to the four gates listed above, future updates that touch the
+CFD-PBE coupling should be gated by:
+
+5. Re-run of `tests/test_cfd_zonal_pbe.py` (33 tests, ~32 s wall time).
+6. Cross-check of `cad/cfd/zones_schema.md` against the Pydantic models
+   in `src/dpsim/cfd/zonal_pbe.py` — the schema doc is the contract; the
+   models are the implementation; drift between them is a documentation bug.
+7. PDF rebuild of `appendix_K_cfd_pbe_zonal_coupling.md` alongside the
+   first-edition manual.
+
+### Remaining work (Phase C and beyond)
+
+The audit's "remaining documentation risks" section noted that the broader
+historical `docs/` tree contains archival planning files. As of 2026-05-01,
+the CFD-PBE coupling has the following items not yet documented in
+user-facing material because the upstream pipeline has not been executed
+end-to-end:
+
+- OpenFOAM dictionary templates for Stirrer A and Stirrer B cases (Phase 1–3).
+- `extract_epsilon.py` implementation (Phase 4).
+- `openfoam_io.py` helper functions.
+- A worked end-to-end example with real (rather than synthetic-fixture) `zones.json`.
+- PIV validation campaign results.
+
+These will be folded in either via a new audit (`DPSIM_UNIFIED_DOCUMENTATION_AUDIT_<date>.md`) or as a follow-up addendum to this document, depending on whether the broader documentation set has shifted by then.

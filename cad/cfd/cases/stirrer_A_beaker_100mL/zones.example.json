@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "case_metadata": {
+    "case_name": "stirrer_A_beaker_100mL",
+    "stirrer_type": "pitched_blade_A",
+    "vessel": "beaker_100mm",
+    "rpm": 1500,
+    "fluid_temperature_K": 298.15,
+    "openfoam_solver": "pimpleDyMFoam",
+    "time_averaging_window_s": [2.0, 5.0],
+    "n_cells_total": 4500000,
+    "convergence_residual": 8.4e-6,
+    "epsilon_volume_weighted_avg_W_per_kg": 9.03
+  },
+  "zones": [
+    {
+      "name": "impeller",
+      "kind": "impeller_swept_volume",
+      "volume_m3": 5.4e-6,
+      "cell_count": 280000,
+      "epsilon_avg_W_per_kg": 75.0,
+      "epsilon_breakage_weighted_W_per_kg": 110.0,
+      "shear_rate_avg_per_s": 5500.0,
+      "centroid_xyz_m": [0.0, 0.0, 0.025],
+      "kolmogorov_length_m": 1.5e-5,
+      "metadata": {"notes": "Disk Ø 59 mm × 1 mm with 19 perimeter tabs"}
+    },
+    {
+      "name": "near_wall",
+      "kind": "near_wall",
+      "volume_m3": 1.2e-5,
+      "cell_count": 720000,
+      "epsilon_avg_W_per_kg": 8.5,
+      "epsilon_breakage_weighted_W_per_kg": 12.0,
+      "shear_rate_avg_per_s": 950.0,
+      "centroid_xyz_m": [0.045, 0.0, 0.04],
+      "kolmogorov_length_m": 4.5e-5
+    },
+    {
+      "name": "bulk",
+      "kind": "bulk",
+      "volume_m3": 8.26e-5,
+      "cell_count": 3500000,
+      "epsilon_avg_W_per_kg": 4.8,
+      "epsilon_breakage_weighted_W_per_kg": 6.2,
+      "shear_rate_avg_per_s": 380.0,
+      "centroid_xyz_m": [0.0, 0.0, 0.06],
+      "kolmogorov_length_m": 5.6e-5
+    }
+  ],
+  "exchanges": [
+    {"from_zone": "impeller", "to_zone": "bulk", "volumetric_flow_m3_per_s": 1.6e-5, "kind": "convective"},
+    {"from_zone": "bulk", "to_zone": "impeller", "volumetric_flow_m3_per_s": 1.6e-5, "kind": "convective"},
+    {"from_zone": "bulk", "to_zone": "near_wall", "volumetric_flow_m3_per_s": 4.2e-6, "kind": "convective"},
+    {"from_zone": "near_wall", "to_zone": "bulk", "volumetric_flow_m3_per_s": 4.2e-6, "kind": "convective"}
+  ]
+}

@@ -1,8 +1,16 @@
 """OpenFOAM I/O helpers for the CFD-PBE coupling.
 
-Status: TODO. Stubs for reading/writing OpenFOAM dictionaries and field
-files from Python. Recommended backend: ``fluidfoam`` for clean field
-readers; fall back to direct dictionary parsing for system/ files.
+Thin wrappers around ``fluidfoam`` for reading cell-centred fields, plus
+a minimal FoamFile dictionary writer for emitting ``system/`` files
+programmatically. The dictionary writer is intentionally narrow — it
+supports the subset of FoamFile syntax DPSim needs (key-value pairs,
+nested dictionaries, lists of scalars, FoamFile header) and does not
+attempt to parse arbitrary user-written dictionaries.
+
+For reading complex face-centred fields (e.g. ``phi`` for exact zone-pair
+flux integration), prefer running an OpenFOAM function object that emits
+the integrated quantity to a CSV / JSON file rather than parsing the
+field file in Python.
 """
 from __future__ import annotations
 
@@ -10,24 +18,225 @@ from pathlib import Path
 from typing import Any
 
 
-def read_field(case_dir: Path, time: str, field_name: str) -> Any:
-    """Read an OpenFOAM volume field (e.g., 'epsilon', 'U', 'k') at a
-    specific time directory. Returns a numpy array shaped to the cell
-    count.
+# ---------------------------------------------------------------------------
+# Reading cell-centred fields
+# ---------------------------------------------------------------------------
+
+def read_field(
+    case_dir: Path,
+    time: str,
+    field_name: str,
+    *,
+    vector: bool = False,
+) -> Any:
+    """Read an OpenFOAM cell-centred field at a specific time directory.
+
+    Returns a NumPy array shaped ``(n_cells,)`` for scalar fields or
+    ``(3, n_cells)`` for vector fields (per ``fluidfoam`` convention).
+
+    Parameters
+    ----------
+    case_dir
+        OpenFOAM case directory containing the time directory.
+    time
+        Time-directory name (string, e.g. ``"5.0"`` or ``"latestTime"``).
+    field_name
+        Field to read (e.g. ``"epsilon"``, ``"U"``, ``"k"``, ``"C"``, ``"V"``).
+    vector
+        Set ``True`` for vector fields. Scalars are the default.
+
+    Raises
+    ------
+    RuntimeError
+        If ``fluidfoam`` is not installed.
+    FileNotFoundError
+        If the time directory or field file does not exist.
     """
-    raise NotImplementedError(
-        "TODO: implement field reader. Use fluidfoam.readof.readvector / "
-        "readscalar for the cleanest API."
-    )
+    try:
+        from fluidfoam import readof
+    except ImportError as exc:
+        raise RuntimeError(
+            "fluidfoam is required to read OpenFOAM fields. "
+            "Install with: pip install fluidfoam"
+        ) from exc
+
+    case_path = Path(case_dir)
+    if not (case_path / time / field_name).exists():
+        raise FileNotFoundError(
+            f"Field file not found: {case_path / time / field_name}"
+        )
+
+    if vector:
+        return readof.readvector(str(case_path), time, field_name)
+    return readof.readscalar(str(case_path), time, field_name)
 
 
 def list_time_directories(case_dir: Path) -> list[str]:
-    """List time directories in an OpenFOAM case (sorted numerically)."""
-    raise NotImplementedError("TODO")
+    """List time directories sorted numerically.
 
-
-def write_dict(path: Path, content: dict) -> None:
-    """Write an OpenFOAM dictionary file (system/fvSchemes etc.) from
-    a Python dict. Honors the FoamFile header convention.
+    Excludes the standard ``0/``, ``system/``, ``constant/`` directories
+    and any directory whose name does not parse as a non-negative float.
     """
-    raise NotImplementedError("TODO")
+    case_path = Path(case_dir)
+    if not case_path.exists():
+        raise FileNotFoundError(f"Case directory not found: {case_path}")
+
+    times: list[tuple[float, str]] = []
+    for child in case_path.iterdir():
+        if not child.is_dir():
+            continue
+        try:
+            t = float(child.name)
+        except ValueError:
+            continue
+        if t < 0:
+            continue
+        times.append((t, child.name))
+    times.sort()
+    return [name for _, name in times]
+
+
+def latest_time(case_dir: Path) -> str:
+    """Return the latest time directory name (highest float value)."""
+    times = list_time_directories(case_dir)
+    if not times:
+        raise RuntimeError(
+            f"No time directories found in {case_dir}. "
+            "Has the case been solved (or reconstructed after a parallel run)?"
+        )
+    return times[-1]
+
+
+# ---------------------------------------------------------------------------
+# Writing FoamFile dictionaries
+# ---------------------------------------------------------------------------
+
+_FOAM_HEADER = """/*--------------------------------*- C++ -*----------------------------------*\\
+| =========                 |                                                 |
+| \\\\      /  F ield         | DPSim CFD-PBE Coupling                          |
+|  \\\\    /   O peration     | Generated by dpsim.cfd.openfoam_io              |
+|   \\\\  /    A nd           | Schema: see cad/cfd/zones_schema.md             |
+|    \\\\/     M anipulation  |                                                 |
+\\*---------------------------------------------------------------------------*/
+FoamFile
+{{
+    version     2.0;
+    format      ascii;
+    class       {cls};
+    object      {obj};
+}}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+"""
+
+
+def write_dict(
+    path: Path,
+    content: dict[str, Any],
+    *,
+    foam_class: str = "dictionary",
+    foam_object: str | None = None,
+) -> None:
+    """Write an OpenFOAM dictionary file from a Python dict.
+
+    Honours the FoamFile header convention. The ``foam_object`` defaults
+    to the file basename (``path.name``) if not given.
+
+    Supported value types in ``content``:
+
+    - ``int``, ``float``, ``bool`` (rendered as ``yes``/``no``)
+    - ``str`` (single token; quoted automatically if it contains whitespace)
+    - ``dict`` (rendered as a nested ``{ ... }`` block)
+    - ``list[number | str]`` (rendered as ``( a b c d );``)
+
+    Quotes around strings are escaped literally; this writer is **not**
+    safe for arbitrary user input (no FoamFile-comment escaping, no
+    unicode normalisation). Intended for the small set of programmatically
+    generated dictionaries DPSim ships.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    obj_name = foam_object if foam_object is not None else path.name
+    header = _FOAM_HEADER.format(cls=foam_class, obj=obj_name)
+
+    body = _render_dict(content, indent=0)
+    text = header + body + "\n// ************************************************************************* //\n"
+    path.write_text(text, encoding="utf-8")
+
+
+def _render_dict(d: dict[str, Any], indent: int) -> str:
+    """Render a Python dict as FoamFile dictionary syntax."""
+    pad = " " * (4 * indent)
+    pad_inner = " " * (4 * (indent + 1))
+    parts: list[str] = []
+    for key, value in d.items():
+        rendered = _render_value(value, indent + 1)
+        if isinstance(value, dict):
+            parts.append(f"{pad}{key}\n{pad}{{\n{rendered}{pad}}}\n")
+        else:
+            parts.append(f"{pad}{key}    {rendered};\n")
+    return "".join(parts)
+
+
+def _render_value(value: Any, indent: int) -> str:
+    """Render a single FoamFile value."""
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, (int, float)):
+        if isinstance(value, float) and not (value != value):  # not NaN
+            return f"{value:g}"
+        return str(value)
+    if isinstance(value, str):
+        if " " in value or "\t" in value:
+            return f'"{value}"'
+        return value
+    if isinstance(value, dict):
+        return _render_dict(value, indent)
+    if isinstance(value, (list, tuple)):
+        return _render_list(value)
+    raise TypeError(
+        f"Unsupported FoamFile value type: {type(value).__name__} ({value!r})"
+    )
+
+
+def _render_list(items: list | tuple) -> str:
+    """Render a list as ``( a b c )``."""
+    parts = [_render_value(it, indent=0) for it in items]
+    return "( " + " ".join(parts) + " )"
+
+
+# ---------------------------------------------------------------------------
+# Convenience: read-and-validate
+# ---------------------------------------------------------------------------
+
+def assert_field_consistent(
+    case_dir: Path,
+    time: str,
+    n_cells_expected: int,
+    fields: list[str],
+) -> None:
+    """Verify that all named fields have the expected cell count.
+
+    Useful as a sanity gate before running ``extract_epsilon.py`` on a
+    new case — catches the common error of pointing at a partially-
+    reconstructed parallel run where some fields are still in
+    ``processor*`` directories.
+    """
+    for field in fields:
+        try:
+            data = read_field(case_dir, time, field, vector=False)
+        except (FileNotFoundError, RuntimeError) as exc:
+            # Re-try as vector if scalar read failed (e.g. for U, C)
+            try:
+                data = read_field(case_dir, time, field, vector=True)
+                n = data.shape[1] if data.shape[0] == 3 else data.shape[0]
+            except Exception:
+                raise exc
+        else:
+            n = data.size
+        if n != n_cells_expected:
+            raise ValueError(
+                f"Field '{field}' has {n} cells, expected {n_cells_expected}. "
+                f"Check that the case is fully reconstructed."
+            )

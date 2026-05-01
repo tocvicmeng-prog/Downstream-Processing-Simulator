@@ -1,0 +1,23 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  DPSim CFD-PBE — turbulenceProperties for Stirrer A.
+  k-ω SST RANS (per cad/cfd/README.md §"Turbulence").
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      turbulenceProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+simulationType  RAS;
+
+RAS
+{
+    RASModel        kOmegaSST;
+    turbulence      on;
+    printCoeffs     on;
+}
+
+// ************************************************************************* //

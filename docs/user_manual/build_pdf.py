@@ -443,6 +443,10 @@ BUILD_TARGETS: list[tuple[str, str]] = [
         "appendix_J_functionalization_protocols.pdf",
     ),
     (
+        "appendix_K_cfd_pbe_zonal_coupling.md",
+        "appendix_K_cfd_pbe_zonal_coupling.pdf",
+    ),
+    (
         "DPSIM_UNIFIED_DOCUMENTATION_AUDIT_2026-04-25.md",
         "DPSIM_UNIFIED_DOCUMENTATION_AUDIT_2026-04-25.pdf",
     ),

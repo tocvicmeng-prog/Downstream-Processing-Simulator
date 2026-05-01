@@ -1,0 +1,34 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  DPSim CFD-PBE — initial k field (turbulent kinetic energy)
+  k_init estimated from I·U_tip with I = 5 % turbulence intensity:
+    U_tip = π·D·N = π · 0.059 · 25 = 4.63 m/s  (Stirrer A at 1500 RPM)
+    k_init = 1.5·(0.05·U_tip)² ≈ 0.08 m²/s²
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      k;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 2 -2 0 0 0 0];
+
+internalField   uniform 0.08;
+
+boundaryField
+{
+    vessel_wall
+    {
+        type            kqRWallFunction;
+        value           uniform 0.08;
+    }
+    impeller_wall
+    {
+        type            kqRWallFunction;
+        value           uniform 0.08;
+    }
+}
+
+// ************************************************************************* //

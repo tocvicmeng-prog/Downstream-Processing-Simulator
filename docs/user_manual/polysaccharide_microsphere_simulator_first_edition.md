@@ -37,6 +37,7 @@ If you only have ten minutes, read **§ 1 (What the Simulator Does)** and **§ 3
   - §6 M2 Chemistry Catalogue
   - §7 M3 Method and Uncertainty Bands
   - §8 Calibration and Wet-Lab Loop
+  - §9 CFD-PBE Zonal Coupling for M1 Scale-up
 - **Part III — Appendix (Reference)**
   - A. Detailed Input Requirements
   - B. Process Steps
@@ -63,6 +64,8 @@ The DPSim Downstream Processing Simulator is a multi-scale lifecycle simulator f
 | **M3** | Affinity-column performance | Pack/equilibrate/load/wash/elute method behaviour, breakthrough curve, pressure profile, dynamic binding capacity (DBC), recovery, optional Monte-Carlo uncertainty bands |
 
 The current v0.3.6 simulator covers **21 selectable polymer families**, **96 M2 reagents** organised into **17 chemistry buckets**, **13 ion-gelant profiles**, and an optional **Monte-Carlo LRM uncertainty driver** that reports P05/P50/P95 envelopes on key chromatography metrics.
+
+> **New in v0.6.0+:** an optional **CFD-PBE zonal coupling** path lets you replace M1's volume-averaged dissipation rate ε with a CFD-resolved, per-zone ε field (typically 3–4 compartments). This is the recommended path for 10× scale-up predictions and any mixer where breakage hotspots dominate (rotor-stators, stator-slot exits). See **§9** for when to use it and how.
 
 ### §1.1 Workflow at a glance
 
@@ -623,6 +626,299 @@ Bench data lives in `data/wetlab_calibration_examples/*.yaml` files. The ingesti
 ### §8.3 The evidence-tier inheritance rule
 
 M3 is **never** allowed to claim stronger evidence than the M2 media contract that supplies its ligand and site-balance basis. Likewise, M2 caps to M1's calibration tier. This is enforced via `RunReport.compute_min_tier` and surfaced in the evidence ladder. **If you see your M3 result drop to `qualitative_trend`, look up the chain at M2 and M1 — the cause lives there.**
+
+---
+
+## §9 CFD-PBE Zonal Coupling for M1 Scale-up
+
+The standard M1 solver feeds the population balance equation (PBE) one scalar dissipation rate ε computed from `P / (ρ · V_tank) = Po · N³ · D⁵ / V_tank` (see Appendix G). That single number is the volume-average over the whole vessel. For a well-mixed pitched-blade impeller in a benchtop beaker, it is good enough. For a rotor-stator, a 1 L scale-up, or any mixer whose breakage is dominated by a small high-shear region, **the volume average underestimates breakage** — and underestimating breakage leads to over-predicted droplet sizes, which is the wrong direction for a screening tool.
+
+The CFD-PBE zonal coupling, introduced in v0.6.0, replaces the single ε with a CFD-resolved, per-compartment ε field. You run an OpenFOAM steady-state RANS simulation of your geometry (CAD provided in `cad/output/`), partition the fluid domain into zones, extract per-zone ε, and feed `dpsim cfd-zones` a `zones.json` file. DPSim then solves the PBE per zone with zone-specific kernels and convective droplet exchange between zones.
+
+> **What this is.** A spatially-resolved upgrade to the M1 PBE that captures sub-zone breakage hotspots. Same kernels (Alopaeus breakage, Coulaloglou-Tavlarides coalescence). Same fixed-pivot grid. Different ε per zone, plus convective mass exchange. **Bit-exact reduction to the legacy single-zone solver when you give it one zone.**
+
+### §9.1 When to use CFD-PBE coupling (decision tree)
+
+```
+Are you doing one of the following?
+
+   ┌─ 10× scale-up prediction (e.g. 100 mL → 1 L)        → YES → §9.4
+   ├─ Rotor-stator with stator slots (Stirrer B family)  → YES → §9.5
+   ├─ Geometry that differs significantly from           → YES → §9.4
+   │  the standard pitched-blade calibration regime
+   ├─ Comparing predicted DSD across two stirrer types   → YES → §9.4
+   │  at the same nominal P/V
+   ├─ Investigating "why is d32 not falling with RPM     → YES → §9.4
+   │  the way the legacy solver predicts?"
+   ├─ Bench validation already done, default kernel      → NO  → use legacy
+   │  predictions match measurement within 15 %                  M1 path
+   └─ Standard pitched-blade in a calibrated beaker      → NO  → use legacy
+      (within the validation envelope)                             M1 path
+```
+
+If your answer is "I am within the validation envelope of the legacy single-ε solver and my measured DSD agrees with the prediction," **you do not need CFD-PBE coupling.** Use the legacy path. The zonal coupling is an extension, not a replacement.
+
+If your answer is "my geometry is unusual, my scale-up is non-trivial, or my breakage is happening somewhere other than the volume-average implies," CFD-PBE coupling will give you a better-grounded prediction — provided you back it with PIV-measured velocity (see §9.8).
+
+### §9.2 Why volume-averaged ε underestimates breakage
+
+The Alopaeus breakage rate is
+
+```
+g(d, ε) = C₁ · √(ε/ν_c) · exp[ -C₂·σ / (ρ_c · ε^(2/3) · d^(5/3)) - C₃·Vi ]
+```
+
+The leading term goes as **ε^(1/2)** and the exponent argument is **divided by ε^(2/3)** — both of which mean that g(d, ε) is **convex in ε**. By Jensen's inequality, `<g(ε)>_volume > g(<ε>_volume)`. In plain English: *if a small fraction of the vessel volume has 10× the average ε, that small fraction does much more than 10× the breakage of an equal-volume bulk region*. Volume-averaging hides this entirely.
+
+Coalescence behaves differently. The Coulaloglou-Tavlarides collision-frequency / film-drainage product is more linear in ε, and the dominant ε-dependence shows up in the film drainage exponent, which damps coalescence in high-ε regions where droplets are too far apart to refilm. A volume-averaged ε is therefore the correct scalar for the coalescence kernel.
+
+The zonal coupling resolves this with a **two-ε scheme**. Each zone exports two ε values:
+
+- **`epsilon_avg_W_per_kg`** — the standard volume average over zone cells. **Drives coalescence.**
+- **`epsilon_breakage_weighted_W_per_kg`** — biased toward sub-zone hotspots via the breakage-frequency function itself: `<ε>_g = ∫ g(d_ref, ε(x)) · ε(x) dV / ∫ g(d_ref, ε(x)) dV`. **Drives breakage.**
+
+Figure 9.1 shows the geometry of the bias.
+
+```
+Within a single CFD zone, ε(x) is heterogeneous:
+
+     ε(x)
+      │              ╭─╮ hotspot (rare, large)
+      │             ╱   ╲
+      │           ╱       ╲
+      │         ╱           ╲           bulk of cells
+      │       ╱     ╭───╮     ╲      ╭──────────────╮
+      │     ╱     ╱     ╲       ╲   ╱
+      │___╱_____╱         ╲      ╲_╱
+      │
+      └────────────────────────────────────────► position x
+
+  Volume average (used for COALESCENCE):
+        ε_avg = ∫ ε(x) dV / ∫ dV
+
+  Breakage-weighted average (used for BREAKAGE):
+        ε_brk = ∫ g(d_ref, ε(x)) · ε(x) dV / ∫ g(d_ref, ε(x)) dV
+
+  By construction:  ε_brk ≥ ε_avg.
+```
+
+**Figure 9.1.** Why the two-ε scheme is needed. The continuous ε field has hotspots that dominate breakage rate g(d, ε) but contribute little to the volume average. The schema enforces `epsilon_breakage_weighted_W_per_kg ≥ epsilon_avg_W_per_kg` (within 1 % numerical slack) at load time; a violation indicates a bug in the post-processing script.
+
+### §9.3 The variable-N compartment model
+
+A `zones.json` file describes a CFD-derived compartment model with a variable number of zones. Each zone is a well-mixed region of the vessel; pairs of zones are connected by directional convective flows that transport droplets between them.
+
+The model has two design choices worth understanding:
+
+**1. Variable-N.** The schema lets you use any number of zones from 1 (degenerate single-zone case, equivalent to the legacy solver) up to as many as your CFD partitioning warrants. The validated baseline configurations are 3 zones for an open impeller (impeller / `near_wall` / bulk, see §9.4) and 4 zones for a rotor-stator (impeller / `slot_exit` / `near_wall` / bulk, see §9.5). More zones add resolution but also add load on `extract_epsilon.py`; in practice, 3–5 zones capture the relevant physics.
+
+**2. Asymmetric exchange.** A convective flow from zone A to zone B with rate Q [m³/s] does not give the two zones a symmetric coupling, because they have different volumes. The number-density balance is:
+
+```
+   dN_A/dt += ... - (Q/V_A) · N_A          # outflow from A
+   dN_B/dt += ... + (Q/V_B) · N_A          # inflow to B (well-mixed)
+```
+
+Different denominators. The same droplet count leaves A and arrives at B per unit time, but their fractional rates of change differ because of the volume disparity. This matters most for rotor-stators where the `slot_exit` zone has volume O(0.5 µL) while the bulk has O(80 mL) — the `slot_exit` fills and empties hundreds of times per second.
+
+To represent net asymmetric flow (e.g., an impeller pumps strongly in one direction), include both directions explicitly in the `exchanges[]` list with their respective flow rates.
+
+### §9.4 Worked example — Stirrer A (3 zones)
+
+Stirrer A is a pitched-blade open impeller in a 100 mL beaker (see `cad/output/stirrer_A_pitched_blade`). The canonical partition is three zones:
+
+```
+        ┌────────── Beaker (V = 100 mL, Ø100 mm) ──────────┐
+        │                                                  │
+        │       ┌─── near_wall ──┐  (ε_avg = 8.5 W/kg)     │
+        │       │                │   slow exchange         │
+        │       │  ┌──────┐      │   Q = 4.2 µL/s          │
+        │       │  │ bulk │ ◄──► │                         │
+        │       │  │      │      │                         │
+        │       │  │      │      │   (ε_avg = 4.8)         │
+        │       │  └──┬───┘      │                         │
+        │       │     │ ▲        │                         │
+        │       │     │ │ Q = 16 │                         │
+        │       │     │ │ µL/s   │                         │
+        │       │     ▼ │        │                         │
+        │       │  ┌─────────┐   │                         │
+        │       │  │impeller │   │   ε_avg = 75            │
+        │       │  │  (HIGH ε│   │   ε_brk = 110           │
+        │       │  │  zone)  │   │   (breakage hotspot)    │
+        │       │  └─────────┘   │                         │
+        │       └────────────────┘                         │
+        └──────────────────────────────────────────────────┘
+```
+
+**Figure 9.2.** Stirrer A 3-zone compartment model. Bidirectional exchange arrows show convective droplet flow between zones. The impeller zone (highest ε) is the dominant breakage region; bulk acts as the sink and `near_wall` is weakly coupled. ε values are in W/kg; flows in µL/s. The values shown are the canonical example fixture at `cad/cfd/cases/stirrer_A_beaker_100mL/zones.example.json`.
+
+**Per-zone ε ordering:** impeller (75 W/kg) ≫ `near_wall` (8.5) > bulk (4.8). Volume-weighted average is 9.0 W/kg, close to the legacy Po·N³·D⁵/V_tank estimate at 1500 RPM.
+
+**Steady-state d32 ordering** (after several seconds of integration): `d32_impeller` < `d32_near_wall` < `d32_bulk`. The impeller zone breaks droplets fastest; bulk is the sink that receives them and lets them coalesce; `near_wall` sits in between. This ordering is enforced as a regression test in `tests/test_cfd_zonal_pbe.py::test_breakage_zone_bias_stirrer_a`.
+
+### §9.5 Worked example — Stirrer B (4 zones, rotor-stator loop)
+
+Stirrer B is a small rotor-stator with 36 stator perforations (see `cad/output/stirrer_B_rotor` and `stirrer_B_stator`). The defining feature is the **slot exit jet**: 80–95 % of breakage events in rotor-stator devices happen in the small region just outside each stator hole, where the rotating fluid blasts through the gap and dissipates suddenly (Padron 2005; Hall et al. 2011). That region is too small to volume-average away — it gets its own zone.
+
+```
+                 BREAKAGE LOOP (Q = 84 µL/s, all 3 edges)
+              ┌──────────────────────────────────────┐
+              │                                      │
+              │   ┌──────────┐     ┌─────────────┐  │
+              ▼   │ impeller │ ───►│  slot_exit  │  │
+       ┌──────────┤ ε_avg=220├     │ ε_avg=850   │  │
+       │   bulk   │ ε_brk=350│     │ ε_brk=1200  │──┘
+       │ε_avg=8.5 │          │     │ (DOMINANT   │
+       │ε_brk=11  └──────────┘     │  BREAKAGE)  │
+       │                            └──────┬──────┘
+       │                                   │
+       │ ◄─────────────────────────────────┘
+       │      Q = 84 µL/s (slot exit jets)
+       │
+       │   Q = 9.8 µL/s    ┌────────────┐
+       └──────────────────►│ near_wall  │
+       ◄──────────────────┤ ε_avg = 18 │
+       │   (weak coupling) │ ε_brk = 25 │
+       │                   └────────────┘
+       └──────────────────────────────────
+```
+
+**Figure 9.3.** Stirrer B 4-zone compartment model. The impeller→`slot_exit`→bulk→impeller circulation is the **breakage loop**. Slot_exit has the highest ε (850 / 1200 W/kg) but very small volume (0.45 µL), giving a residence time of roughly 5 ms — droplets are dominated by inflow from impeller, not by local breakage during transit. The `near_wall` zone is weakly coupled (Q one order of magnitude lower than the loop edges) and drifts independently. Q values are volumetric flows; ε in W/kg. Canonical fixture at `cad/cfd/cases/stirrer_B_beaker_100mL/zones.example.json`.
+
+**Counter-intuitive consequence:** at steady state the per-zone d32 ordering is **bulk > `slot_exit` ≈ impeller** (within the loop), with `near_wall` an outlier. The `slot_exit` zone does most of the breakage *work*, but its short residence time prevents the local d32 from dropping much below the loop average. Bulk is consistently the largest because it is the sink. This is correctly captured by the integrator and asserted as `tests/test_cfd_zonal_pbe.py::test_breakage_zone_bias_stirrer_b_loop_below_bulk`.
+
+### §9.6 Running it: `dpsim cfd-zones`
+
+The `dpsim cfd-zones` subcommand is the standalone runner for a zonal simulation. It does **not** modify the standard `run` / `lifecycle` pipeline.
+
+**Minimal invocation** (Stirrer A example fixture):
+
+```
+dpsim cfd-zones cad/cfd/cases/stirrer_A_beaker_100mL/zones.example.json \
+    --kernels pitched_blade \
+    --duration 30 \
+    --output results.json
+```
+
+**Full flag reference:**
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `zones_json` (positional) | required | Path to zones.json (schema v1.0) |
+| `--kernels` | `pitched_blade` | KernelConfig preset. Use `pitched_blade` for Stirrer A, `rotor_stator_small` for Stirrer B, `rotor_stator_legacy` for the original homogeniser calibration |
+| `--rho-oil` | from `MaterialProperties` | Continuous-phase density [kg/m³] |
+| `--mu-oil` | from `MaterialProperties` | Continuous-phase viscosity [Pa·s] |
+| `--rho-aq` | from `MaterialProperties` | Aqueous density [kg/m³] |
+| `--mu-d` | from `MaterialProperties` | Dispersed-phase viscosity [Pa·s] |
+| `--sigma` | from `MaterialProperties` | Interfacial tension [N/m] |
+| `--phi-d` | 0.05 | Dispersed-phase volume fraction |
+| `--duration` | 30.0 | Integration duration [s]; no adaptive extension — call again with longer if d32 has not stabilised |
+| `--n-bins` | 50 | Fixed-pivot diameter grid bins |
+| `--d-min`, `--d-max` | 1e-7, 5e-4 | Grid bounds [m] |
+| `--d32-premix`, `--sigma-premix` | 100e-6, 0.5 | Initial log-normal premix DSD |
+| `--legacy-eps` | (none) | Optional empirical ε [W/kg] for the consistency cross-check (§9.7) |
+| `--consistency-tol` | 0.30 | Relative tolerance for the cross-check |
+| `--output` | (none) | Path to write the results JSON (else stdout summary only) |
+| `--quiet` | off | Suppress the per-zone summary print |
+
+**Sanity-check invocation** (run with consistency gate):
+
+```
+dpsim cfd-zones zones.json \
+    --kernels pitched_blade \
+    --rho-oil 860 --mu-oil 0.05 --mu-d 0.05 --sigma 5e-3 \
+    --phi-d 0.05 --duration 30 --d32-premix 200e-6 \
+    --legacy-eps 9.0 \
+    --output results.json
+```
+
+The `--legacy-eps` flag triggers the §9.7 cross-check against the empirical Po·N³·D⁵/V_tank value; a failure logs a clearly-marked WARNING but does not stop the run.
+
+### §9.7 Reading the output
+
+The integrator emits an aggregated DSD across all zones plus a per-zone breakdown. The console summary covers the headline numbers; the JSON output adds the structured fields you need for downstream analysis.
+
+**Aggregated DSD** is the volume-weighted convolution: `aggregated_counts[j] = Σᵢ Vᵢ · N_{i,j}`, total droplet count in bin j across all zones. d10/d32/d50/d90 and span are computed from this. **Compare aggregated d32 against your measured DSD** — that is the bench-comparable number.
+
+**Per-zone d32** tells you where the breakage is happening. For a healthy run you expect (a) the highest-ε zone to have the smallest d32 (open impeller) or (b) the bulk/sink zone to have the largest d32 with the high-ε loop-members clustered close together (rotor-stator). If the per-zone ordering looks inverted, your CFD inputs are probably wrong — see §9.8.
+
+**Volume balance** (`volume_balance.relative_error`): the total droplet volume ΣᵢVᵢΣⱼN_{i,j}vⱼ should be exactly conserved. The integrator reports the relative error against the initial droplet volume (`phi_d · V_total`). **Fail gate: > 1e-3.** Breakage and coalescence are mass-conservative under fixed-pivot redistribution; convective exchange has equal source-loss / target-gain rates by construction. A volume-balance error above 1e-3 indicates either a bug in the integrator or a pathologically stiff parameter regime — file an issue if you hit it.
+
+**Consistency check** (only when `--legacy-eps` was passed): cross-checks Σ(Vᵢ·εᵢ)/Σ(Vᵢ) against the empirical legacy estimate. The default 30 % tolerance is the irreducible Po-correlation uncertainty for non-standard impeller geometries (Scientific Advisor guidance, 2026-05-01). A pass means your CFD setup is consistent with first-principles power draw; a fail means **either** your CFD's RPM/viscosity/convergence is wrong, **or** the empirical Po and impeller D in `datatypes.py` need adjustment. Investigate before trusting the per-zone results.
+
+```
+Aggregated DSD:
+  d10 = 73.57 um
+  d32 = 112.37 um
+  d50 = 105.45 um
+  d90 = 148.56 um
+  span = 0.711
+
+Per-zone d32:
+  impeller             = 108.83 um
+  near_wall            = 110.77 um
+  bulk                 = 112.84 um
+
+Volume balance:
+  initial    = 5.0000e-06 m^3
+  final      = 5.0000e-06 m^3
+  rel. error = 0.00%
+
+Consistency check vs legacy empirical eps:
+  eps_cfd     = 9.03 W/kg
+  eps_legacy  = 9   W/kg
+  rel_err     = 0.39% (tol=30%)
+  passed      = True
+```
+
+**Figure 9.4.** Example console output for Stirrer A at 1500 RPM, 10 s integration, paraffin/aqueous-polymer system. The per-zone d32 spread is small here (~4 µm) because the impeller↔bulk exchange equilibrates the loop on a timescale shorter than the breakage relaxation; the spread grows for poorly-coupled or higher-disparity geometries.
+
+### §9.8 Validation status and limitations
+
+The CFD-PBE coupling is currently in a **scaffolded** state: the DPSim-side coupling, integrator, schema, and CLI are implemented and tested (33 pytest tests, including bit-exact 1-zone reduction to the legacy solver). The OpenFOAM-side pipeline that produces `zones.json` is documented but not yet executed against real geometry — see Appendix K and `cad/cfd/README.md` for the 7-phase OpenFOAM roadmap.
+
+Until you have run a PIV measurement at bench scale on the geometry you are simulating, the CFD field is **unvalidated**. Treat predictions accordingly:
+
+| Use | Acceptable use of zonal CFD-PBE |
+|---|---|
+| Relative comparison of two stirrer types at matched P/V | **Yes** — relative differences are robust to absolute ε accuracy |
+| Predicting trends with RPM, φ_d, surfactant load | **Yes** — trends are kernel-driven, not absolute-ε-driven |
+| Predicting absolute d32 at a new scale (1 L from 100 mL) | **Only with PIV validation at the bench scale.** Without it, treat the prediction as `qualitative_trend`. |
+| Replacing wet-lab DSD measurement | **No.** Same as for the legacy M1 path. |
+
+**Other limitations:**
+
+- **Single-phase Eulerian.** The CFD treats only the continuous-phase ε field. Dispersed-phase φ_d is assumed homogeneous across zones at t=0. For highly inhomogeneous concentrated emulsions (φ_d > 0.4 with strong segregation) this assumption breaks; deferred to schema v1.1.
+- **Steady-state RANS.** Time-resolved transients (start-up, shut-down, RPM ramp) are not captured. Use end-of-integration steady values only.
+- **k-ω SST turbulence.** RANS is the appropriate cost-accuracy point for ε-field validation; LES would be 100× more expensive and is not justified for 10× scale-up validation.
+- **Inertial sub-range assumption.** Both Alopaeus breakage (with C₃ = 0) and Coulaloglou-Tavlarides coalescence assume `d ≫ η_K` (Kolmogorov scale). If your `d_mode/η_K < 5` in any zone, the CT kernel is marginal; the integrator does not warn for the zonal case (the legacy stirred-vessel path does — port deferred).
+- **No adaptive extension.** Unlike the legacy `solve_stirred_vessel`, `integrate_pbe_with_zones` does not auto-extend until d32 stabilises. If your last 10 % of integration time still shows d32 changing, re-run with a longer `--duration`.
+
+**Evidence-tier policy:** until validated, M1 results from the zonal path inherit `qualitative_trend` evidence in the lifecycle ladder. Calibration of the CFD field via PIV moves it to `calibrated_local`; full bench DSD calibration moves it to `validated_quantitative`. The same inheritance rule (§8.3) applies.
+
+### §9.9 Pointers and references
+
+**Source-of-truth files:**
+
+| Topic | File |
+|---|---|
+| `zones.json` schema v1.0 | `cad/cfd/zones_schema.md` |
+| OpenFOAM 7-phase pipeline roadmap | `cad/cfd/README.md` |
+| DPSim-side coupling implementation | `src/dpsim/cfd/zonal_pbe.py` |
+| CLI subcommand | `src/dpsim/__main__.py` (`_cmd_cfd_zones`) |
+| Pytest suite (33 tests, including 1-zone equivalence) | `tests/test_cfd_zonal_pbe.py` |
+| Stirrer A 3-zone canonical fixture | `cad/cfd/cases/stirrer_A_beaker_100mL/zones.example.json` |
+| Stirrer B 4-zone canonical fixture | `cad/cfd/cases/stirrer_B_beaker_100mL/zones.example.json` |
+| Advanced reference (deep-dive, OpenFOAM dicts, references) | `appendix_K_cfd_pbe_zonal_coupling.md` |
+
+**Foundational references:**
+
+- Alopaeus V., Koskinen J., Keskinen K. I., Majander J. (2002). *Simulation of the population balances for liquid-liquid systems in a nonideal stirred tank.* Chem. Eng. Sci. 57, 1815–1825.
+- Coulaloglou C. A., Tavlarides L. L. (1977). *Description of interaction processes in agitated liquid-liquid dispersions.* Chem. Eng. Sci. 32, 1289–1297.
+- Padron G. (2005). *Effect of surfactants on drop size distribution in a batch, rotor-stator mixer.* PhD thesis, U. of Maryland. — **Slot-exit dominance of rotor-stator breakage.**
+- Hall S., Cooke M., Pacek A. W., Kowalski A. J., Rothman D. (2011). *Scaling-up of silverson rotor-stator mixers.* Can. J. Chem. Eng. 89, 1040–1050. — **80–95 % of breakage in slot exit jets.**
+- Wang T., Mao Z.-S. (2005). *CFD-PBE coupling for stirred tanks.* Chem. Eng. Sci. 60, 4501–4516.
+- Kumar S., Ramkrishna D. (1996). *On the solution of population balance equations by discretization — I. A fixed pivot technique.* Chem. Eng. Sci. 51, 1311–1332.
 
 ---
 

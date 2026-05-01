@@ -1,0 +1,92 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | DPSim CFD-PBE Coupling                          |
+|  \\    /   O peration     | controlDict for Stirrer A in 100 mL beaker      |
+|   \\  /    A nd           | RPM 1500, paraffin/aqueous-polymer system       |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     pimpleDyMFoam;
+
+startFrom       startTime;
+startTime       0;
+
+stopAt          endTime;
+endTime         5.0;            // ~125 impeller rotations at 1500 RPM
+
+// 1500 RPM = 25 rev/s; 1° per timestep at 25 rev/s = 1 / (25 * 360) ≈ 1.1e-4 s.
+// deltaT 1e-4 keeps Courant safely below 0.5 for a 0.1 mm boundary-layer cell.
+deltaT          1.0e-4;
+
+writeControl    adjustableRunTime;
+writeInterval   0.1;
+purgeWrite      0;
+writeFormat     ascii;          // 'binary' for production runs (~10× smaller)
+writePrecision  8;
+writeCompression off;
+timeFormat      general;
+timePrecision   6;
+
+runTimeModifiable true;
+adjustTimeStep    true;
+maxCo             0.5;          // max Courant — drops deltaT if exceeded
+maxDeltaT         5.0e-4;       // upper bound on adjustable timestep
+
+functions
+{
+    // Run-time field averaging — sample every step, write the running mean.
+    // The fieldAverage dict above writes UMean, epsilonMean, etc., which
+    // extract_epsilon.py picks up via --time-window.
+    fieldAverage1
+    {
+        type            fieldAverage;
+        libs            ("libfieldFunctionObjects.so");
+        writeControl    writeTime;
+        timeStart       2.0;     // discard first 2 s of transient
+        fields
+        (
+            U
+            {
+                mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+            epsilon
+            {
+                mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+            k
+            {
+                mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+        );
+    }
+
+    // Power draw monitor — integrate (p · n) · (omega × r) over impeller_wall.
+    // Useful for the consistency check vs the legacy Po·N³·D⁵ estimate.
+    impellerPower
+    {
+        type            forces;
+        libs            ("libforces.so");
+        writeControl    timeStep;
+        writeInterval   100;
+        patches         (impeller_wall);
+        rho             rhoInf;
+        rhoInf          1020;     // emulsion density, kg/m³
+        CofR            (0 0 0.025);
+    }
+}
+
+// ************************************************************************* //

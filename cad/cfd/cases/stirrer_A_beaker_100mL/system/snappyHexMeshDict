@@ -1,0 +1,140 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  DPSim CFD-PBE — snappyHexMesh for Stirrer A.
+  Refinement: level 5 on impeller surface (~0.16 mm), level 2 in bulk.
+  Prism layers: 5 layers, expansion 1.2 on impeller and vessel walls.
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      snappyHexMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+castellatedMesh true;
+snap            true;
+addLayers       true;
+
+geometry
+{
+    vessel_wall
+    {
+        type triSurfaceMesh;
+        file "vessel_wall.stl";
+    }
+    impeller_wall
+    {
+        type triSurfaceMesh;
+        file "impeller_wall.stl";
+    }
+
+    // Rotating-zone enclosure: a cylinder around the impeller swept volume.
+    // snappyHexMesh creates a cellZone here for the AMI sliding mesh.
+    rotorZone
+    {
+        type        searchableCylinder;
+        point1      (0 0 0.020);
+        point2      (0 0 0.030);
+        radius      0.035;
+    }
+}
+
+castellatedMeshControls
+{
+    maxLocalCells       2000000;
+    maxGlobalCells      8000000;
+    minRefinementCells  10;
+    maxLoadUnbalance    0.10;
+    nCellsBetweenLevels 3;
+
+    features ();
+
+    refinementSurfaces
+    {
+        vessel_wall
+        {
+            level (2 3);
+            patchInfo { type wall; }
+        }
+        impeller_wall
+        {
+            level (5 5);             // ~0.16 mm cells on impeller
+            patchInfo { type wall; }
+        }
+    }
+
+    refinementRegions
+    {
+        rotorZone
+        {
+            mode    inside;
+            levels  ((1.0 4));       // level-4 inside the rotor swept volume
+        }
+    }
+
+    locationInMesh   (0 0 0.065);    // mid-vessel point inside the fluid
+
+    resolveFeatureAngle 30;
+    allowFreeStandingZoneFaces true;
+}
+
+snapControls
+{
+    nSmoothPatch    3;
+    tolerance       2.0;
+    nSolveIter      30;
+    nRelaxIter      5;
+    nFeatureSnapIter 10;
+    implicitFeatureSnap false;
+    explicitFeatureSnap true;
+    multiRegionFeatureSnap false;
+}
+
+addLayersControls
+{
+    relativeSizes       true;
+    expansionRatio      1.2;
+    finalLayerThickness 0.5;
+    minThickness        0.01;
+    nGrow               0;
+
+    layers
+    {
+        impeller_wall   { nSurfaceLayers 5; }
+        vessel_wall     { nSurfaceLayers 5; }
+    }
+
+    featureAngle    60;
+    nSmoothSurfaceNormals 1;
+    nSmoothNormals  3;
+    nSmoothThickness 10;
+    maxFaceThicknessRatio 0.5;
+    maxThicknessToMedialRatio 0.3;
+    minMedianAxisAngle 90;
+    nBufferCellsNoExtrude 0;
+    nLayerIter      50;
+}
+
+meshQualityControls
+{
+    maxNonOrtho         65;       // README gate
+    maxBoundarySkewness 20;
+    maxInternalSkewness 4;        // README gate
+    maxConcave          80;
+    minVol              1e-13;
+    minTetQuality       -1e30;
+    minArea             -1;
+    minTwist            0.05;
+    minDeterminant      0.001;
+    minFaceWeight       0.05;
+    minVolRatio         0.01;
+    minTriangleTwist    -1;
+    nSmoothScale        4;
+    errorReduction      0.75;
+}
+
+debug           0;
+mergeTolerance  1e-6;
+
+// ************************************************************************* //

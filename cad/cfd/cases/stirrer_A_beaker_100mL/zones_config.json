@@ -1,0 +1,29 @@
+{
+  "_comment": "Zone-partitioning rules for extract_epsilon.py. Stirrer A uses the canonical 3-zone partition: impeller swept volume (high ε), thin near-wall layer, and bulk recirculation. The 'rotorZone' cellZone is created by snappyHexMesh from the refinementRegion in snappyHexMeshDict.",
+  "zones": [
+    {
+      "name": "impeller",
+      "kind": "impeller_swept_volume",
+      "selector": {
+        "type": "cellZone",
+        "name": "rotorZone"
+      }
+    },
+    {
+      "name": "near_wall",
+      "kind": "near_wall",
+      "selector": {
+        "type": "near_surface",
+        "patch": "vessel_wall",
+        "max_distance_m": 0.005
+      }
+    },
+    {
+      "name": "bulk",
+      "kind": "bulk",
+      "selector": {
+        "type": "complement"
+      }
+    }
+  ]
+}

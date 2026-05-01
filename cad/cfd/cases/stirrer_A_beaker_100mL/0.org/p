@@ -1,0 +1,23 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  DPSim CFD-PBE — initial p field for Stirrer A
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      p;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 2 -2 0 0 0 0];
+
+internalField   uniform 0;
+
+boundaryField
+{
+    vessel_wall   { type zeroGradient; }
+    impeller_wall { type zeroGradient; }
+}
+
+// ************************************************************************* //

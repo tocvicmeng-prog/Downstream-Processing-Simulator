@@ -1,38 +1,112 @@
 #!/usr/bin/env bash
-# OpenFOAM case runner: blockMesh → snappyHexMesh → decomposePar →
-# pimpleDyMFoam → reconstructPar.
+# run_case.sh — execute the full OpenFOAM CFD-PBE pipeline for a case.
 #
-# Status: TODO. Requires OpenFOAM v11+ (or .com/.org build with
-# pimpleDyMFoam available) and a fully-populated case directory.
+# Stages
+# ------
+#   1. blockMesh                  background hex mesh from blockMeshDict
+#   2. surfaceFeatureExtract      extract sharp edges from STL
+#   3. snappyHexMesh -overwrite   castellate + snap + layer
+#   4. checkMesh                  mesh-quality gates
+#   5. decomposePar               split for parallel
+#   6. mpirun -n N pimpleDyMFoam  transient solve with sliding mesh
+#   7. reconstructPar             merge time directories
+#   8. postProcess writeCellCentres writeCellVolumes  (for extract_epsilon.py)
 #
-# Usage: ./run_case.sh <case_directory> [--cores N]
-
+# Requires
+# --------
+#   - OpenFOAM v11+ (or .com/.org build with pimpleDyMFoam, snappyHexMesh)
+#   - prepare_geometry.sh has been run (STL files in constant/triSurface/)
+#   - mpirun (for parallel)
+#
+# Usage
+# -----
+#   run_case.sh stirrer_A_beaker_100mL [--cores 8]
 set -euo pipefail
 
-CASE="${1:-}"
+CASE_NAME="${1:-}"
 CORES="${CORES:-8}"
 
-if [ -z "$CASE" ] || [ ! -d "$CASE" ]; then
-    echo "Usage: $0 <case_directory>"
-    echo "Example: $0 ../cases/stirrer_A_beaker_100mL"
+# Parse --cores N
+shift || true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --cores)
+            CORES="$2"; shift 2;;
+        *)
+            echo "ERROR: unknown flag $1" >&2; exit 1;;
+    esac
+done
+
+if [[ -z "${CASE_NAME}" ]]; then
+    echo "Usage: $0 <case_name> [--cores N]" >&2
+    echo "  case_name: stirrer_A_beaker_100mL or stirrer_B_beaker_100mL" >&2
     exit 1
 fi
 
-cd "$CASE"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+CASE_DIR="${REPO_ROOT}/cad/cfd/cases/${CASE_NAME}"
 
-echo "TODO: implement case execution"
-echo "  Case: $CASE"
-echo "  Cores: $CORES"
+if [[ ! -d "${CASE_DIR}" ]]; then
+    echo "ERROR: case directory missing: ${CASE_DIR}" >&2
+    exit 1
+fi
+
+if [[ ! -d "${CASE_DIR}/constant/triSurface" ]] || \
+   [[ -z "$(ls -A "${CASE_DIR}/constant/triSurface" 2>/dev/null || true)" ]]; then
+    echo "ERROR: STL files missing. Run prepare_geometry.sh ${CASE_NAME} first." >&2
+    exit 1
+fi
+
+# Sanity: OpenFOAM environment loaded?
+if ! command -v blockMesh >/dev/null 2>&1; then
+    echo "ERROR: OpenFOAM environment not loaded." >&2
+    echo "  source /opt/openfoam11/etc/bashrc   (or equivalent)" >&2
+    exit 1
+fi
+
+cd "${CASE_DIR}"
+
+# Restore initial conditions
+if [[ -d "0.org" ]]; then
+    rm -rf 0
+    cp -r 0.org 0
+fi
+
+echo "==> Stage 1/8: blockMesh"
+blockMesh > log.blockMesh 2>&1
+
+echo "==> Stage 2/8: surfaceFeatureExtract"
+if [[ -f system/surfaceFeatureExtractDict ]]; then
+    surfaceFeatureExtract > log.surfaceFeatureExtract 2>&1
+else
+    echo "  (no surfaceFeatureExtractDict; skipping — relying on snappy auto-edges)"
+fi
+
+echo "==> Stage 3/8: snappyHexMesh -overwrite"
+snappyHexMesh -overwrite > log.snappyHexMesh 2>&1
+
+echo "==> Stage 4/8: checkMesh"
+if ! checkMesh > log.checkMesh 2>&1; then
+    echo "WARNING: checkMesh reported issues; review log.checkMesh." >&2
+fi
+
+echo "==> Stage 5/8: decomposePar"
+decomposePar -force > log.decomposePar 2>&1
+
+echo "==> Stage 6/8: pimpleDyMFoam (parallel, ${CORES} cores)"
+mpirun -n "${CORES}" pimpleDyMFoam -parallel > log.pimpleDyMFoam 2>&1
+
+echo "==> Stage 7/8: reconstructPar"
+reconstructPar -latestTime > log.reconstructPar 2>&1
+
+echo "==> Stage 8/8: writeCellCentres + writeCellVolumes (for extract_epsilon.py)"
+postProcess -func writeCellCentres -latestTime > log.writeCellCentres 2>&1
+postProcess -func writeCellVolumes -latestTime > log.writeCellVolumes 2>&1
+
 echo
-echo "Expected steps once case dictionaries are populated:"
-echo "  1. blockMesh                              # background hex mesh"
-echo "  2. surfaceFeatureExtract                  # edges from STL"
-echo "  3. snappyHexMesh -overwrite               # cut + snap + layer"
-echo "  4. checkMesh                              # quality check"
-echo "  5. decomposePar                           # split for parallel"
-echo "  6. mpirun -n \$CORES pimpleDyMFoam -parallel"
-echo "  7. reconstructPar"
-echo "  8. python3 ../../scripts/extract_epsilon.py ."
-echo
-echo "See cad/cfd/README.md for setup details."
-exit 0
+echo "Done. Next step:"
+echo "  python3 ${SCRIPT_DIR}/extract_epsilon.py ${CASE_DIR} \\"
+echo "      --zones ${CASE_DIR}/zones_config.json \\"
+echo "      --output ${CASE_DIR}/zones.json \\"
+echo "      --case-name ${CASE_NAME}"

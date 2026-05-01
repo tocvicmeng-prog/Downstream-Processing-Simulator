@@ -1,0 +1,60 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  DPSim CFD-PBE — background hex mesh for Stirrer A in 100 mm beaker.
+  Beaker: Ø 100 × 130 mm. Bounding box: x,y ∈ [-0.06, 0.06], z ∈ [0, 0.13].
+  Background cell size: ~5 mm; snappyHexMesh refines to 0.1 mm at impeller.
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+scale   1;
+
+vertices
+(
+    (-0.06 -0.06 0.00)   // 0
+    ( 0.06 -0.06 0.00)   // 1
+    ( 0.06  0.06 0.00)   // 2
+    (-0.06  0.06 0.00)   // 3
+    (-0.06 -0.06 0.13)   // 4
+    ( 0.06 -0.06 0.13)   // 5
+    ( 0.06  0.06 0.13)   // 6
+    (-0.06  0.06 0.13)   // 7
+);
+
+blocks
+(
+    // 24 cells in x,y; 26 cells in z → ~5 mm background cells.
+    hex (0 1 2 3 4 5 6 7) (24 24 26) simpleGrading (1 1 1)
+);
+
+edges
+(
+);
+
+boundary
+(
+    boundingBox
+    {
+        type        wall;
+        faces
+        (
+            (0 1 2 3)   // bottom
+            (4 5 6 7)   // top
+            (0 1 5 4)   // -y
+            (3 2 6 7)   // +y
+            (0 4 7 3)   // -x
+            (1 5 6 2)   // +x
+        );
+    }
+);
+
+mergePatchPairs
+(
+);
+
+// ************************************************************************* //

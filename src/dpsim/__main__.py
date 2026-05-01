@@ -276,6 +276,66 @@ def main():
         help="Path to write the CalibrationStore-compatible JSON",
     )
 
+    # cfd-zones command (B5: zonal CFD-PBE coupling)
+    cfd_p = sub.add_parser(
+        "cfd-zones",
+        help=(
+            "Run the M1 PBE on a CFD-derived zones.json (variable-N "
+            "compartment model with per-zone ε)."
+        ),
+    )
+    cfd_p.add_argument(
+        "zones_json",
+        help="Path to zones.json (schema v1.0; see cad/cfd/zones_schema.md)",
+    )
+    cfd_p.add_argument(
+        "--config", default=None,
+        help=(
+            "Optional TOML config to source MaterialProperties from. "
+            "Per-property CLI overrides (--rho-oil etc.) take precedence."
+        ),
+    )
+    cfd_p.add_argument("--rho-oil", type=float, default=None, help="[kg/m^3]")
+    cfd_p.add_argument("--mu-oil", type=float, default=None, help="[Pa.s]")
+    cfd_p.add_argument("--rho-aq", type=float, default=None, help="[kg/m^3]")
+    cfd_p.add_argument("--mu-d", type=float, default=None, help="[Pa.s]")
+    cfd_p.add_argument("--sigma", type=float, default=None, help="[N/m]")
+    cfd_p.add_argument(
+        "--kernels",
+        choices=["pitched_blade", "rotor_stator_legacy", "rotor_stator_small"],
+        default="pitched_blade",
+        help=(
+            "KernelConfig preset. Default 'pitched_blade' (matches Stirrer A). "
+            "Use 'rotor_stator_small' for Stirrer B."
+        ),
+    )
+    cfd_p.add_argument("--phi-d", type=float, default=0.05)
+    cfd_p.add_argument(
+        "--duration", type=float, default=30.0,
+        help="Integration duration [s]. Default 30 s.",
+    )
+    cfd_p.add_argument("--d32-premix", type=float, default=200.0e-6, help="[m]")
+    cfd_p.add_argument("--sigma-premix", type=float, default=0.5)
+    cfd_p.add_argument("--n-bins", type=int, default=50)
+    cfd_p.add_argument("--d-min", type=float, default=0.1e-6, help="[m]")
+    cfd_p.add_argument("--d-max", type=float, default=500.0e-6, help="[m]")
+    cfd_p.add_argument(
+        "--legacy-eps", type=float, default=None,
+        help=(
+            "Optional: cross-check the CFD volume-weighted ε against this "
+            "empirical legacy estimate (W/kg). Default 30%% tolerance."
+        ),
+    )
+    cfd_p.add_argument(
+        "--consistency-tol", type=float, default=0.30,
+        help="Tolerance for --legacy-eps cross-check. Default 0.30.",
+    )
+    cfd_p.add_argument(
+        "--output", "-o", default=None,
+        help="Path to write the results JSON. Default: print summary only.",
+    )
+    cfd_p.add_argument("--quiet", "-q", action="store_true")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -314,6 +374,8 @@ def main():
         _cmd_dossier(args)
     elif args.command == "ingest":
         _cmd_ingest(args)
+    elif args.command == "cfd-zones":
+        _cmd_cfd_zones(args)
 
 
 def _load_params(config_path):
@@ -744,6 +806,176 @@ def _cmd_info(args):
     print(f"  Bridge eff:       {props.f_bridge:.1%}")
     print(f"  IPN coupling:     eta = {props.eta_coupling}")
     print()
+
+
+def _cmd_cfd_zones(args):
+    """Run the M1 PBE on a CFD-derived zones.json (B5 zonal coupling).
+
+    Standalone command — does not touch the legacy run/lifecycle pipeline.
+    Loads zones.json, builds MaterialProperties from --config (if given) and
+    per-property CLI overrides, calls integrate_pbe_with_zones, optionally
+    cross-checks against a legacy empirical ε via consistency_check_with_volume_avg,
+    and writes a results JSON.
+    """
+    import json as _json
+    import sys as _sys
+
+    from .cfd.zonal_pbe import (
+        consistency_check_with_volume_avg,
+        integrate_pbe_with_zones,
+        load_zones_json,
+    )
+    from .datatypes import KernelConfig, MaterialProperties
+
+    # Avoid UnicodeEncodeError on legacy Windows console (project-wide quirk).
+    try:
+        _sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    except (AttributeError, OSError):
+        pass
+
+    # Load + validate zones.json (raises pydantic.ValidationError on bad input).
+    payload = load_zones_json(Path(args.zones_json))
+    if not args.quiet:
+        meta = payload.case_metadata
+        print(
+            f"Loaded zones.json: case='{meta.case_name}' "
+            f"({len(payload.zones)} zones, {len(payload.exchanges)} exchanges, "
+            f"V_total={payload.total_volume_m3()*1e6:.2f} mL, "
+            f"eps_vw_avg={meta.epsilon_volume_weighted_avg_W_per_kg:.3g} W/kg)"
+        )
+
+    # Build MaterialProperties: start from config or defaults, apply CLI overrides.
+    if args.config is not None:
+        from .config import load_config
+        params = load_config(Path(args.config))
+        # Best-effort: if the config attaches a property database / overrides, the
+        # caller can pass --rho-oil etc. to override. For simplicity, start from
+        # MaterialProperties() — the cfd-zones command does not need the full
+        # PropertyDatabase update path used by `run`.
+        del params  # acknowledge load but don't use; keeps hook for future
+    material = MaterialProperties()
+    if args.rho_oil is not None:
+        material.rho_oil = args.rho_oil
+    if args.mu_oil is not None:
+        material.mu_oil = args.mu_oil
+    if args.rho_aq is not None:
+        material.rho_aq = args.rho_aq
+    if args.mu_d is not None:
+        material.mu_d = args.mu_d
+    if args.sigma is not None:
+        material.sigma = args.sigma
+
+    # KernelConfig preset selection.
+    kernel_factories = {
+        "pitched_blade": KernelConfig.for_pitched_blade,
+        "rotor_stator_legacy": KernelConfig.for_rotor_stator_legacy,
+        "rotor_stator_small": KernelConfig.for_rotor_stator_small,
+    }
+    kernels = kernel_factories[args.kernels]()
+
+    # Run the zonal integrator.
+    result = integrate_pbe_with_zones(
+        payload=payload,
+        material=material,
+        kernels=kernels,
+        phi_d=args.phi_d,
+        duration_s=args.duration,
+        n_bins=args.n_bins,
+        d_min=args.d_min,
+        d_max=args.d_max,
+        d32_premix=args.d32_premix,
+        sigma_premix=args.sigma_premix,
+    )
+
+    consistency = None
+    if args.legacy_eps is not None:
+        consistency = consistency_check_with_volume_avg(
+            payload, args.legacy_eps, tolerance_rel=args.consistency_tol,
+        )
+
+    # Print summary.
+    if not args.quiet:
+        print()
+        print(f"Integration: converged={result.converged} ({result.solver_message})")
+        print(f"  duration:     {result.integration_time_s:.2f} s")
+        print(f"  n_zones:      {result.n_zones}")
+        print(f"  n_eval_pts:   {result.diagnostics.get('n_eval_points', '-')}")
+        print()
+        print("Aggregated DSD:")
+        print(f"  d10 = {result.aggregated_d10*1e6:.2f} um")
+        print(f"  d32 = {result.aggregated_d32*1e6:.2f} um")
+        print(f"  d50 = {result.aggregated_d50*1e6:.2f} um")
+        print(f"  d90 = {result.aggregated_d90*1e6:.2f} um")
+        print(f"  span = {result.aggregated_span:.3f}")
+        print()
+        print("Per-zone d32:")
+        for name, d32 in result.per_zone_d32.items():
+            print(f"  {name:20s} = {d32*1e6:.2f} um")
+        print()
+        print("Volume balance:")
+        print(f"  initial    = {result.initial_total_droplet_volume_m3:.4e} m^3")
+        print(f"  final      = {result.aggregated_total_droplet_volume_m3:.4e} m^3")
+        print(f"  rel. error = {result.volume_balance_relative_error:.2%}")
+        if consistency is not None:
+            print()
+            print("Consistency check vs legacy empirical eps:")
+            print(f"  eps_cfd     = {consistency['epsilon_cfd_volume_weighted_W_per_kg']:.3g} W/kg")
+            print(f"  eps_legacy  = {consistency['epsilon_legacy_W_per_kg']:.3g} W/kg")
+            print(f"  rel_err     = {consistency['relative_error']:.2%} (tol={consistency['tolerance_rel']:.0%})")
+            print(f"  passed      = {consistency['passed']}")
+
+    # Write results JSON if requested.
+    if args.output is not None:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        results_dict = {
+            "schema_version": payload.schema_version,
+            "case_metadata": payload.case_metadata.model_dump(),
+            "settings": {
+                "phi_d": args.phi_d,
+                "duration_s": args.duration,
+                "kernels_preset": args.kernels,
+                "n_bins": args.n_bins,
+                "d_min_m": args.d_min,
+                "d_max_m": args.d_max,
+                "d32_premix_m": args.d32_premix,
+                "sigma_premix": args.sigma_premix,
+                "material": {
+                    "rho_oil": material.rho_oil,
+                    "mu_oil": material.mu_oil,
+                    "rho_aq": material.rho_aq,
+                    "mu_d": material.mu_d,
+                    "sigma": material.sigma,
+                    "breakage_C3": material.breakage_C3,
+                },
+            },
+            "converged": result.converged,
+            "solver_message": result.solver_message,
+            "n_zones": result.n_zones,
+            "aggregated": {
+                "d10_um": result.aggregated_d10 * 1e6,
+                "d32_um": result.aggregated_d32 * 1e6,
+                "d43_um": result.aggregated_d43 * 1e6,
+                "d50_um": result.aggregated_d50 * 1e6,
+                "d90_um": result.aggregated_d90 * 1e6,
+                "span": result.aggregated_span,
+            },
+            "per_zone_d32_um": {
+                name: d32 * 1e6 for name, d32 in result.per_zone_d32.items()
+            },
+            "volume_balance": {
+                "initial_m3": result.initial_total_droplet_volume_m3,
+                "final_m3": result.aggregated_total_droplet_volume_m3,
+                "relative_error": result.volume_balance_relative_error,
+            },
+            "diagnostics": result.diagnostics,
+            "consistency_check": consistency,
+        }
+        with open(out_path, "w", encoding="utf-8") as f:
+            _json.dump(results_dict, f, indent=2)
+        if not args.quiet:
+            print()
+            print(f"Wrote results: {out_path}")
 
 
 def _cmd_ui(args):

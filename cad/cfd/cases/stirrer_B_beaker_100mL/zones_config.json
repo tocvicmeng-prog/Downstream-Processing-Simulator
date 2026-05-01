@@ -1,0 +1,37 @@
+{
+  "_comment": "Zone-partitioning rules for Stirrer B (rotor-stator). 4-zone canonical partition with a dedicated slot_exit zone capturing the high-shear region just outside each stator hole, where 80-95% of breakage occurs (Padron 2005, Hall 2011). The 'rotorZone' and 'slotExitZone' cellZones are created by snappyHexMesh from refinementRegions in snappyHexMeshDict. The selector evaluation order matters: slot_exit is matched before near_wall so that cells just outside stator holes are not double-counted as near-stator-wall.",
+  "zones": [
+    {
+      "name": "impeller",
+      "kind": "impeller_swept_volume",
+      "selector": {
+        "type": "cellZone",
+        "name": "rotorZone"
+      }
+    },
+    {
+      "name": "slot_exit",
+      "kind": "stator_slot_exit",
+      "selector": {
+        "type": "cellZone",
+        "name": "slotExitZone"
+      }
+    },
+    {
+      "name": "near_wall",
+      "kind": "near_wall",
+      "selector": {
+        "type": "near_surface",
+        "patch": "vessel_wall",
+        "max_distance_m": 0.005
+      }
+    },
+    {
+      "name": "bulk",
+      "kind": "bulk",
+      "selector": {
+        "type": "complement"
+      }
+    }
+  ]
+}
