@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — CAD geometry handoff + OpenFOAM CFD-PBE scaffolding (2026-05-01)
+## v0.6.0 — CAD geometry handoff + OpenFOAM CFD-PBE scaffolding + Stirrer A xsec v2 (2026-05-01)
 
 Establishes the foundation for spatially-resolved ε-field forcing of the
 M1 Alopaeus breakage kernel, motivated by the 100 mL → 1 L scale-up
