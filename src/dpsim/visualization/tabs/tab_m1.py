@@ -577,8 +577,8 @@ def render_tab_m1(
                     # representative paraffin-oil at hot emulsification
                     # (see hardware_metrics module for values).
                     from dpsim.visualization.components import (
-                        render_impeller_xsec,
-                        render_impeller_xsec_v2,
+                        render_impeller_xsec_v2_2,
+                        render_impeller_xsec_v3,
                     )
                     from dpsim.visualization.design import chrome
                     from dpsim.visualization.tabs.m1.hardware_metrics import (
@@ -595,45 +595,66 @@ def render_tab_m1(
                             "Stirrer A · 19-tab disk in 100 mL beaker · live"
                         ))
                     else:
-                        st.html(chrome.eyebrow("Rushton cross-section · live"))
+                        st.html(chrome.eyebrow(
+                            "Stirrer B · rotor-stator in 100 mL beaker · live"
+                        ))
                     _xsec_col, _rail_col = st.columns([1, 0.42])
                     with _xsec_col:
                         if is_stirrer_A:
-                            # v0.6.0: disk-style 19-tab Stirrer A in glass
-                            # beaker (geometry verified 2026-05-01 against
-                            # cad/output/). Four-state toggle button cycles:
-                            #   1 side opaque → 2 bottom opaque
-                            #   3 side transparent → 4 bottom transparent
-                            # Transparent views fade the agitator to
-                            # emphasise circulation flow + double-emulsion
-                            # droplet collisions.
-                            render_impeller_xsec_v2(rpm=float(rpm))
+                            # v0.6.3 (this commit): replaces the v0.6.0 v2
+                            # animation. Corrected beaker rim (20° outward
+                            # flare, 5 mm height), corrected Stirrer A
+                            # cross-section (1 mm disk + 2 perimeter tabs
+                            # only — left UP, right DOWN; was a comb-like
+                            # bar with tabs across the full diameter),
+                            # added zone-shaded backgrounds matching v0.6.2
+                            # zones.json schema, and three collision types
+                            # (★ break / ✦ wall / ⊕ coalesce) per
+                            # first-principles fluid mechanics. See
+                            # impeller_xsec_v2_2.py docstring for the
+                            # full revision notes vs v2.
+                            render_impeller_xsec_v2_2(rpm=float(rpm))
                         else:
-                            render_impeller_xsec(
-                                rpm=float(rpm),
-                                impeller_d_mm=_hw_ctx.impeller_diameter_mm,
-                            )
+                            # v0.6.3: replaces the legacy Rushton-style
+                            # animation (which drew the wrong instrument
+                            # entirely — a 6-blade Rushton in a baffled
+                            # BSTR rather than the rotor-stator with 36
+                            # perforations Stirrer B actually is). The new
+                            # v3 component renders the cross rotor inside
+                            # the perforated stator, the bench-loop
+                            # circulation, the 36 slot-exit jets, and the
+                            # collision types with break-up dominantly at
+                            # the slot exits per Padron 2005 / Hall 2011.
+                            render_impeller_xsec_v3(rpm=float(rpm))
                     with _rail_col:
                         render_metrics_rail(_hw_ctx)
                     if is_stirrer_A:
                         st.caption(
                             "Disk-style impeller (Ø 59 mm × 1 mm sheet) with "
                             "19 perimeter tabs alternating UP/DOWN, each at "
-                            "10° tangential pitch. Click the toggle button "
-                            "(top-right) to cycle through side / bottom / "
-                            "transparent views. Geometry sourced from "
-                            "`cad/output/stirrer_A_pitched_blade.step` "
-                            "(verified against 2026-03-27 measurement photos)."
+                            "10° tangential pitch. The 10 UP / 9 DOWN tab "
+                            "imbalance gives a small net upward axial bias; "
+                            "the dominant flow pattern is **radial discharge** "
+                            "at the impeller plane with figure-8 recirculation "
+                            "above and below (Tatterson 1991). Toggle (top-"
+                            "right) cycles through 4 views; transparent "
+                            "modes show the per-zone ε partitioning matching "
+                            "v0.6.2 ``zones.json`` schema and three collision "
+                            "types: ★ break · ✦ wall · ⊕ coalesce."
                         )
                     else:
                         st.caption(
-                            "Standard Rushton-disk in baffled BSTR (D/T = 1/3). "
-                            "Conveys shear tier (`v_tip`), break-up zone (trailing-"
-                            "vortex pair behind each blade per Wu & Patterson 1989), "
-                            "and impeller-zone passage frequency (`f_pass`). Re/We "
-                            "use representative paraffin-oil properties (ρ≈850 "
-                            "kg/m³, μ≈5 mPa·s at 80 °C, σ≈25 mN/m); the PBE solver "
-                            "does its own rigorous calculation."
+                            "Cross rotor (Ø 25.7 mm × 16 mm) inside a "
+                            "perforated stator housing (Ø 32.03 mm, 36 × Ø 3 mm "
+                            "perforations in a 3 × 12 grid). Rotor pumps fluid "
+                            "axially through the open stator bottom; "
+                            "centrifugal acceleration ejects it radially as 36 "
+                            "slot-exit jets where 80–95 % of breakage occurs "
+                            "(Padron 2005, Hall 2011). The transparent view "
+                            "shows the bench-loop circulation: rotor inlet → "
+                            "slot exits → bulk → return. ε_brk in slot-exit "
+                            "shells reaches ~1200 W/kg, ~5× the impeller "
+                            "swept-volume ε_brk."
                         )
 
                     t_emul = labeled_widget(

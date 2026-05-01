@@ -1,0 +1,762 @@
+<!doctype html>
+<!--
+  ImpellerCrossSection v2.2 (rev 2) — disk-style 19-tab Stirrer A in glass beaker.
+
+  v2.2 rev 2 corrections (2026-05-01):
+    * Beaker rim: replaced hook curls with a clean 20° outward flare
+      ending in a rounded rim cap.
+    * All side-view circulation paths confined to y ∈ [135, 280] so
+      droplets stay inside the liquid (was extending above liquid level).
+    * Bottom-view swirl arcs now centred at (160, 180) on the disk axis
+      (was off-centre at (160, 160)) and discharge jets recomputed to
+      emanate from the disk perimeter at the correct radius.
+    * Speed differentiation: each figure-8 loop split into a fast
+      "discharge" segment (impeller → wall, thick teal, fast droplets)
+      and a slow "return" segment (along the wall back to the impeller,
+      thin teal, slow droplets). Encodes the impeller-zone vs bulk-zone
+      ε ratio.
+
+  Geometry verified 2026-05-01 against cad/output/*.step:
+    Stirrer A — Ø 59 mm flat disk × 1 mm thick, 19 perimeter tabs
+                (10 UP + 9 DOWN, alternating; 90° perpendicular bend;
+                10° tangential fan-pitch; tab dim 9 × 8.5 × 1 mm).
+    Beaker   — Ø 100 mm inner × 130 mm tall, R=10 inner-bottom fillet,
+                R=5 outer-bottom fillet, 20° outward-flared rim.
+
+  Coordinate system: viewBox 320 × 360, scale 2 px/mm.
+    Beaker inside: x ∈ [60, 260], y ∈ [70, 305].
+    Liquid level (top of fluid): y = 130.
+    Disk plane: y = 195. Disk extent: x ∈ [101, 219] (Ø 59 mm).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --bg:        #020617;
+    --surface:   #0F172A;
+    --surface-2: #1E293B;
+    --border:    rgba(71, 85, 105, 0.55);
+    --text:      #F8FAFC;
+    --text-muted: #94A3B8;
+    --text-dim:  #64748B;
+    --accent:    #2DD4BF;
+    --accent-dim: #0F766E;
+    --orange:    #F97316;
+    --orange-2:  #FB923C;
+    --sky:       #7DD3FC;
+    --magenta:   #E879F9;
+    --steel:     #94A3B8;
+    --steel-dark: #64748B;
+    --glass:     rgba(125, 211, 252, 0.16);
+    --zone-impeller: rgba(249, 115, 22, 0.14);
+    --zone-near-wall: rgba(148, 163, 184, 0.14);
+    /* Break-event colour (amber/gold spark) — DELIBERATELY distinct from
+       the orange droplet shell so collisions don't read as just more
+       droplets. */
+    --break:        #FBBF24;
+    --break-bright: #FCD34D;
+    --break-stroke: #F59E0B;
+  }
+  body.light {
+    --bg: #FAFBFC; --surface: #FFFFFF; --surface-2: #F1F5F9;
+    --border: rgba(148,163,184,0.35);
+    --text: #0F172A; --text-muted: #64748B; --text-dim: #94A3B8;
+    --accent: #14B8A6;
+    --accent-dim: #5EEAD4;
+    --glass: rgba(56, 189, 248, 0.12);
+    --zone-impeller: rgba(249, 115, 22, 0.14);
+    --zone-near-wall: rgba(100, 116, 139, 0.10);
+    --break:        #D97706;
+    --break-bright: #F59E0B;
+    --break-stroke: #B45309;
+  }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .frame {
+    position: relative;
+    width: __WIDTH__px;
+    height: __HEIGHT__px;
+    margin: 0 auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .toggle-btn {
+    position: absolute;
+    top: 8px; right: 8px;
+    z-index: 10;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 10px;
+    font-family: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    user-select: none;
+    transition: background 150ms ease-out;
+  }
+  .toggle-btn:hover { background: var(--surface-2); }
+  .view-label {
+    position: absolute;
+    top: 8px; left: 8px;
+    z-index: 5;
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 9.5px;
+    font-family: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .stage { position: absolute; inset: 0; }
+  .stage svg { display: block; width: 100%; height: 100%; }
+  .view {
+    position: absolute; inset: 0;
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+    pointer-events: none;
+  }
+  .view.active { opacity: 1; pointer-events: auto; }
+  .agitator { transition: opacity 150ms ease-out; }
+  .view:not(.transparent) .agitator { opacity: 1.0; }
+  .view.transparent .agitator { opacity: 0.22; }
+  .view.transparent .flow-fast { opacity: 0.95; }
+  .view:not(.transparent) .flow-fast { opacity: 0.65; }
+  .view.transparent .flow-slow { opacity: 0.55; }
+  .view:not(.transparent) .flow-slow { opacity: 0.35; }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .rotor-spin {
+    animation: spin var(--spin-period, 0.5s) linear infinite;
+    transform-origin: center;
+  }
+
+  @keyframes streak-flow {
+    0%   { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: -40; }
+  }
+  .motion-streak {
+    fill: none;
+    stroke-dasharray: 4 4;
+    animation: streak-flow var(--streak-period, 0.4s) linear infinite;
+  }
+
+  .zone-label {
+    font-family: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+    font-size: 8px;
+    fill: var(--text-dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-feature-settings: "tnum";
+    pointer-events: none;
+  }
+  .legend {
+    position: absolute;
+    bottom: 6px; left: 8px; right: 8px;
+    display: flex; gap: 9px;
+    font-size: 9px;
+    color: var(--text-dim);
+    font-family: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+    letter-spacing: 0.04em;
+    flex-wrap: wrap;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .legend .swatch {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    margin-right: 4px;
+    vertical-align: -1px;
+  }
+  .legend .glyph {
+    display: inline-block;
+    width: 10px; text-align: center;
+    margin-right: 3px;
+  }
+</style>
+</head>
+<body class="__THEME__">
+  <div class="frame" role="img"
+       aria-label="Stirrer A 19-tab disk impeller in 100 mL glass beaker. Animated cross-section showing the dominant radial-discharge flow pattern with figure-8 recirculation loops, three collision-type events (star-break, diamond-wall, plus-coalesce), and zone-shaded backgrounds matching the v0.6.2 zones.json schema.">
+    <button class="toggle-btn" id="toggleBtn" aria-label="Toggle view">SIDE · OPAQUE</button>
+    <div class="view-label" id="viewLabel">VIEW 1 / 4</div>
+
+    <svg width="0" height="0" style="position:absolute" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <defs>
+        <marker id="arrowAccent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+        </marker>
+        <marker id="arrowAccentDim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-dim)" />
+        </marker>
+        <marker id="arrowOrange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--orange)" />
+        </marker>
+
+        <!-- Collision glyphs.
+             Break uses the dedicated --break amber, distinct from the
+             --orange droplet shell so collisions read as energy events,
+             not as more droplets. -->
+        <g id="glyphBreak">
+          <path d="M 0 -5.5 L 1.55 -1.7 L 5.5 -1.7 L 2.3 0.7 L 3.4 5 L 0 2.6 L -3.4 5 L -2.3 0.7 L -5.5 -1.7 L -1.55 -1.7 Z"
+                fill="var(--break)" stroke="var(--break-stroke)" stroke-width="0.6" stroke-linejoin="round" />
+        </g>
+        <g id="glyphWall">
+          <path d="M 0 -5 L 5 0 L 0 5 L -5 0 Z"
+                fill="none" stroke="var(--magenta)" stroke-width="1.4" stroke-linejoin="round" />
+        </g>
+        <g id="glyphCoalesce">
+          <circle r="5" fill="none" stroke="var(--sky)" stroke-width="1.2" />
+          <path d="M -3 0 L 3 0 M 0 -3 L 0 3" stroke="var(--sky)" stroke-width="1.2" />
+        </g>
+
+        <!-- Flow paths (side view), confined to liquid region y ∈ [135, 280].
+             Each loop split into FAST radial discharge near the impeller
+             and SLOW recirculation in the bulk. -->
+
+        <!-- Fast radial-discharge segments (impeller → wall) -->
+        <path id="dischRight" d="M 219 195 L 248 195" />
+        <path id="dischLeft"  d="M 101 195 L 72 195" />
+
+        <!-- Slow upper-right recirculation: wall up → liquid surface →
+             back inward → returns to impeller (note y starts at impeller
+             plane, never goes above liquid level y=130, never below
+             bottom y=280). -->
+        <path id="loopUR" d="M 248 195 Q 252 165 248 140 Q 220 132 195 138 Q 175 158 178 188 Q 188 195 200 195 L 219 195" />
+        <path id="loopUL" d="M 72 195 Q 68 165 72 140 Q 100 132 125 138 Q 145 158 142 188 Q 132 195 120 195 L 101 195" />
+        <path id="loopLR" d="M 248 195 Q 252 230 244 270 Q 220 280 195 270 Q 175 240 178 205 Q 188 198 200 198 L 219 198" />
+        <path id="loopLL" d="M 72 195 Q 68 230 76 270 Q 100 280 125 270 Q 145 240 142 205 Q 132 198 120 198 L 101 198" />
+
+        <!-- Bottom-view circular swirl, centred at (160, 180). -->
+        <path id="swirlOuter" d="M 160 90  A 90 90 0 1 1 159.5 90 Z" />
+        <path id="swirlMid"   d="M 160 120 A 60 60 0 1 1 159.5 120 Z" />
+
+        <!-- Bottom-view radial discharge from disk perimeter (r=29 px,
+             centre 160, 180). 6 representative directions. -->
+        <path id="discharge0" d="M 189 180 L 245 180" />
+        <path id="discharge1" d="M 175 205 L 198 245" />
+        <path id="discharge2" d="M 145 205 L 122 245" />
+        <path id="discharge3" d="M 131 180 L 75 180" />
+        <path id="discharge4" d="M 145 155 L 122 115" />
+        <path id="discharge5" d="M 175 155 L 198 115" />
+      </defs>
+    </svg>
+
+    <!-- ==================== VIEW 1: side, opaque ==================== -->
+    <div class="view active" data-view="1">
+      <div class="stage">
+        <svg viewBox="0 0 320 360" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+          <!-- Liquid tint -->
+          <path d="M 60 130 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 130 Z"
+                fill="var(--glass)" stroke="none" />
+
+          <!-- Zone shading (clipped to liquid region) -->
+          <clipPath id="liqClip1">
+            <path d="M 60 130 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 130 Z" />
+          </clipPath>
+          <g clip-path="url(#liqClip1)">
+            <rect x="60" y="180" width="200" height="30" fill="var(--zone-impeller)" />
+            <rect x="60" y="130" width="10" height="175" fill="var(--zone-near-wall)" />
+            <rect x="250" y="130" width="10" height="175" fill="var(--zone-near-wall)" />
+          </g>
+          <text class="zone-label" x="160" y="178" text-anchor="middle">IMPELLER · ε=75</text>
+          <text class="zone-label" x="160" y="270" text-anchor="middle">BULK · ε=4.8</text>
+
+          <!-- Beaker outline: clean rim + cylindrical body + bottom fillets -->
+          <g class="beaker">
+            <!-- Cylindrical body (vertical walls + R=10 mm inner-bottom fillets) -->
+            <path d="M 60 70 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 70"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <!-- Left rim profile: 20° outward flare ending in small rounded cap.
+                 No backward hook — clean glass-beaker lip. -->
+            <path d="M 60 70 L 56 60 Q 54 56 56 54 L 60 54"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <!-- Right rim profile (mirror) -->
+            <path d="M 260 70 L 264 60 Q 266 56 264 54 L 260 54"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <!-- Liquid surface dashed line -->
+            <line x1="60" y1="130" x2="260" y2="130" stroke="var(--sky)" stroke-width="1" stroke-dasharray="2 4" opacity="0.6" />
+          </g>
+
+          <!-- FAST radial-discharge jets at impeller plane (thick teal, opaque view: dimmed) -->
+          <g class="flow-fast" fill="none" stroke="var(--accent)" stroke-width="2.2">
+            <use xlink:href="#dischRight" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#dischLeft" marker-end="url(#arrowAccent)" />
+          </g>
+          <!-- SLOW recirculation loops (thin teal-dim, return through bulk) -->
+          <g class="flow-slow" fill="none" stroke="var(--accent-dim)" stroke-width="1.2">
+            <use xlink:href="#loopUR" marker-end="url(#arrowAccentDim)" />
+            <use xlink:href="#loopUL" marker-end="url(#arrowAccentDim)" />
+            <use xlink:href="#loopLR" marker-end="url(#arrowAccentDim)" />
+            <use xlink:href="#loopLL" marker-end="url(#arrowAccentDim)" />
+          </g>
+
+          <!-- Agitator: shaft + disk + 2 perimeter tabs -->
+          <g class="agitator">
+            <line x1="160" y1="40" x2="160" y2="195" stroke="var(--steel)" stroke-width="3" stroke-linecap="round" />
+            <rect x="101" y="194" width="118" height="2" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <!-- Left perimeter tab (UP) -->
+            <rect x="100" y="177" width="2" height="17" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <!-- Right perimeter tab (DOWN) -->
+            <rect x="218" y="196" width="2" height="17" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <!-- Side-view rotation streaks (motion blur of cycling tabs) -->
+            <g stroke="var(--accent)" stroke-width="0.8" opacity="0.5">
+              <path class="motion-streak" d="M 105 192 L 215 192" />
+              <path class="motion-streak" d="M 105 198 L 215 198" />
+            </g>
+            <!-- Rotation arrow on shaft -->
+            <path d="M 154 60 A 6 6 0 1 1 166 60 L 162 56 M 166 60 L 162 64"
+                  fill="none" stroke="var(--accent)" stroke-width="0.9" />
+          </g>
+
+          <!-- Droplets: FAST along discharge jets (more particles, faster), SLOW along recirculation -->
+          <g class="droplets-fast">
+            <g><circle r="4.5" fill="var(--orange)" opacity="0.9" /><circle r="1.5" fill="var(--sky)" />
+              <animateMotion dur="1.6s" repeatCount="indefinite"><mpath xlink:href="#dischRight" /></animateMotion></g>
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.9" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.6s" begin="-0.8s" repeatCount="indefinite"><mpath xlink:href="#dischRight" /></animateMotion></g>
+            <g><circle r="4.5" fill="var(--orange)" opacity="0.9" /><circle r="1.5" fill="var(--sky)" />
+              <animateMotion dur="1.6s" begin="-0.4s" repeatCount="indefinite"><mpath xlink:href="#dischLeft" /></animateMotion></g>
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.9" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.6s" begin="-1.2s" repeatCount="indefinite"><mpath xlink:href="#dischLeft" /></animateMotion></g>
+          </g>
+          <g class="droplets-slow">
+            <g><circle r="5" fill="var(--orange)" opacity="0.85" /><circle r="1.6" fill="var(--sky)" />
+              <animateMotion dur="6s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#loopUR" /></animateMotion></g>
+            <g><circle r="5" fill="var(--orange)" opacity="0.85" /><circle r="1.6" fill="var(--sky)" />
+              <animateMotion dur="6s" begin="-3s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#loopUL" /></animateMotion></g>
+            <g><circle r="6" fill="var(--orange)" opacity="0.85" /><circle r="2" fill="var(--sky)" />
+              <animateMotion dur="7s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#loopLR" /></animateMotion></g>
+            <g><circle r="5" fill="var(--orange)" opacity="0.85" /><circle r="1.6" fill="var(--sky)" />
+              <animateMotion dur="7s" begin="-3.5s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#loopLL" /></animateMotion></g>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ==================== VIEW 2: bottom, opaque ==================== -->
+    <div class="view" data-view="2">
+      <div class="stage">
+        <svg viewBox="0 0 320 360" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+          <!-- Beaker plan view -->
+          <circle cx="160" cy="180" r="100" fill="var(--glass)" stroke="none" />
+          <circle cx="160" cy="180" r="100" fill="none" stroke="var(--steel-dark)" stroke-width="1.6" />
+          <circle cx="160" cy="180" r="103" fill="none" stroke="var(--steel-dark)" stroke-width="1.0" opacity="0.45" />
+
+          <!-- Zone shading -->
+          <circle cx="160" cy="180" r="100" fill="none" stroke="var(--zone-near-wall)" stroke-width="10" />
+          <circle cx="160" cy="180" r="59" fill="var(--zone-impeller)" stroke="none" />
+
+          <!-- SLOW tangential swirl (mid-radius, around the disk) -->
+          <g class="flow-slow" fill="none" stroke="var(--accent-dim)" stroke-width="1.3">
+            <use xlink:href="#swirlOuter" marker-end="url(#arrowAccentDim)" />
+          </g>
+          <!-- FAST radial discharge jets (from disk perimeter outward) -->
+          <g class="flow-fast" fill="none" stroke="var(--accent)" stroke-width="1.8">
+            <use xlink:href="#discharge0" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#discharge1" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#discharge2" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#discharge3" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#discharge4" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#discharge5" marker-end="url(#arrowAccent)" />
+          </g>
+
+          <!-- Rotating disk + 19 perimeter tabs (built by JS) -->
+          <g class="agitator rotor-spin" style="transform-origin: 160px 180px">
+            <circle cx="160" cy="180" r="29" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.6" />
+            <g id="tabs-bottom"></g>
+            <circle cx="160" cy="180" r="4" fill="var(--bg)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <path d="M 160 158 A 22 22 0 0 1 182 178 L 178 174 M 182 178 L 178 182"
+                  fill="none" stroke="var(--accent)" stroke-width="1.2" />
+          </g>
+
+          <!-- SLOW droplets along outer swirl, FAST droplets along discharges -->
+          <g class="droplets-slow">
+            <g><circle r="4" fill="var(--orange)" opacity="0.85" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="5s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#swirlOuter" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.85" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="5s" begin="-1.7s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#swirlOuter" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.85" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="5s" begin="-3.3s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#swirlOuter" /></animateMotion></g>
+          </g>
+          <g class="droplets-fast">
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.9" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.4s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#discharge0" /></animateMotion></g>
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.9" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.4s" begin="-0.4s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#discharge1" /></animateMotion></g>
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.9" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.4s" begin="-0.8s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#discharge3" /></animateMotion></g>
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.9" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.4s" begin="-1.1s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#discharge4" /></animateMotion></g>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ==================== VIEW 3: side, transparent ==================== -->
+    <div class="view transparent" data-view="3">
+      <div class="stage">
+        <svg viewBox="0 0 320 360" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+          <path d="M 60 130 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 130 Z"
+                fill="var(--glass)" stroke="none" />
+          <clipPath id="liqClip3">
+            <path d="M 60 130 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 130 Z" />
+          </clipPath>
+          <g clip-path="url(#liqClip3)">
+            <rect x="60" y="180" width="200" height="30" fill="var(--zone-impeller)" />
+            <rect x="60" y="130" width="10" height="175" fill="var(--zone-near-wall)" />
+            <rect x="250" y="130" width="10" height="175" fill="var(--zone-near-wall)" />
+          </g>
+          <text class="zone-label" x="160" y="178" text-anchor="middle">IMPELLER · ε_brk=110</text>
+
+          <g class="beaker">
+            <path d="M 60 70 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 70"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <path d="M 60 70 L 56 60 Q 54 56 56 54 L 60 54"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <path d="M 260 70 L 264 60 Q 266 56 264 54 L 260 54"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <line x1="60" y1="130" x2="260" y2="130" stroke="var(--sky)" stroke-width="1" stroke-dasharray="2 4" opacity="0.6" />
+          </g>
+
+          <!-- FAST + SLOW flow paths, emphasised in transparent view -->
+          <g class="flow-fast" fill="none" stroke="var(--accent)" stroke-width="2.4">
+            <use xlink:href="#dischRight" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#dischLeft" marker-end="url(#arrowAccent)" />
+          </g>
+          <g class="flow-slow" fill="none" stroke="var(--accent-dim)" stroke-width="1.4">
+            <use xlink:href="#loopUR" marker-end="url(#arrowAccentDim)" />
+            <use xlink:href="#loopUL" marker-end="url(#arrowAccentDim)" />
+            <use xlink:href="#loopLR" marker-end="url(#arrowAccentDim)" />
+            <use xlink:href="#loopLL" marker-end="url(#arrowAccentDim)" />
+          </g>
+
+          <!-- Transparent agitator -->
+          <g class="agitator">
+            <line x1="160" y1="40" x2="160" y2="195" stroke="var(--steel)" stroke-width="3" stroke-linecap="round" />
+            <rect x="101" y="194" width="118" height="2" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <rect x="100" y="177" width="2" height="17" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <rect x="218" y="196" width="2" height="17" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <g stroke="var(--accent)" stroke-width="1.0" opacity="0.7">
+              <path class="motion-streak" d="M 105 192 L 215 192" />
+              <path class="motion-streak" d="M 105 198 L 215 198" />
+            </g>
+          </g>
+
+          <!-- FAST droplets along discharges + SLOW droplets along recirculation -->
+          <g class="droplets-fast">
+            <g><circle r="5" fill="var(--orange)" opacity="0.95" /><circle r="1.7" fill="var(--sky)" />
+              <animateMotion dur="1.5s" repeatCount="indefinite"><mpath xlink:href="#dischRight" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.95" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="1.5s" begin="-0.75s" repeatCount="indefinite"><mpath xlink:href="#dischRight" /></animateMotion></g>
+            <g><circle r="5" fill="var(--orange)" opacity="0.95" /><circle r="1.7" fill="var(--sky)" />
+              <animateMotion dur="1.5s" begin="-0.3s" repeatCount="indefinite"><mpath xlink:href="#dischLeft" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.95" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="1.5s" begin="-1.1s" repeatCount="indefinite"><mpath xlink:href="#dischLeft" /></animateMotion></g>
+          </g>
+          <g class="droplets-slow">
+            <g><circle r="6" fill="var(--orange)" opacity="0.9" /><circle r="2" fill="var(--sky)" />
+              <animateMotion dur="5s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#loopUR" /></animateMotion></g>
+            <g><circle r="6" fill="var(--orange)" opacity="0.9" /><circle r="2" fill="var(--sky)" />
+              <animateMotion dur="5s" begin="-1.7s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#loopUL" /></animateMotion></g>
+            <g><circle r="7" fill="var(--orange)" opacity="0.9" /><circle r="2.4" fill="var(--sky)" />
+              <animateMotion dur="6s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#loopLR" /></animateMotion></g>
+            <g><circle r="7" fill="var(--orange)" opacity="0.9" /><circle r="2.4" fill="var(--sky)" />
+              <animateMotion dur="6s" begin="-2s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#loopLL" /></animateMotion></g>
+          </g>
+
+          <!-- Collision shower: filled by JS at script init time with
+               many ★ break events along the impeller plane, ✦ wall hits
+               along the inner walls, and ⊕ coalescence events in the
+               bulk. The density per zone is proportional to the
+               literature breakage / collision frequency in that zone. -->
+          <g id="collisions-side-3" class="collision-events"></g>
+
+          <!-- Collision-key in top-right -->
+          <g transform="translate(192 28)">
+            <rect x="0" y="0" width="116" height="14" fill="var(--surface)" stroke="var(--border)" stroke-width="0.5" rx="3" />
+            <text x="6" y="10" font-family="Geist Mono, monospace" font-size="8" fill="var(--text-muted)" letter-spacing="0.04em">★ break · ✦ wall · ⊕ coal</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ==================== VIEW 4: bottom, transparent ==================== -->
+    <div class="view transparent" data-view="4">
+      <div class="stage">
+        <svg viewBox="0 0 320 360" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+          <circle cx="160" cy="180" r="100" fill="var(--glass)" stroke="none" />
+          <circle cx="160" cy="180" r="100" fill="none" stroke="var(--steel-dark)" stroke-width="1.6" />
+          <circle cx="160" cy="180" r="100" fill="none" stroke="var(--zone-near-wall)" stroke-width="10" />
+          <circle cx="160" cy="180" r="59" fill="var(--zone-impeller)" stroke="none" />
+
+          <!-- SLOW outer swirl + FAST radial discharges -->
+          <g class="flow-slow" fill="none" stroke="var(--accent-dim)" stroke-width="1.6">
+            <use xlink:href="#swirlOuter" marker-end="url(#arrowAccentDim)" />
+          </g>
+          <g class="flow-fast" fill="none" stroke="var(--accent)" stroke-width="2.0">
+            <use xlink:href="#discharge0" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#discharge1" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#discharge2" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#discharge3" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#discharge4" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#discharge5" marker-end="url(#arrowAccent)" />
+          </g>
+
+          <!-- Rotating transparent agitator -->
+          <g class="agitator rotor-spin" style="transform-origin: 160px 180px">
+            <circle cx="160" cy="180" r="29" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.6" />
+            <g id="tabs-bottom-2"></g>
+            <circle cx="160" cy="180" r="4" fill="var(--bg)" stroke="var(--steel-dark)" stroke-width="0.5" />
+          </g>
+
+          <g class="droplets-slow">
+            <g><circle r="5" fill="var(--orange)" opacity="0.9" /><circle r="1.7" fill="var(--sky)" />
+              <animateMotion dur="4s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#swirlOuter" /></animateMotion></g>
+            <g><circle r="5" fill="var(--orange)" opacity="0.9" /><circle r="1.7" fill="var(--sky)" />
+              <animateMotion dur="4s" begin="-1.3s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#swirlOuter" /></animateMotion></g>
+            <g><circle r="5" fill="var(--orange)" opacity="0.9" /><circle r="1.7" fill="var(--sky)" />
+              <animateMotion dur="4s" begin="-2.7s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#swirlOuter" /></animateMotion></g>
+          </g>
+          <g class="droplets-fast">
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.95" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.2s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#discharge0" /></animateMotion></g>
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.95" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.2s" begin="-0.2s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#discharge1" /></animateMotion></g>
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.95" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.2s" begin="-0.4s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#discharge2" /></animateMotion></g>
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.95" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.2s" begin="-0.6s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#discharge3" /></animateMotion></g>
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.95" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.2s" begin="-0.8s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#discharge4" /></animateMotion></g>
+            <g><circle r="3.5" fill="var(--orange)" opacity="0.95" /><circle r="1.2" fill="var(--sky)" />
+              <animateMotion dur="1.2s" begin="-1.0s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#discharge5" /></animateMotion></g>
+          </g>
+
+          <!-- Collision shower: filled by JS for the bottom-transparent
+               view. ★ break clustered around the 6 radial-discharge
+               endpoints, ✦ wall hits along the outer ring, ⊕ coalescence
+               in the bulk between disk and wall. -->
+          <g id="collisions-bottom-4" class="collision-events"></g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--accent)"></span>fast (impeller)</span>
+      <span><span class="swatch" style="background: var(--accent-dim)"></span>slow (bulk)</span>
+      <span><span class="swatch" style="background: var(--orange)"></span>oil shell</span>
+      <span><span class="swatch" style="background: var(--sky)"></span>aq core</span>
+      <span><span class="glyph" style="color: var(--break)">★</span>break</span>
+      <span><span class="glyph" style="color: var(--magenta)">✦</span>wall</span>
+      <span><span class="glyph" style="color: var(--sky)">⊕</span>coalesce</span>
+    </div>
+  </div>
+
+<script>
+  (function() {
+    // RPM → base period. The base period drives the rotor spin (CSS),
+    // motion-blur streaks (CSS), AND every <animateMotion>/<animate>
+    // duration on the page (set below via applyTimings).
+    var rpm = parseFloat("__RPM__") || 1300;
+    var period = 1.5 / Math.max(0.3, Math.log10(Math.max(100, rpm) / 100));
+    period = Math.min(3.0, Math.max(0.3, period));
+    document.documentElement.style.setProperty("--spin-period", period.toFixed(2) + "s");
+    var streak = Math.max(0.18, period * 0.4);
+    document.documentElement.style.setProperty("--streak-period", streak.toFixed(2) + "s");
+
+    var SVG_NS = "http://www.w3.org/2000/svg";
+    var XLINK_NS = "http://www.w3.org/1999/xlink";
+
+    // ----------------------------------------------------------------
+    // Dense collision-shower generators (rev 3): instead of 2-3 static
+    // glyphs per zone, scatter many ★/✦/⊕ events at varied positions
+    // with staggered phases so each zone reads as an *area of activity*
+    // rather than isolated points. Periods are scaled later by
+    // applyTimings() so collision frequency tracks RPM.
+    // ----------------------------------------------------------------
+    function placeEvent(parent, glyphHref, x, y, dur, begin, eventClass) {
+      var u = document.createElementNS(SVG_NS, "use");
+      u.setAttributeNS(XLINK_NS, "xlink:href", glyphHref);
+      u.setAttribute("transform", "translate(" + x.toFixed(1) + " " + y.toFixed(1) + ")");
+      u.setAttribute("class", eventClass);
+      var a = document.createElementNS(SVG_NS, "animate");
+      a.setAttribute("attributeName", "opacity");
+      a.setAttribute("values", "0;1;1;0");
+      a.setAttribute("keyTimes", "0;0.15;0.4;0.6");
+      a.setAttribute("dur", dur.toFixed(2) + "s");
+      if (begin !== 0) a.setAttribute("begin", begin.toFixed(2) + "s");
+      a.setAttribute("repeatCount", "indefinite");
+      u.appendChild(a);
+      parent.appendChild(u);
+      return u;
+    }
+
+    // Pseudo-random with a fixed seed for deterministic placement
+    var rngState = 1234567;
+    function rng() {
+      rngState = (rngState * 1664525 + 1013904223) >>> 0;
+      return rngState / 4294967296;
+    }
+
+    // Stirrer A side view (view 3): collision shower
+    var sideHost = document.getElementById("collisions-side-3");
+    if (sideHost) {
+      // ★ break: 8 along impeller plane (y ∈ [188, 204], x outside shaft ±10)
+      for (var i = 0; i < 8; i++) {
+        var bx = (i < 4) ? (75 + 18 * i) : (165 + 18 * (i - 4));
+        var by = 188 + rng() * 16;
+        placeEvent(sideHost, "#glyphBreak", bx, by, 1.5, -(rng() * 1.5), "event-break");
+      }
+      // ✦ wall: 4 along inner walls (x = 67 left, x = 253 right)
+      var wallY = [150, 220, 175, 260];
+      for (var w = 0; w < wallY.length; w++) {
+        var wx = (w % 2 === 0) ? 67 : 253;
+        placeEvent(sideHost, "#glyphWall", wx, wallY[w], 3.0, -(rng() * 3.0), "event-wall");
+      }
+      // ⊕ coalesce: 6 in bulk regions (above + below impeller, away from shaft)
+      var coalSpots = [
+        [110, 155], [200, 155], [80, 250], [240, 250], [130, 230], [190, 145]
+      ];
+      for (var c = 0; c < coalSpots.length; c++) {
+        placeEvent(sideHost, "#glyphCoalesce", coalSpots[c][0], coalSpots[c][1],
+                   4.0, -(rng() * 4.0), "event-coalesce");
+      }
+    }
+
+    // Stirrer A bottom view (view 4): collision shower
+    var botHost = document.getElementById("collisions-bottom-4");
+    if (botHost) {
+      // ★ break: 6 at radial-discharge endpoints near the disk perimeter
+      var discAngles = [0, 60, 120, 180, 240, 300];
+      for (var d = 0; d < discAngles.length; d++) {
+        var thR = discAngles[d] * Math.PI / 180.0;
+        var bx2 = 160 + 50 * Math.cos(thR);
+        var by2 = 180 + 50 * Math.sin(thR);
+        placeEvent(botHost, "#glyphBreak", bx2, by2, 1.5, -(d * 0.25), "event-break");
+      }
+      // ✦ wall: 4 around the outer ring
+      var wallAngles = [30, 150, 210, 330];
+      for (var ww = 0; ww < wallAngles.length; ww++) {
+        var thW = wallAngles[ww] * Math.PI / 180.0;
+        var wx2 = 160 + 92 * Math.cos(thW);
+        var wy2 = 180 + 92 * Math.sin(thW);
+        placeEvent(botHost, "#glyphWall", wx2, wy2, 3.0, -(ww * 0.7), "event-wall");
+      }
+      // ⊕ coalesce: 6 in the bulk annulus between disk and wall
+      var coalAngles = [15, 75, 135, 195, 255, 315];
+      for (var cc = 0; cc < coalAngles.length; cc++) {
+        var thC = coalAngles[cc] * Math.PI / 180.0;
+        var cx2 = 160 + 70 * Math.cos(thC);
+        var cy2 = 180 + 70 * Math.sin(thC);
+        placeEvent(botHost, "#glyphCoalesce", cx2, cy2, 4.0, -(cc * 0.6), "event-coalesce");
+      }
+    }
+
+    // ----------------------------------------------------------------
+    // applyTimings(basePeriod): scale every <animateMotion> and every
+    // collision <animate> duration by the RPM-derived base period.
+    // Also rescales begin offsets proportionally so phase staggering
+    // survives the rescaling.
+    //
+    // Tier multipliers (× basePeriod):
+    //   FAST (impeller jets):  3.2  → 0.96 s @ 1500 RPM, 1.6 s @ 100 RPM (clamped)
+    //   SLOW (bulk return):   12.0  → 3.6  s @ 1500, ~6.0 s @ 100
+    //   BREAK collision:        3.0
+    //   WALL collision:         6.0
+    //   COAL collision:         8.0
+    // ----------------------------------------------------------------
+    function scaleDur(el, newDur) {
+      var oldDur = parseFloat(el.getAttribute("dur")) || newDur;
+      el.setAttribute("dur", newDur.toFixed(2) + "s");
+      var oldBegin = el.getAttribute("begin");
+      if (oldBegin) {
+        var beginSec = parseFloat(oldBegin);
+        if (!isNaN(beginSec)) {
+          var ratio = newDur / oldDur;
+          el.setAttribute("begin", (beginSec * ratio).toFixed(2) + "s");
+        }
+      }
+    }
+
+    function applyTimings(p) {
+      var rules = [
+        [".droplets-fast animateMotion",  p * 3.2],
+        [".droplets-medium animateMotion", p * 5.5],
+        [".droplets-slow animateMotion",  p * 12.0],
+        [".event-break animate",          p * 3.0],
+        [".event-wall animate",           p * 6.0],
+        [".event-coalesce animate",       p * 8.0],
+      ];
+      for (var r = 0; r < rules.length; r++) {
+        var sel = rules[r][0], newDur = rules[r][1];
+        document.querySelectorAll(sel).forEach(function(el) {
+          scaleDur(el, newDur);
+        });
+      }
+    }
+    applyTimings(period);
+
+    function buildTabs(containerId) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+      var nTabs = 19;
+      var R_disk = 29;
+      var tabWidth = 5;
+      var tabHeight = 4.5;
+      for (var i = 0; i < nTabs; i++) {
+        var angleDeg = (360.0 / nTabs) * i;
+        var goingUp = (i % 2 === 0);
+        var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", -tabWidth / 2);
+        rect.setAttribute("y", R_disk - tabHeight / 2);
+        rect.setAttribute("width", tabWidth);
+        rect.setAttribute("height", tabHeight);
+        rect.setAttribute("fill", goingUp ? "var(--steel)" : "var(--steel-dark)");
+        rect.setAttribute("stroke", "var(--steel-dark)");
+        rect.setAttribute("stroke-width", "0.3");
+        rect.setAttribute("transform",
+          "translate(160 180) rotate(" + (angleDeg + 10) + ")");
+        container.appendChild(rect);
+      }
+    }
+    buildTabs("tabs-bottom");
+    buildTabs("tabs-bottom-2");
+
+    var labels = {
+      "1": "SIDE · OPAQUE",
+      "2": "BOTTOM · OPAQUE",
+      "3": "SIDE · TRANSPARENT",
+      "4": "BOTTOM · TRANSPARENT"
+    };
+    var current = 1;
+    var btn = document.getElementById("toggleBtn");
+    var lbl = document.getElementById("viewLabel");
+    btn.addEventListener("click", function() {
+      document.querySelector('.view[data-view="' + current + '"]').classList.remove("active");
+      current = (current % 4) + 1;
+      document.querySelector('.view[data-view="' + current + '"]').classList.add("active");
+      btn.textContent = labels[String(current)];
+      lbl.textContent = "VIEW " + current + " / 4";
+    });
+  })();
+</script>
+</body>
+</html>

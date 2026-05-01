@@ -1,0 +1,786 @@
+<!doctype html>
+<!--
+  ImpellerCrossSection v3 (rev 2) — small rotor-stator (Stirrer B) in glass beaker.
+
+  v3 rev 2 corrections (2026-05-01):
+    * Beaker rim: replaced hook curls with a clean 20° outward flare
+      ending in a rounded rim cap.
+    * Bottom view: 6 spiral-then-radial droplet trajectories explicitly
+      visualise particles being flung outward through the stator
+      perforations by centrifugal force (was: only static jet arrows,
+      no actual particle motion).
+    * Speed differentiation: slot-exit jets in red at very fast cadence
+      (0.6 s) — highest ε zone; rotor inlet flow at medium cadence;
+      bulk return at slow cadence (6 s, dim teal). Encodes the ~140×
+      ε_brk ratio between slot-exit (1200 W/kg) and bulk (8.5 W/kg).
+
+  Geometry verified 2026-05-01 against cad/output/*.step:
+    Rotor   — flat sheet "+", root Ø 8.5 mm → tip Ø 25.7 mm, 16 mm tall.
+    Stator  — Ø 32.03 mm × 18 mm, 2.2 mm wall, closed top + Ø 10 mm
+               shaft passage, open bottom; 36 Ø 3 mm perforations
+               (3 rows × 12 columns).
+    Beaker  — Ø 100 mm inner × 130 mm tall, 20° outward-flared rim.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --bg:        #020617;
+    --surface:   #0F172A;
+    --surface-2: #1E293B;
+    --border:    rgba(71, 85, 105, 0.55);
+    --text:      #F8FAFC;
+    --text-muted: #94A3B8;
+    --text-dim:  #64748B;
+    --accent:    #2DD4BF;
+    --accent-dim: #0F766E;
+    --orange:    #F97316;
+    --orange-2:  #FB923C;
+    --red:       #DC2626;
+    --red-2:     #EF4444;
+    --sky:       #7DD3FC;
+    --magenta:   #E879F9;
+    --steel:     #94A3B8;
+    --steel-dark: #64748B;
+    --glass:     rgba(125, 211, 252, 0.16);
+    --zone-impeller:  rgba(249, 115, 22, 0.14);
+    --zone-slot-exit: rgba(220, 38, 38, 0.20);
+    --zone-near-wall: rgba(148, 163, 184, 0.14);
+    /* Break-event colour — amber/gold spark, distinct from --orange
+       droplet shell and --red slot-exit jet path. */
+    --break:        #FBBF24;
+    --break-bright: #FEF3C7;
+    --break-stroke: #F59E0B;
+  }
+  body.light {
+    --bg: #FAFBFC; --surface: #FFFFFF; --surface-2: #F1F5F9;
+    --border: rgba(148,163,184,0.35);
+    --text: #0F172A; --text-muted: #64748B; --text-dim: #94A3B8;
+    --accent: #14B8A6;
+    --accent-dim: #5EEAD4;
+    --glass: rgba(56, 189, 248, 0.12);
+    --zone-impeller: rgba(249, 115, 22, 0.14);
+    --zone-slot-exit: rgba(220, 38, 38, 0.16);
+    --zone-near-wall: rgba(100, 116, 139, 0.10);
+    --break:        #D97706;
+    --break-bright: #FBBF24;
+    --break-stroke: #B45309;
+  }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .frame {
+    position: relative;
+    width: __WIDTH__px;
+    height: __HEIGHT__px;
+    margin: 0 auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .toggle-btn {
+    position: absolute; top: 8px; right: 8px; z-index: 10;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 6px 10px; font-size: 10px;
+    font-family: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+    letter-spacing: 0.04em; cursor: pointer; user-select: none;
+    transition: background 150ms ease-out;
+  }
+  .toggle-btn:hover { background: var(--surface-2); }
+  .view-label {
+    position: absolute; top: 8px; left: 8px; z-index: 5;
+    background: var(--surface); color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 8px; font-size: 9.5px;
+    font-family: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .stage { position: absolute; inset: 0; }
+  .stage svg { display: block; width: 100%; height: 100%; }
+  .view {
+    position: absolute; inset: 0; opacity: 0;
+    transition: opacity 150ms ease-out; pointer-events: none;
+  }
+  .view.active { opacity: 1; pointer-events: auto; }
+  .agitator { transition: opacity 150ms ease-out; }
+  .view:not(.transparent) .agitator { opacity: 1.0; }
+  .view.transparent .agitator { opacity: 0.22; }
+  .view.transparent .flow-fast { opacity: 1.0; }
+  .view:not(.transparent) .flow-fast { opacity: 0.7; }
+  .view.transparent .flow-medium { opacity: 0.85; }
+  .view:not(.transparent) .flow-medium { opacity: 0.5; }
+  .view.transparent .flow-slow { opacity: 0.55; }
+  .view:not(.transparent) .flow-slow { opacity: 0.3; }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .rotor-spin {
+    animation: spin var(--spin-period, 0.30s) linear infinite;
+    transform-origin: center;
+  }
+  @keyframes streak-flow {
+    0%   { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: -40; }
+  }
+  .motion-streak {
+    fill: none; stroke-dasharray: 4 4;
+    animation: streak-flow var(--streak-period, 0.25s) linear infinite;
+  }
+  @keyframes jet-pulse {
+    0%, 35%   { opacity: 0.75; }
+    50%       { opacity: 1.0; }
+    65%, 100% { opacity: 0.75; }
+  }
+  .jet-pulse {
+    animation: jet-pulse var(--spin-period, 0.30s) linear infinite;
+  }
+
+  .zone-label {
+    font-family: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+    font-size: 8px; fill: var(--text-dim);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    font-feature-settings: "tnum"; pointer-events: none;
+  }
+  .legend {
+    position: absolute; bottom: 6px; left: 8px; right: 8px;
+    display: flex; gap: 9px; font-size: 9px;
+    color: var(--text-dim);
+    font-family: "Geist Mono", "JetBrains Mono", Menlo, monospace;
+    letter-spacing: 0.04em; flex-wrap: wrap;
+    justify-content: center; pointer-events: none;
+  }
+  .legend .swatch {
+    display: inline-block; width: 10px; height: 10px;
+    border-radius: 2px; margin-right: 4px; vertical-align: -1px;
+  }
+  .legend .glyph {
+    display: inline-block; width: 10px; text-align: center;
+    margin-right: 3px;
+  }
+</style>
+</head>
+<body class="__THEME__">
+  <div class="frame" role="img"
+       aria-label="Stirrer B rotor-stator in 100 mL glass beaker. Animated cross-section showing the bench-loop circulation, 36 slot-exit jets where 80-95% of breakage occurs (Padron 2005, Hall 2011), three collision-type events.">
+    <button class="toggle-btn" id="toggleBtn" aria-label="Toggle view">SIDE · OPAQUE</button>
+    <div class="view-label" id="viewLabel">VIEW 1 / 4</div>
+
+    <svg width="0" height="0" style="position:absolute" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <defs>
+        <marker id="arrowAccent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+        </marker>
+        <marker id="arrowAccentDim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-dim)" />
+        </marker>
+        <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--red)" />
+        </marker>
+
+        <!-- Break glyphs use --break (amber) instead of orange/red so they
+             read as energy-spark events rather than as more droplets or
+             jet paths. Intense variant for slot-exit dominance is the
+             same hue but with the bright pale fill, suggesting a
+             flashbulb. -->
+        <g id="glyphBreak">
+          <path d="M 0 -5.5 L 1.55 -1.7 L 5.5 -1.7 L 2.3 0.7 L 3.4 5 L 0 2.6 L -3.4 5 L -2.3 0.7 L -5.5 -1.7 L -1.55 -1.7 Z"
+                fill="var(--break)" stroke="var(--break-stroke)" stroke-width="0.6" stroke-linejoin="round" />
+        </g>
+        <g id="glyphBreakIntense">
+          <path d="M 0 -6.5 L 1.85 -2 L 6.5 -2 L 2.7 0.85 L 4 6 L 0 3.1 L -4 6 L -2.7 0.85 L -6.5 -2 L -1.85 -2 Z"
+                fill="var(--break-bright)" stroke="var(--break)" stroke-width="0.8" stroke-linejoin="round" />
+        </g>
+        <g id="glyphWall">
+          <path d="M 0 -5 L 5 0 L 0 5 L -5 0 Z" fill="none" stroke="var(--magenta)" stroke-width="1.4" stroke-linejoin="round" />
+        </g>
+        <g id="glyphCoalesce">
+          <circle r="5" fill="none" stroke="var(--sky)" stroke-width="1.2" />
+          <path d="M -3 0 L 3 0 M 0 -3 L 0 3" stroke="var(--sky)" stroke-width="1.2" />
+        </g>
+
+        <!-- Side-view bench loop. Three speed tiers:
+             FAST (red): 6 slot-exit jets (where ε peaks at 1200 W/kg).
+             MEDIUM (teal): rotor inlet (axial pull-in through open bottom).
+             SLOW (teal-dim): bulk return (down outside the stator). -->
+
+        <!-- 6 visible slot-exit jets, ~10 mm radial decay -->
+        <path id="jetRT" d="M 188 183 L 212 183" />
+        <path id="jetRM" d="M 188 195 L 220 195" />
+        <path id="jetRB" d="M 188 207 L 212 207" />
+        <path id="jetLT" d="M 132 183 L 108 183" />
+        <path id="jetLM" d="M 132 195 L 100 195" />
+        <path id="jetLB" d="M 132 207 L 108 207" />
+
+        <!-- Rotor inlet: axial inflow drawn from below the stator into the
+             rotor zone (medium speed). One on each side. -->
+        <path id="inletR" d="M 165 280 L 165 215" />
+        <path id="inletL" d="M 155 280 L 155 215" />
+
+        <!-- Slow bulk-return loop: from slot-exit endpoint, descends along
+             outside of stator, curves toward stator inlet at the bottom. -->
+        <path id="returnR" d="M 220 195 Q 240 195 248 240 Q 240 280 200 280 Q 175 280 168 270" />
+        <path id="returnL" d="M 100 195 Q 80 195 72 240 Q 80 280 120 280 Q 145 280 152 270" />
+
+        <!-- Bottom-view plan paths -->
+        <!-- Tangential swirl in rotor-stator gap (mid-radius, between rotor
+             and stator wall) — slow tier. -->
+        <path id="swirlMid" d="M 160 152 A 28 28 0 1 1 159.5 152 Z" />
+        <!-- Outer bulk swirl — very slow. -->
+        <path id="swirlOuter" d="M 160 90 A 90 90 0 1 1 159.5 90 Z" />
+
+        <!-- 12 spiral-then-radial particle trajectories: tangential inside
+             rotor → arc to stator wall → radial outward through perforation
+             → continue into bulk. Generated in JS for the 12-position fan. -->
+      </defs>
+    </svg>
+
+    <!-- ==================== VIEW 1: side, opaque ==================== -->
+    <div class="view active" data-view="1">
+      <div class="stage">
+        <svg viewBox="0 0 320 360" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+          <path d="M 60 130 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 130 Z"
+                fill="var(--glass)" stroke="none" />
+          <clipPath id="liqClip1">
+            <path d="M 60 130 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 130 Z" />
+          </clipPath>
+          <g clip-path="url(#liqClip1)">
+            <rect x="132" y="177" width="56" height="36" fill="var(--zone-impeller)" />
+            <rect x="118" y="177" width="10" height="36" fill="var(--zone-slot-exit)" />
+            <rect x="192" y="177" width="10" height="36" fill="var(--zone-slot-exit)" />
+            <rect x="60" y="130" width="10" height="175" fill="var(--zone-near-wall)" />
+            <rect x="250" y="130" width="10" height="175" fill="var(--zone-near-wall)" />
+          </g>
+          <text class="zone-label" x="160" y="172" text-anchor="middle">IMPELLER · ε=220</text>
+          <text class="zone-label" x="160" y="226" text-anchor="middle" fill="var(--red-2)">SLOT-EXIT · ε=850</text>
+          <text class="zone-label" x="160" y="270" text-anchor="middle">BULK · ε=8.5</text>
+
+          <!-- Beaker outline: clean rim -->
+          <g class="beaker">
+            <path d="M 60 70 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 70"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <path d="M 60 70 L 56 60 Q 54 56 56 54 L 60 54"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <path d="M 260 70 L 264 60 Q 266 56 264 54 L 260 54"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <line x1="60" y1="130" x2="260" y2="130" stroke="var(--sky)" stroke-width="1" stroke-dasharray="2 4" opacity="0.6" />
+          </g>
+
+          <!-- FAST slot-exit jets (red, opaque view dimmed) -->
+          <g class="flow-fast" fill="none" stroke="var(--red)" stroke-width="2.0">
+            <use xlink:href="#jetRM" marker-end="url(#arrowRed)" />
+            <use xlink:href="#jetLM" marker-end="url(#arrowRed)" />
+          </g>
+          <!-- MEDIUM rotor-inlet axial flow -->
+          <g class="flow-medium" fill="none" stroke="var(--accent)" stroke-width="1.6">
+            <use xlink:href="#inletR" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#inletL" marker-end="url(#arrowAccent)" />
+          </g>
+          <!-- SLOW bulk-return loops -->
+          <g class="flow-slow" fill="none" stroke="var(--accent-dim)" stroke-width="1.2">
+            <use xlink:href="#returnR" marker-end="url(#arrowAccentDim)" />
+            <use xlink:href="#returnL" marker-end="url(#arrowAccentDim)" />
+          </g>
+
+          <!-- Stator + rotor agitator -->
+          <g class="agitator">
+            <line x1="160" y1="40" x2="160" y2="179" stroke="var(--steel)" stroke-width="3.4" stroke-linecap="round" />
+            <!-- Stator top closure (split by shaft passage) -->
+            <path d="M 128 177 L 150 177 M 170 177 L 192 177" fill="none" stroke="var(--steel)" stroke-width="1.6" />
+            <!-- Stator side walls with notches for 3 perforation rows each side -->
+            <path d="M 128 177 L 128 180 M 128 186 L 128 192 M 128 198 L 128 204 M 128 210 L 128 213"
+                  fill="none" stroke="var(--steel)" stroke-width="1.6" />
+            <path d="M 192 177 L 192 180 M 192 186 L 192 192 M 192 198 L 192 204 M 192 210 L 192 213"
+                  fill="none" stroke="var(--steel)" stroke-width="1.6" />
+            <!-- Inner-wall hint (faint) -->
+            <path d="M 132 180 L 132 213 M 188 180 L 188 213"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="0.6" opacity="0.45" />
+            <!-- Open-bottom indicator -->
+            <line x1="132" y1="213" x2="188" y2="213"
+                  stroke="var(--steel-dark)" stroke-width="0.7" stroke-dasharray="2 3" opacity="0.5" />
+            <!-- Cross rotor: hub + horizontal mid-arm -->
+            <rect x="151.5" y="179" width="17" height="32" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <rect x="134.3" y="187" width="51.4" height="16" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <!-- Side-view rotor motion-blur -->
+            <g stroke="var(--accent)" stroke-width="0.8" opacity="0.5">
+              <path class="motion-streak" d="M 138 191 L 182 191" />
+              <path class="motion-streak" d="M 138 199 L 182 199" />
+            </g>
+            <!-- Rotation arrow on shaft -->
+            <path d="M 154 60 A 6 6 0 1 1 166 60 L 162 56 M 166 60 L 162 64"
+                  fill="none" stroke="var(--accent)" stroke-width="0.9" />
+          </g>
+
+          <!-- Droplets at three speed tiers -->
+          <!-- FAST: through slot-exit jets -->
+          <g class="droplets-fast">
+            <g><circle r="4" fill="var(--orange)" opacity="0.95" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="0.9s" repeatCount="indefinite"><mpath xlink:href="#jetRM" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.95" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="0.9s" begin="-0.45s" repeatCount="indefinite"><mpath xlink:href="#jetLM" /></animateMotion></g>
+          </g>
+          <!-- MEDIUM: rotor-inlet axial flow -->
+          <g class="droplets-medium">
+            <g><circle r="4" fill="var(--orange)" opacity="0.85" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="2.5s" repeatCount="indefinite"><mpath xlink:href="#inletR" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.85" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="2.5s" begin="-1.2s" repeatCount="indefinite"><mpath xlink:href="#inletL" /></animateMotion></g>
+          </g>
+          <!-- SLOW: bulk-return loops -->
+          <g class="droplets-slow">
+            <g><circle r="5" fill="var(--orange)" opacity="0.85" /><circle r="1.6" fill="var(--sky)" />
+              <animateMotion dur="6s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#returnR" /></animateMotion></g>
+            <g><circle r="5" fill="var(--orange)" opacity="0.85" /><circle r="1.6" fill="var(--sky)" />
+              <animateMotion dur="6s" begin="-3s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#returnL" /></animateMotion></g>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ==================== VIEW 2: bottom, opaque ==================== -->
+    <div class="view" data-view="2">
+      <div class="stage">
+        <svg viewBox="0 0 320 360" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+          <circle cx="160" cy="180" r="100" fill="var(--glass)" stroke="none" />
+          <circle cx="160" cy="180" r="100" fill="none" stroke="var(--steel-dark)" stroke-width="1.6" />
+          <circle cx="160" cy="180" r="103" fill="none" stroke="var(--steel-dark)" stroke-width="1.0" opacity="0.45" />
+
+          <circle cx="160" cy="180" r="100" fill="none" stroke="var(--zone-near-wall)" stroke-width="10" />
+          <circle cx="160" cy="180" r="42" fill="none" stroke="var(--zone-slot-exit)" stroke-width="14" />
+          <circle cx="160" cy="180" r="32" fill="var(--zone-impeller)" stroke="none" />
+
+          <circle cx="160" cy="180" r="32" fill="none" stroke="var(--steel-dark)" stroke-width="1.6" />
+          <g id="perfs-bottom" stroke="var(--bg)" stroke-width="0.6" fill="var(--bg)"></g>
+
+          <g class="agitator rotor-spin" style="transform-origin: 160px 180px">
+            <circle cx="160" cy="180" r="8.5" fill="var(--steel-dark)" stroke="none" />
+            <rect x="155.5" y="154.3" width="9" height="17.4" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" rx="1" />
+            <rect x="155.5" y="188.3" width="9" height="17.4" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" rx="1" />
+            <rect x="171.6" y="175.5" width="14.1" height="9" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" rx="1" />
+            <rect x="134.3" y="175.5" width="14.1" height="9" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" rx="1" />
+            <circle cx="160" cy="180" r="3" fill="var(--bg)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <path d="M 160 162 A 18 18 0 0 1 178 178 L 174 174 M 178 178 L 174 182"
+                  fill="none" stroke="var(--accent)" stroke-width="1.2" />
+          </g>
+
+          <!-- Tangential swirl in stator-rotor gap -->
+          <g class="flow-medium" fill="none" stroke="var(--accent)" stroke-width="1.4">
+            <use xlink:href="#swirlMid" marker-end="url(#arrowAccent)" />
+          </g>
+
+          <!-- Slow droplets in outer bulk -->
+          <g class="droplets-slow">
+            <g><circle r="5" fill="var(--orange)" opacity="0.85" /><circle r="1.6" fill="var(--sky)" />
+              <animateMotion dur="4.5s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#swirlOuter" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.85" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="4.5s" begin="-1.5s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#swirlOuter" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.85" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="4.5s" begin="-3s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#swirlOuter" /></animateMotion></g>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ==================== VIEW 3: side, transparent ==================== -->
+    <div class="view transparent" data-view="3">
+      <div class="stage">
+        <svg viewBox="0 0 320 360" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+          <path d="M 60 130 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 130 Z"
+                fill="var(--glass)" stroke="none" />
+          <clipPath id="liqClip3">
+            <path d="M 60 130 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 130 Z" />
+          </clipPath>
+          <g clip-path="url(#liqClip3)">
+            <rect x="132" y="177" width="56" height="36" fill="var(--zone-impeller)" />
+            <rect x="118" y="177" width="10" height="36" fill="var(--zone-slot-exit)" />
+            <rect x="192" y="177" width="10" height="36" fill="var(--zone-slot-exit)" />
+            <rect x="60" y="130" width="10" height="175" fill="var(--zone-near-wall)" />
+            <rect x="250" y="130" width="10" height="175" fill="var(--zone-near-wall)" />
+          </g>
+          <text class="zone-label" x="160" y="226" text-anchor="middle" fill="var(--red-2)">SLOT-EXIT · ε_brk=1200</text>
+
+          <g class="beaker">
+            <path d="M 60 70 L 60 285 Q 60 305 80 305 L 240 305 Q 260 305 260 285 L 260 70"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <path d="M 60 70 L 56 60 Q 54 56 56 54 L 60 54"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <path d="M 260 70 L 264 60 Q 266 56 264 54 L 260 54"
+                  fill="none" stroke="var(--steel-dark)" stroke-width="1.6" stroke-linejoin="round" />
+            <line x1="60" y1="130" x2="260" y2="130" stroke="var(--sky)" stroke-width="1" stroke-dasharray="2 4" opacity="0.6" />
+          </g>
+
+          <!-- All 6 slot-exit jets (FAST, red, with pulsation) -->
+          <g class="flow-fast jet-pulse" fill="none" stroke="var(--red)" stroke-width="2.2">
+            <use xlink:href="#jetRT" marker-end="url(#arrowRed)" />
+            <use xlink:href="#jetRM" marker-end="url(#arrowRed)" />
+            <use xlink:href="#jetRB" marker-end="url(#arrowRed)" />
+            <use xlink:href="#jetLT" marker-end="url(#arrowRed)" />
+            <use xlink:href="#jetLM" marker-end="url(#arrowRed)" />
+            <use xlink:href="#jetLB" marker-end="url(#arrowRed)" />
+          </g>
+          <!-- Rotor inlet (medium) -->
+          <g class="flow-medium" fill="none" stroke="var(--accent)" stroke-width="1.8">
+            <use xlink:href="#inletR" marker-end="url(#arrowAccent)" />
+            <use xlink:href="#inletL" marker-end="url(#arrowAccent)" />
+          </g>
+          <!-- Bulk return (slow) -->
+          <g class="flow-slow" fill="none" stroke="var(--accent-dim)" stroke-width="1.4">
+            <use xlink:href="#returnR" marker-end="url(#arrowAccentDim)" />
+            <use xlink:href="#returnL" marker-end="url(#arrowAccentDim)" />
+          </g>
+
+          <!-- Transparent agitator -->
+          <g class="agitator">
+            <line x1="160" y1="40" x2="160" y2="179" stroke="var(--steel)" stroke-width="3.4" stroke-linecap="round" />
+            <path d="M 128 177 L 150 177 M 170 177 L 192 177" fill="none" stroke="var(--steel)" stroke-width="1.6" />
+            <path d="M 128 177 L 128 180 M 128 186 L 128 192 M 128 198 L 128 204 M 128 210 L 128 213" fill="none" stroke="var(--steel)" stroke-width="1.6" />
+            <path d="M 192 177 L 192 180 M 192 186 L 192 192 M 192 198 L 192 204 M 192 210 L 192 213" fill="none" stroke="var(--steel)" stroke-width="1.6" />
+            <line x1="132" y1="213" x2="188" y2="213" stroke="var(--steel-dark)" stroke-width="0.7" stroke-dasharray="2 3" opacity="0.5" />
+            <rect x="151.5" y="179" width="17" height="32" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <rect x="134.3" y="187" width="51.4" height="16" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" />
+            <g stroke="var(--accent)" stroke-width="1.0" opacity="0.7">
+              <path class="motion-streak" d="M 138 191 L 182 191" />
+              <path class="motion-streak" d="M 138 199 L 182 199" />
+            </g>
+          </g>
+
+          <!-- FAST droplets along all 6 jets -->
+          <g class="droplets-fast">
+            <g><circle r="4" fill="var(--orange)" opacity="0.95" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="0.7s" repeatCount="indefinite"><mpath xlink:href="#jetRT" /></animateMotion></g>
+            <g><circle r="4.5" fill="var(--orange)" opacity="0.95" /><circle r="1.5" fill="var(--sky)" />
+              <animateMotion dur="0.7s" begin="-0.35s" repeatCount="indefinite"><mpath xlink:href="#jetRM" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.95" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="0.7s" begin="-0.18s" repeatCount="indefinite"><mpath xlink:href="#jetRB" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.95" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="0.7s" begin="-0.53s" repeatCount="indefinite"><mpath xlink:href="#jetLT" /></animateMotion></g>
+            <g><circle r="4.5" fill="var(--orange)" opacity="0.95" /><circle r="1.5" fill="var(--sky)" />
+              <animateMotion dur="0.7s" repeatCount="indefinite"><mpath xlink:href="#jetLM" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.95" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="0.7s" begin="-0.35s" repeatCount="indefinite"><mpath xlink:href="#jetLB" /></animateMotion></g>
+          </g>
+          <!-- MEDIUM rotor-inlet droplets -->
+          <g class="droplets-medium">
+            <g><circle r="4" fill="var(--orange)" opacity="0.85" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="2.2s" repeatCount="indefinite"><mpath xlink:href="#inletR" /></animateMotion></g>
+            <g><circle r="4" fill="var(--orange)" opacity="0.85" /><circle r="1.4" fill="var(--sky)" />
+              <animateMotion dur="2.2s" begin="-1.1s" repeatCount="indefinite"><mpath xlink:href="#inletL" /></animateMotion></g>
+          </g>
+          <!-- SLOW bulk-return droplets -->
+          <g class="droplets-slow">
+            <g><circle r="6" fill="var(--orange)" opacity="0.9" /><circle r="2" fill="var(--sky)" />
+              <animateMotion dur="5s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#returnR" /></animateMotion></g>
+            <g><circle r="6" fill="var(--orange)" opacity="0.9" /><circle r="2" fill="var(--sky)" />
+              <animateMotion dur="5s" begin="-2.5s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#returnL" /></animateMotion></g>
+          </g>
+
+          <!-- Collision shower: filled by JS for the side-transparent
+               view. Density mapping: slot-exit zone gets the highest
+               break-event density (~6 ★★ per cycle, dominant per Padron
+               2005 / Hall 2011), rotor-blade impacts secondary (~3 ★),
+               near-wall hits rare (~2 ✦), bulk coalescence slow but
+               scattered (~5 ⊕). -->
+          <g id="collisions-side-3" class="collision-events"></g>
+
+          <g transform="translate(192 28)">
+            <rect x="0" y="0" width="116" height="14" fill="var(--surface)" stroke="var(--border)" stroke-width="0.5" rx="3" />
+            <text x="6" y="10" font-family="Geist Mono, monospace" font-size="8" fill="var(--text-muted)" letter-spacing="0.04em">★ break · ✦ wall · ⊕ coal</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ==================== VIEW 4: bottom, transparent ==================== -->
+    <div class="view transparent" data-view="4">
+      <div class="stage">
+        <svg viewBox="0 0 320 360" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+          <circle cx="160" cy="180" r="100" fill="var(--glass)" stroke="none" />
+          <circle cx="160" cy="180" r="100" fill="none" stroke="var(--steel-dark)" stroke-width="1.6" />
+          <circle cx="160" cy="180" r="100" fill="none" stroke="var(--zone-near-wall)" stroke-width="10" />
+          <circle cx="160" cy="180" r="42" fill="none" stroke="var(--zone-slot-exit)" stroke-width="14" />
+          <circle cx="160" cy="180" r="32" fill="var(--zone-impeller)" stroke="none" />
+          <circle cx="160" cy="180" r="32" fill="none" stroke="var(--steel-dark)" stroke-width="1.6" />
+
+          <!-- Tangential swirl mid-radius (slow tier, between rotor + stator) -->
+          <g class="flow-slow" fill="none" stroke="var(--accent-dim)" stroke-width="1.4">
+            <use xlink:href="#swirlMid" marker-end="url(#arrowAccentDim)" />
+          </g>
+
+          <!-- 12 spiral-then-radial particle paths (built by JS) -->
+          <g id="exit-paths-fast" class="flow-fast jet-pulse" fill="none" stroke="var(--red)" stroke-width="1.6"></g>
+
+          <!-- Rotating transparent agitator -->
+          <g class="agitator rotor-spin" style="transform-origin: 160px 180px">
+            <circle cx="160" cy="180" r="8.5" fill="var(--steel-dark)" stroke="none" />
+            <rect x="155.5" y="154.3" width="9" height="17.4" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" rx="1" />
+            <rect x="155.5" y="188.3" width="9" height="17.4" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" rx="1" />
+            <rect x="171.6" y="175.5" width="14.1" height="9" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" rx="1" />
+            <rect x="134.3" y="175.5" width="14.1" height="9" fill="var(--steel)" stroke="var(--steel-dark)" stroke-width="0.5" rx="1" />
+            <circle cx="160" cy="180" r="3" fill="var(--bg)" stroke="var(--steel-dark)" stroke-width="0.5" />
+          </g>
+
+          <!-- Particles flung outward through perforations (built by JS,
+               12 trajectories at evenly-spaced angles, each one a
+               quarter-circle spiral inside the rotor → radial line out
+               through perforation → into bulk) -->
+          <g id="exit-droplets" class="droplets-fast"></g>
+
+          <!-- Slot-exit break-up glyphs (8 positions around the stator,
+               built by JS), plus scattered ⊕ coalescence in outer bulk
+               (also JS-built for shower density). -->
+          <g id="slot-collisions" class="collision-events"></g>
+          <g id="bulk-coalesce-4" class="collision-events"></g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--red)"></span>jet (fast)</span>
+      <span><span class="swatch" style="background: var(--accent)"></span>inlet (med)</span>
+      <span><span class="swatch" style="background: var(--accent-dim)"></span>return (slow)</span>
+      <span><span class="swatch" style="background: var(--orange)"></span>oil shell</span>
+      <span><span class="swatch" style="background: var(--sky)"></span>aq core</span>
+      <span><span class="glyph" style="color: var(--break)">★</span>break</span>
+      <span><span class="glyph" style="color: var(--sky)">⊕</span>coal</span>
+    </div>
+  </div>
+
+<script>
+  (function() {
+    // RPM → base period. Drives rotor spin (CSS), motion-blur streaks
+    // (CSS), AND every <animateMotion>/<animate> dur via applyTimings.
+    var rpm = parseFloat("__RPM__") || 6000;
+    var period = 1.5 / Math.max(0.3, Math.log10(Math.max(100, rpm) / 100));
+    period = Math.min(3.0, Math.max(0.25, period));
+    document.documentElement.style.setProperty("--spin-period", period.toFixed(2) + "s");
+    var streak = Math.max(0.15, period * 0.4);
+    document.documentElement.style.setProperty("--streak-period", streak.toFixed(2) + "s");
+
+    var SVG_NS = "http://www.w3.org/2000/svg";
+    var XLINK_NS = "http://www.w3.org/1999/xlink";
+
+    // Helper: place a collision glyph with opacity-pulse animation
+    function placeEvent(parent, glyphHref, x, y, dur, begin, eventClass) {
+      var u = document.createElementNS(SVG_NS, "use");
+      u.setAttributeNS(XLINK_NS, "xlink:href", glyphHref);
+      u.setAttribute("transform", "translate(" + x.toFixed(1) + " " + y.toFixed(1) + ")");
+      u.setAttribute("class", eventClass);
+      var a = document.createElementNS(SVG_NS, "animate");
+      a.setAttribute("attributeName", "opacity");
+      a.setAttribute("values", "0;1;1;0");
+      a.setAttribute("keyTimes", "0;0.15;0.4;0.6");
+      a.setAttribute("dur", dur.toFixed(2) + "s");
+      if (begin !== 0) a.setAttribute("begin", begin.toFixed(2) + "s");
+      a.setAttribute("repeatCount", "indefinite");
+      u.appendChild(a);
+      parent.appendChild(u);
+      return u;
+    }
+    var rngState = 7654321;
+    function rng() {
+      rngState = (rngState * 1664525 + 1013904223) >>> 0;
+      return rngState / 4294967296;
+    }
+
+    // Bottom view: 12 perforations on the stator wall, plus 12
+    // spiral-then-radial particle trajectories showing centrifugal
+    // ejection through the perforations.
+    var perfs = document.getElementById("perfs-bottom");
+    var exitPaths = document.getElementById("exit-paths-fast");
+    var exitDroplets = document.getElementById("exit-droplets");
+    var slotCollisions = document.getElementById("slot-collisions");
+
+    var STATOR_R = 32;       // px from centre to outer stator wall
+    var ROTOR_R = 18;        // px (between root Ø8.5 and tip Ø25.7)
+    var BULK_R = 80;         // px to bulk recirculation point
+
+    // Perforations on the stator wall (View 2 + View 4)
+    if (perfs) {
+      for (var col = 0; col < 12; col++) {
+        var theta = (col * 30) * Math.PI / 180.0;
+        var c = document.createElementNS(SVG_NS, "circle");
+        c.setAttribute("cx", 160 + STATOR_R * Math.cos(theta));
+        c.setAttribute("cy", 180 + STATOR_R * Math.sin(theta));
+        c.setAttribute("r", 1.6);
+        c.setAttribute("fill", "var(--bg)");
+        c.setAttribute("stroke", "var(--steel-dark)");
+        c.setAttribute("stroke-width", 0.4);
+        perfs.appendChild(c);
+      }
+    }
+
+    // 12 spiral-then-radial particle trajectories.
+    //
+    // For each angle θ:
+    //   Start at angle (θ - 90°) inside the rotor, r = ROTOR_R
+    //   Quarter-circle spiral CW to angle θ at r = ROTOR_R (still inside)
+    //   Radial line outward to (160 + BULK_R cos θ, 180 + BULK_R sin θ)
+    //
+    // This visualises: tangential rotation inside the rotor → centrifugal
+    // ejection through a perforation → flight into the bulk.
+    var paths = [];
+    for (var k = 0; k < 12; k++) {
+      var theta = (k * 30) * Math.PI / 180.0;
+      var theta0 = theta - Math.PI / 2;          // start angle (90° behind)
+      var sx = 160 + ROTOR_R * Math.cos(theta0);
+      var sy = 180 + ROTOR_R * Math.sin(theta0);
+      var mx = 160 + ROTOR_R * Math.cos(theta);  // arc midpoint at slot
+      var my = 180 + ROTOR_R * Math.sin(theta);
+      var bx = 160 + BULK_R * Math.cos(theta);   // bulk endpoint
+      var by = 180 + BULK_R * Math.sin(theta);
+      // SVG path: M sx sy A r r 0 0 1 mx my L bx by
+      var d = "M " + sx.toFixed(2) + " " + sy.toFixed(2)
+            + " A " + ROTOR_R + " " + ROTOR_R + " 0 0 1 " + mx.toFixed(2) + " " + my.toFixed(2)
+            + " L " + bx.toFixed(2) + " " + by.toFixed(2);
+      var pathId = "exitPath" + k;
+      paths.push({id: pathId, d: d, theta: theta});
+      // Visible arrow path (the "guide line" particles follow)
+      var p = document.createElementNS(SVG_NS, "path");
+      p.setAttribute("id", pathId);
+      p.setAttribute("d", d);
+      p.setAttribute("marker-end", "url(#arrowRed)");
+      exitPaths.appendChild(p);
+    }
+    // Animated droplets, one per path, with phase offsets so the fan
+    // looks continuously busy.
+    if (exitDroplets) {
+      paths.forEach(function(p, i) {
+        var g = document.createElementNS(SVG_NS, "g");
+        var c1 = document.createElementNS(SVG_NS, "circle");
+        c1.setAttribute("r", "4");
+        c1.setAttribute("fill", "var(--orange)");
+        c1.setAttribute("opacity", "0.95");
+        var c2 = document.createElementNS(SVG_NS, "circle");
+        c2.setAttribute("r", "1.4");
+        c2.setAttribute("fill", "var(--sky)");
+        var anim = document.createElementNS(SVG_NS, "animateMotion");
+        anim.setAttribute("dur", "1.3s");
+        anim.setAttribute("repeatCount", "indefinite");
+        anim.setAttribute("rotate", "auto");
+        anim.setAttribute("begin", (-(i * 0.11)).toFixed(2) + "s");
+        var mp = document.createElementNS(SVG_NS, "mpath");
+        mp.setAttributeNS(XLINK_NS, "xlink:href", "#" + p.id);
+        anim.appendChild(mp);
+        g.appendChild(c1);
+        g.appendChild(c2);
+        g.appendChild(anim);
+        exitDroplets.appendChild(g);
+      });
+    }
+    // 8 slot-exit break-up glyphs in the slot-exit shell (bottom view)
+    if (slotCollisions) {
+      for (var k2 = 0; k2 < 8; k2++) {
+        var thetaK = (k2 * 45) * Math.PI / 180.0;
+        var rg = STATOR_R + 9;
+        var xg = 160 + rg * Math.cos(thetaK);
+        var yg = 180 + rg * Math.sin(thetaK);
+        placeEvent(slotCollisions, "#glyphBreakIntense", xg, yg,
+                   0.8, -(0.1 * k2), "event-break");
+      }
+    }
+    // 6 ⊕ coalescence events in outer bulk (bottom view)
+    var bulkCoal = document.getElementById("bulk-coalesce-4");
+    if (bulkCoal) {
+      var coalAngles4 = [25, 95, 155, 215, 275, 335];
+      for (var bc = 0; bc < coalAngles4.length; bc++) {
+        var thBC = coalAngles4[bc] * Math.PI / 180.0;
+        var rBC = 78;
+        placeEvent(bulkCoal, "#glyphCoalesce",
+                   160 + rBC * Math.cos(thBC), 180 + rBC * Math.sin(thBC),
+                   4.0, -(rng() * 4.0), "event-coalesce");
+      }
+    }
+
+    // Side-view (view 3) collision shower: dense break events at the
+    // 6 slot exits + 2 rotor blades, sparse wall hits + 5 coalescence
+    // events scattered in bulk above and below the stator.
+    var sideHost = document.getElementById("collisions-side-3");
+    if (sideHost) {
+      // ★★ slot-exit (intense) — left and right at 3 vertical positions each
+      var slotPositions = [
+        [200, 183], [205, 195], [200, 207],   // right slot exits
+        [120, 183], [115, 195], [120, 207],   // left slot exits
+      ];
+      for (var sp = 0; sp < slotPositions.length; sp++) {
+        placeEvent(sideHost, "#glyphBreakIntense",
+                   slotPositions[sp][0], slotPositions[sp][1],
+                   0.8, -(sp * 0.13), "event-break");
+      }
+      // ★ rotor-blade impacts — 2 inside stator
+      placeEvent(sideHost, "#glyphBreak", 148, 195, 1.5, 0, "event-break");
+      placeEvent(sideHost, "#glyphBreak", 172, 195, 1.5, -0.75, "event-break");
+      // ✦ wall hits — 2, far from stator (rare event)
+      placeEvent(sideHost, "#glyphWall", 67, 250, 5.0, 0, "event-wall");
+      placeEvent(sideHost, "#glyphWall", 253, 145, 5.0, -2.5, "event-wall");
+      // ⊕ coalescence — scattered in bulk
+      var coalSpots3 = [[100, 150], [220, 150], [80, 270], [240, 270], [160, 145]];
+      for (var c3 = 0; c3 < coalSpots3.length; c3++) {
+        placeEvent(sideHost, "#glyphCoalesce", coalSpots3[c3][0], coalSpots3[c3][1],
+                   4.0, -(rng() * 4.0), "event-coalesce");
+      }
+    }
+
+    // applyTimings: all <animateMotion> + collision <animate> dur and
+    // begin offsets scaled by the RPM-derived basePeriod.
+    function scaleDur(el, newDur) {
+      var oldDur = parseFloat(el.getAttribute("dur")) || newDur;
+      el.setAttribute("dur", newDur.toFixed(2) + "s");
+      var oldBegin = el.getAttribute("begin");
+      if (oldBegin) {
+        var beginSec = parseFloat(oldBegin);
+        if (!isNaN(beginSec)) {
+          var ratio = newDur / oldDur;
+          el.setAttribute("begin", (beginSec * ratio).toFixed(2) + "s");
+        }
+      }
+    }
+    function applyTimings(p) {
+      // Stirrer B is fully turbulent at lower base period; jets very fast.
+      var rules = [
+        [".droplets-fast animateMotion",   p * 2.5],   // slot-exit jets
+        [".droplets-medium animateMotion", p * 7.0],   // rotor inlet axial
+        [".droplets-slow animateMotion",   p * 16.0],  // bulk return
+        ["#exit-droplets animateMotion",   p * 4.0],   // bottom-view spiral exit
+        [".event-break animate",           p * 2.5],   // slot-exit dominant
+        [".event-wall animate",            p * 16.0],  // wall rare
+        [".event-coalesce animate",        p * 12.0],  // coalescence slow
+      ];
+      for (var r = 0; r < rules.length; r++) {
+        var sel = rules[r][0], newDur = rules[r][1];
+        document.querySelectorAll(sel).forEach(function(el) {
+          scaleDur(el, newDur);
+        });
+      }
+    }
+    applyTimings(period);
+
+    var labels = {
+      "1": "SIDE · OPAQUE",
+      "2": "BOTTOM · OPAQUE",
+      "3": "SIDE · TRANSPARENT",
+      "4": "BOTTOM · TRANSPARENT"
+    };
+    var current = 1;
+    var btn = document.getElementById("toggleBtn");
+    var lbl = document.getElementById("viewLabel");
+    btn.addEventListener("click", function() {
+      document.querySelector('.view[data-view="' + current + '"]').classList.remove("active");
+      current = (current % 4) + 1;
+      document.querySelector('.view[data-view="' + current + '"]').classList.add("active");
+      btn.textContent = labels[String(current)];
+      lbl.textContent = "VIEW " + current + " / 4";
+    });
+  })();
+</script>
+</body>
+</html>
