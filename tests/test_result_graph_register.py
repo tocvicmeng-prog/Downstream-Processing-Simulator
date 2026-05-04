@@ -7,6 +7,7 @@ Closes architect-coherence-audit D3 ResultGraph finding for the M2 stage.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 
 
 from dpsim.core.result_graph import ResultGraph, ResultNode
@@ -98,6 +99,26 @@ class TestRegisterResult:
         )
         # weakest_evidence_tier returns the WEAKEST = QUALITATIVE_TREND
         assert graph.weakest_evidence_tier() == ModelEvidenceTier.QUALITATIVE_TREND
+
+    def test_weakest_tier_accepts_reloaded_enum_values(self):
+        """Notebook/test reloads can leave manifests carrying stale enum classes."""
+        stale_tier = Enum(
+            "ModelEvidenceTier",
+            [(tier.name, tier.value) for tier in ModelEvidenceTier],
+        )
+        graph = ResultGraph()
+        graph.add_node(
+            ResultNode(
+                node_id="stale",
+                stage="M2",
+                label="stale enum manifest",
+                manifest=ModelManifest(
+                    model_name="stale",
+                    evidence_tier=stale_tier.SEMI_QUANTITATIVE,
+                ),
+            )
+        )
+        assert graph.weakest_evidence_tier() == ModelEvidenceTier.SEMI_QUANTITATIVE
 
 
 # ─── M2 sub-step graph integration ───────────────────────────────────────────

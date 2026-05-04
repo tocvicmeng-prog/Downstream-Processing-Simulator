@@ -129,7 +129,7 @@ flowchart LR
 ### CFD-PBE coupling for M1 scale-up (v0.6.0 → v0.6.2)
 
 - **Schema-v1.0** `zones.json` contract (`cad/cfd/zones_schema.md`) with two ε per zone: `epsilon_avg` for coalescence, `epsilon_breakage_weighted` for breakage.
-- **Pydantic v2 zonal-PBE loader** with 11 hard validation paths; **bit-exact reduction to the bare PBE solver** in the 1-zone degenerate case.
+- **Pydantic v2 zonal-PBE loader** with 11 hard validation paths; **agreement with the bare PBE solver at integrator-tolerance level** in the 1-zone degenerate case.
 - **`dpsim cfd-zones` CLI subcommand** with material overrides, kernel preset, and optional `--legacy-eps` cross-check against the legacy Po · N³ · D⁵ / V_tank empirical estimate (30 % tolerance gate).
 - **OpenFOAM case scaffold** (`cad/cfd/cases/`) for both stirrer geometries with zone definitions, refinement levels, and the `extract_epsilon.py` post-processor that emits the schema-v1.0 zones.json.
 
@@ -315,7 +315,7 @@ Downstream-Processing-Simulator/
 ├── src/dpsim/                          # Production source
 │   ├── core/                           # Quantities, parameters, ProcessRecipe, evidence roll-up
 │   ├── lifecycle/                      # M1→M2→M3 orchestrator
-│   ├── pipeline/                       # M1 fabrication pipeline (legacy L1-L4 kernels; called by lifecycle)
+│   ├── pipeline/                       # M1 fabrication orchestration support, batch variability, checkpointing
 │   ├── level1_emulsification/          # Population balance + hydrodynamics
 │   ├── level2_gelation/                # Polymer-family L2 solvers + composite dispatch + ion registry
 │   ├── level3_crosslinking/            # Primary network kinetics
@@ -351,7 +351,7 @@ Downstream-Processing-Simulator/
 └── pyproject.toml                      # Package metadata, dependencies, extras
 ```
 
-> **Note on the dual M1 codepath.** `pipeline/` hosts the legacy L1-L4 kernels that are still load-bearing for M1 fabrication; `level1_emulsification/` is the population-balance / hydrodynamics layer that the lifecycle orchestrator and the CFD-PBE coupling both consume. Both are real and current; do not delete one looking for the other.
+> **Note on the M1 codepath.** `pipeline/` hosts the fabrication orchestrator and support utilities; the L1-L4 numerical kernels live in `level1_emulsification/`, `level2_gelation/`, `level3_crosslinking/`, and `level4_mechanical/`. The lifecycle orchestrator still uses the M1 pipeline layer to assemble those kernels into the fabrication contract.
 
 ---
 

@@ -1147,6 +1147,13 @@ _REQUIRES_ACTIVATED = _COUPLING_TYPES | {
     ModificationStepType.SPACER_ARM,
 }
 
+_ACTIVATED_SITE_PRODUCERS = {
+    ModificationStepType.ACTIVATION,
+    ModificationStepType.ACS_CONVERSION,
+    ModificationStepType.ARM_ACTIVATION,
+    ModificationStepType.SPACER_ARM,
+}
+
 # Rule 4: Allowed reaction_type values per step type (Codex P1-1 fix)
 _STEP_ALLOWED_REACTION_TYPES: dict[ModificationStepType, set[str]] = {
     ModificationStepType.SECONDARY_CROSSLINKING: {"crosslinking"},
@@ -1219,8 +1226,7 @@ def _validate_workflow_ordering(
                 prior_produces = any(
                     s.product_acs == step.target_acs
                     for s in steps[:i]
-                    if s.step_type in (ModificationStepType.ACTIVATION,
-                                       ModificationStepType.SPACER_ARM)
+                    if s.step_type in _ACTIVATED_SITE_PRODUCERS
                 )
                 if not prior_produces:
                     raise ValueError(
@@ -1233,8 +1239,7 @@ def _validate_workflow_ordering(
                 prior_activates = any(
                     s.product_acs == step.target_acs
                     for s in steps[:i]
-                    if s.step_type in (ModificationStepType.ACTIVATION,
-                                       ModificationStepType.SPACER_ARM)
+                    if s.step_type in _ACTIVATED_SITE_PRODUCERS
                 )
                 if not prior_activates:
                     logger.warning(
@@ -1267,4 +1272,3 @@ def _validate_workflow_ordering(
         # Track quenching
         if step.step_type == ModificationStepType.QUENCHING:
             quenched_targets.add(step.target_acs)
-

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from enum import Enum
+
 import numpy as np
 
+from dpsim.core.evidence import weakest_tier
 from dpsim.datatypes import (
     ModelEvidenceTier,
     ModelManifest,
@@ -116,7 +119,6 @@ class TestRunReport:
         # ModelEvidenceTier class object is new, but L2/L4 solver modules
         # (not in the reload list) still hold manifests built against the old
         # class. compute_min_tier must match by value, not by enum identity.
-        from enum import Enum
         StaleTier = Enum(
             "ModelEvidenceTier",
             [(t.name, t.value) for t in ModelEvidenceTier],
@@ -128,6 +130,17 @@ class TestRunReport:
         )
         rr = RunReport(model_graph=[m])
         assert rr.compute_min_tier() == ModelEvidenceTier.SEMI_QUANTITATIVE
+
+    def test_core_weakest_tier_survives_reloaded_enum_class(self):
+        stale_tier = Enum(
+            "ModelEvidenceTier",
+            [(t.name, t.value) for t in ModelEvidenceTier],
+        )
+        m = ModelManifest(
+            model_name="core.stale",
+            evidence_tier=stale_tier.QUALITATIVE_TREND,
+        )
+        assert weakest_tier([m]) == ModelEvidenceTier.QUALITATIVE_TREND
 
 
 # ── Backward Compatibility ───────────────────────────────────────────────

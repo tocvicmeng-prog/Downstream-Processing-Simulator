@@ -288,9 +288,9 @@ class CahnHilliardSolver:
         T_hist_arr = np.array([T for _, T in T_history]) if T_history else np.array([0.0])
 
         model_manifest = ModelManifest(
-            model_name="L2.Pore.CahnHilliard2D",
+            model_name="L2.Pore.CahnHilliard1D.Radial",
             evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
-            assumptions=["Cahn-Hilliard free energy", "mobility arrest", "2D approximation"],
+            assumptions=["Cahn-Hilliard free energy", "mobility arrest", "1D radial approximation"],
         )
         return GelationResult(
             r_grid=r,

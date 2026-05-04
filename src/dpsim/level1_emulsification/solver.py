@@ -406,7 +406,7 @@ class PBESolver:
                 "We": (1.0, 1.0e5),
                 "viscosity_ratio": (0.01, 200.0),
             },
-            assumptions=["Kolmogorov turbulence", "daughter-size beta distribution", "fixed-pivot discretization"],
+            assumptions=["Kolmogorov turbulence", "binary equal-volume daughter distribution", "fixed-pivot discretization"],
             diagnostics={
                 "converged": converged,
                 "n_extensions": n_extensions,
@@ -740,7 +740,7 @@ class PBESolver:
                 "We": (1.0, 1.0e5),
                 "viscosity_ratio": (0.01, 200.0),
             },
-            assumptions=["Kolmogorov turbulence", "daughter-size beta distribution", "fixed-pivot discretization"],
+            assumptions=["Kolmogorov turbulence", "binary equal-volume daughter distribution", "fixed-pivot discretization"],
             diagnostics={
                 "converged": converged,
                 "n_extensions": n_extensions,

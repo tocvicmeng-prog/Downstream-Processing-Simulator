@@ -134,6 +134,19 @@ class TestOrchestratorAcceptsACSConverters:
         step = _step(ModificationStepType.ACS_CONVERSION, converter_key)
         _validate_workflow_ordering([step], _hydroxyl_profile())
 
+    def test_acs_conversion_product_can_feed_ligand_coupling_preflight(self) -> None:
+        """A converter step creates activated ACS for the following coupler.
+
+        Public sequence validation accepts CNBr ACTIVATE -> COUPLE_LIGAND;
+        the backend preflight must mirror that lifecycle path when recipes
+        are encoded with the v0.5+ ACS_CONVERSION step type.
+        """
+        steps = [
+            _step(ModificationStepType.ACS_CONVERSION, "cnbr_activation"),
+            _step(ModificationStepType.LIGAND_COUPLING, "generic_amine_to_cyanate_ester"),
+        ]
+        _validate_workflow_ordering(steps, _hydroxyl_profile())
+
     def test_pyridyl_disulfide_passes_preflight_as_arm_activation(self) -> None:
         # Build an AMINE_DISTAL profile so the arm-activation step has a
         # substrate to consume.
@@ -285,6 +298,41 @@ class TestG6PhaseRankingForArmActivation:
             f"Legacy arm-activate-as-ACTIVATE should validate via reagent-"
             f"key override; got {codes}"
         )
+
+    def test_out_of_order_message_mentions_arm_activate(self) -> None:
+        steps = [
+            ProcessStep(
+                name="cnbr",
+                stage=LifecycleStage.M2_FUNCTIONALIZATION,
+                kind=ProcessStepKind.ACTIVATE,
+                parameters={"reagent_key": "cnbr_activation"},
+            ),
+            ProcessStep(
+                name="couple_protein",
+                stage=LifecycleStage.M2_FUNCTIONALIZATION,
+                kind=ProcessStepKind.COUPLE_LIGAND,
+                parameters={"reagent_key": "protein_a_thiol_to_pyridyl_disulfide"},
+            ),
+            ProcessStep(
+                name="pyridyl_pds",
+                stage=LifecycleStage.M2_FUNCTIONALIZATION,
+                kind=ProcessStepKind.ARM_ACTIVATE,
+                parameters={"reagent_key": "pyridyl_disulfide_activation"},
+            ),
+        ]
+        report = validate_recipe_first_principles(
+            ProcessRecipe(
+                target=TargetProductProfile(),
+                material_batch=MaterialBatch(polymer_family="agarose_chitosan"),
+                steps=steps,
+            )
+        )
+        sequence_issues = [
+            issue for issue in report.issues
+            if issue.code == "FP_G6_SEQUENCE_OUT_OF_ORDER"
+        ]
+        assert sequence_issues
+        assert "ARM_ACTIVATE" in sequence_issues[0].message
 
 
 # ─── (P2-2) G6.5 honours time units on intervening steps ───────────────

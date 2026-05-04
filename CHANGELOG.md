@@ -42,8 +42,9 @@ scale-up (Appendix K §K.4.6 — full validation envelope).
   Alopaeus and Coulaloglou-Tavlarides kernels from
   ``level1_emulsification`` (single source of truth for kernel arithmetic);
   asymmetric Q/V_from outflow + Q/V_to inflow exchange; LSODA via
-  ``solve_ivp``. **Bit-exact reduction to bare ``PBESolver`` in the
-  1-zone degenerate case** (0.000000 % rel error).
+  ``solve_ivp``. **Agreement with bare ``PBESolver`` at integrator-
+  tolerance level in the 1-zone degenerate case** (aggregated d32
+  relative error <= 1e-9 in the regression test).
 - **Consistency check** ``consistency_check_with_volume_avg``:
   30 %-tolerance gate against the legacy Po·N³·D⁵/V_tank empirical
   estimate (Scientific Advisor 2026-05-01 guidance).
@@ -53,7 +54,7 @@ scale-up (Appendix K §K.4.6 — full validation envelope).
 - **31 pytest tests** (``tests/test_cfd_zonal_pbe.py``): loader happy
   paths, 11 parametrised rejection paths, advisory warnings via
   caplog, consistency-check edge cases, integrator input validation,
-  single-zone bit-exact equivalence, volume balance < 1e-3 on
+  single-zone integrator-tolerance equivalence, volume balance < 1e-3 on
   Stirrer A and Stirrer B, breakage-zone bias, plus 2 subprocess-based
   CLI smoke tests.
 
@@ -144,7 +145,7 @@ Metzner-Otto 1957, Utomo 2009.
 ### Test totals
 
 48/48 pytest passing in ~28 s (33 zonal-PBE + 15 extract-epsilon /
-openfoam-io). The bit-exact 1-zone equivalence test is the strongest
+openfoam-io). The 1-zone integrator-tolerance equivalence test is the strongest
 correctness gate: any drift would mean the zonal coupling has
 introduced numerical noise into the degenerate case.
 

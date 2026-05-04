@@ -362,11 +362,11 @@ def _g6_acs_converter_sequence(
         timeline.append((idx, step, step.kind, rkey))
 
     # G6.1 — ordering check.
-    # v0.5.2 (codex P2-1 fix): ARM_ACTIVATE has phase rank 2.5 (after
-    # INSERT_SPACER, before COUPLE_LIGAND). Recipes that encode pyridyl-
-    # disulfide as the legacy ACTIVATE kind (pre-v0.5.2) get the same
-    # treatment via the reagent-key override below, so existing recipes
-    # don't suddenly start failing G6.1 once ARM_ACTIVATE lands.
+    # v0.5.2 (codex P2-1 fix): ARM_ACTIVATE has phase rank 3 (after
+    # rank-2 INSERT_SPACER, before rank-4 COUPLE_LIGAND). Recipes that
+    # encode pyridyl-disulfide as the legacy ACTIVATE kind (pre-v0.5.2)
+    # get the same treatment via the reagent-key override below, so
+    # existing recipes don't start failing G6.1 once ARM_ACTIVATE lands.
     _phase_rank: dict[ProcessStepKind, int] = {
         ProcessStepKind.ACTIVATE: 1,
         ProcessStepKind.INSERT_SPACER: 2,
@@ -393,7 +393,7 @@ def _g6_acs_converter_sequence(
                 (
                     f"Step {step.name!r} (kind={kind.value!r}) appears AFTER a "
                     f"later-phase step. Required order: ACTIVATE → INSERT_SPACER "
-                    f"→ COUPLE_LIGAND → METAL_CHARGE."
+                    f"→ ARM_ACTIVATE → COUPLE_LIGAND → METAL_CHARGE."
                 ),
                 module="M2",
                 recommendation=(

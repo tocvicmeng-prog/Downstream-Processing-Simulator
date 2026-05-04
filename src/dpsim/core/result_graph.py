@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from dpsim.core.evidence import weakest_tier
 from dpsim.datatypes import ModelEvidenceTier, ModelManifest
 
 
@@ -63,12 +64,7 @@ class ResultGraph:
 
     def weakest_evidence_tier(self) -> ModelEvidenceTier:
         """Return the weakest evidence tier across node manifests."""
-        manifests = self.model_manifests()
-        if not manifests:
-            return ModelEvidenceTier.UNSUPPORTED
-        order = list(ModelEvidenceTier)
-        worst = max(order.index(m.evidence_tier) for m in manifests)
-        return order[worst]
+        return weakest_tier(self.model_manifests())
 
     def register_result(
         self,
