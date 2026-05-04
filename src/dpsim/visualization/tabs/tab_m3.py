@@ -806,10 +806,37 @@ def render_tab_m3(tab_container) -> None:
                             st.error(f"Blocker: {_blk}")
 
                     _dbc_c1, _dbc_c2, _dbc_c3, _dbc_c4 = st.columns(4)
-                    _dbc_c1.metric("DBC\u2085%", f"{_bt.dbc_5pct:.1f} mol/m\u00b3" if not np.isnan(_bt.dbc_5pct) else "N/A")
-                    _dbc_c2.metric("DBC\u2081\u2080%", f"{_bt.dbc_10pct:.1f} mol/m\u00b3" if not np.isnan(_bt.dbc_10pct) else "N/A")
-                    _dbc_c3.metric("DBC\u2085\u2080%", f"{_bt.dbc_50pct:.1f} mol/m\u00b3" if not np.isnan(_bt.dbc_50pct) else "N/A")
-                    _dbc_c4.metric("Pressure drop", f"{_bt.pressure_drop / 1000:.1f} kPa")
+                    # B-1b rollout: DBC and pressure-drop through the gate.
+                    # DBC requires VALIDATED_QUANTITATIVE for NUMBER mode;
+                    # PRESSURE_DROP requires only SEMI_QUANTITATIVE.
+                    from dpsim.core.decision_grade import OutputType as _OT_dbc
+                    from dpsim.visualization.decision_grade_render import render_metric as _rm_dbc
+                    _bt_tier = (
+                        getattr(getattr(_bt, "model_manifest", None),
+                                "evidence_tier", None)
+                        or ModelEvidenceTier.SEMI_QUANTITATIVE
+                    )
+                    if not np.isnan(_bt.dbc_5pct):
+                        _rm_dbc("DBC\u2085%", value=_bt.dbc_5pct,
+                                output_type=_OT_dbc.DBC, tier=_bt_tier,
+                                unit="mol/m\u00b3", container=_dbc_c1)
+                    else:
+                        _dbc_c1.metric("DBC\u2085%", "N/A")
+                    if not np.isnan(_bt.dbc_10pct):
+                        _rm_dbc("DBC\u2081\u2080%", value=_bt.dbc_10pct,
+                                output_type=_OT_dbc.DBC, tier=_bt_tier,
+                                unit="mol/m\u00b3", container=_dbc_c2)
+                    else:
+                        _dbc_c2.metric("DBC\u2081\u2080%", "N/A")
+                    if not np.isnan(_bt.dbc_50pct):
+                        _rm_dbc("DBC\u2085\u2080%", value=_bt.dbc_50pct,
+                                output_type=_OT_dbc.DBC, tier=_bt_tier,
+                                unit="mol/m\u00b3", container=_dbc_c3)
+                    else:
+                        _dbc_c3.metric("DBC\u2085\u2080%", "N/A")
+                    _rm_dbc("Pressure drop", value=_bt.pressure_drop,
+                            output_type=_OT_dbc.PRESSURE_DROP, tier=_bt_tier,
+                            unit="kPa", scale=1.0 / 1000.0, container=_dbc_c4)
 
                     st.divider()
                     _C_feed_mol_bt = st.session_state.get(
@@ -901,7 +928,19 @@ def render_tab_m3(tab_container) -> None:
                     )
                     _calibrated = is_method_calibrated(_fmc_ui)
                     _pm1, _pm2, _pm3, _pm4 = st.columns(4)
-                    _pm1.metric("Elution recovery", f"{_pa.predicted_elution_recovery_fraction:.1%}")
+                    # B-1b rollout: elution recovery through the gate.
+                    # RECOVERY policy floor is VALIDATED_QUANTITATIVE.
+                    from dpsim.core.decision_grade import OutputType as _OT_rec
+                    from dpsim.visualization.decision_grade_render import render_metric as _rm_rec
+                    _method_tier = (
+                        getattr(getattr(_method, "model_manifest", None),
+                                "evidence_tier", None)
+                        or ModelEvidenceTier.SEMI_QUANTITATIVE
+                    )
+                    _rm_rec("Elution recovery",
+                            value=_pa.predicted_elution_recovery_fraction,
+                            output_type=_OT_rec.RECOVERY, tier=_method_tier,
+                            unit="%", scale=100.0, container=_pm1)
                     if _calibrated:
                         _pm2.metric(
                             "Cycle lifetime",

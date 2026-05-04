@@ -101,6 +101,9 @@ def render_metric(
     scale: float = 1.0,
     rank_reference: Optional[float] = None,
     help: Optional[str] = None,
+    delta: Optional[str] = None,
+    delta_color: str = "normal",
+    container=None,
 ) -> None:
     """``st.metric`` wrapper that routes through the decision-grade gate.
 
@@ -108,6 +111,13 @@ def render_metric(
     :func:`format_decision_graded`. The help tooltip carries the
     mode-specific caption (so the user can hover and see "rendered as ±30%
     interval" instead of having to read the dossier).
+
+    Kwargs ``delta``, ``delta_color``, ``container`` are passthroughs:
+      * ``delta`` and ``delta_color`` go directly to ``st.metric`` (used by
+        existing M1 dashboard sites for "X% from target").
+      * ``container`` lets the caller route the metric into a column /
+        container without having to ``with col:`` — passing
+        ``container=col`` is equivalent to ``col.metric(...)``.
     """
     mode, display = format_decision_graded(
         value, output_type, tier,
@@ -115,7 +125,12 @@ def render_metric(
     )
     extra = caption_for_mode(mode)
     composed_help = "\n\n".join(p for p in (help, extra) if p)
-    st.metric(label, display, help=composed_help or None)
+    target = container if container is not None else st
+    target.metric(
+        label, display,
+        delta=delta, delta_color=delta_color,
+        help=composed_help or None,
+    )
 
 
 def gate_decision_for(

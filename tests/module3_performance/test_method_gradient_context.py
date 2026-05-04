@@ -181,3 +181,81 @@ class TestDefaultFactoryPopulatesBoth:
         steps = default_protein_a_method_steps()
         elute = next(s for s in steps if s.operation == ChromatographyOperation.ELUTE)
         assert _elution_pH(elute) == pytest.approx(3.5)
+
+
+# ─── Salt / imidazole gradient scaffolding ──────────────────────────────────
+
+
+class TestSaltGradientScaffolding:
+    """B-2e incremental: non-pH gradients populate the diagnostic envelope.
+
+    The isotherm physics does NOT yet consume non-pH values; these tests
+    only cover the time-profile scaffolding that downstream plots / render
+    can show.
+    """
+
+    def _make_loaded_elution(self, gradient_ctx):
+        """Run a minimal loaded-state elution with a custom gradient context."""
+        import numpy as np
+        from dpsim.module3_performance.hydrodynamics import ColumnGeometry
+        from dpsim.module3_performance.method import run_loaded_state_elution
+
+        col = ColumnGeometry(
+            diameter=0.010, bed_height=0.10,
+            particle_diameter=100e-6, bed_porosity=0.38,
+        )
+        elute = ChromatographyMethodStep(
+            name="elute",
+            operation=ChromatographyOperation.ELUTE,
+            duration_s=300.0,
+            flow_rate_m3_s=1e-8,
+            buffer=BufferCondition(pH=7.4),
+            gradient_context=gradient_ctx,
+        )
+        # Minimal initial bound profile.
+        q0 = np.full(20, 5.0)
+        return run_loaded_state_elution(
+            column=col, q_initial_profile=q0, elution_step=elute, n_z=20,
+        )
+
+    def test_pH_gradient_does_not_populate_diag(self):
+        """For pH gradients, pH_profile already carries the envelope."""
+        result = self._make_loaded_elution(GradientContext(
+            gradient_field="ph", start_value=7.4, end_value=3.5,
+            duration_s=300.0,
+        ))
+        assert result.gradient_diagnostics is None
+
+    def test_salt_gradient_populates_diag(self):
+        """Salt gradient → diagnostic envelope present, isotherm advisory set."""
+        result = self._make_loaded_elution(GradientContext(
+            gradient_field="salt_concentration",
+            start_value=50.0, end_value=1000.0,
+            duration_s=300.0,
+        ))
+        assert result.gradient_diagnostics is not None
+        diag = result.gradient_diagnostics
+        assert diag["field"] == "salt_concentration"
+        assert diag["start_value"] == 50.0
+        assert diag["end_value"] == 1000.0
+        assert diag["isotherm_consumes"] is False
+        assert "values" in diag
+        assert len(diag["values"]) == len(result.time)
+        # Linear ramp: first sample ≈ start, last sample ≈ end.
+        assert abs(diag["values"][0] - 50.0) < 1.0
+        assert abs(diag["values"][-1] - 1000.0) < 50.0  # last sample near end
+
+    def test_imidazole_gradient_populates_diag(self):
+        result = self._make_loaded_elution(GradientContext(
+            gradient_field="imidazole",
+            start_value=10.0, end_value=500.0,
+            duration_s=300.0,
+        ))
+        assert result.gradient_diagnostics is not None
+        assert result.gradient_diagnostics["field"] == "imidazole"
+        assert result.gradient_diagnostics["isotherm_consumes"] is False
+
+    def test_no_gradient_no_diag(self):
+        """Absent / inactive gradient context → no diagnostic."""
+        result = self._make_loaded_elution(None)
+        assert result.gradient_diagnostics is None

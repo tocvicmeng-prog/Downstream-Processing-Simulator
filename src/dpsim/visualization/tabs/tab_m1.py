@@ -388,13 +388,39 @@ def _render_non_ac_family(*, tab_container, family, is_stirred_default, model_mo
     st.success(f"Pipeline complete in {elapsed:.1f}s")
 
     # ── Family-neutral results display ────────────────────────────────
+    # B-1b rollout: route the four primary M1 metrics through the
+    # decision-grade gate so weak-evidence outputs render as INTERVAL /
+    # RANK_BAND. Tier sourced from each level's manifest; SEMI_QUANTITATIVE
+    # fallback matches the in-tree default for L1/L2/L4 today.
+    from dpsim.core.decision_grade import OutputType as _OT_m1
+    from dpsim.visualization.decision_grade_render import render_metric as _rm_m1
+
     e, g, m = result.emulsification, result.gelation, result.mechanical
     c1, c2, c3, c4 = st.columns(4)
     d_mode = getattr(e, "d_mode", 0.0)
-    c1.metric("d_mode", f"{d_mode*1e6:.1f} µm" if d_mode > 0 else f"d32 {e.d32*1e6:.2f} µm")
-    c2.metric("Pore size", f"{g.pore_size_mean*1e9:.1f} nm")
-    c3.metric("Porosity", f"{g.porosity:.2f}")
-    c4.metric("G (modulus)", f"{m.G_DN/1000:.1f} kPa")
+    _e_tier = (
+        getattr(getattr(e, "model_manifest", None), "evidence_tier", None)
+        or ModelEvidenceTier.SEMI_QUANTITATIVE
+    )
+    _g_tier = (
+        getattr(getattr(g, "model_manifest", None), "evidence_tier", None)
+        or ModelEvidenceTier.SEMI_QUANTITATIVE
+    )
+    _m_tier = (
+        getattr(getattr(m, "model_manifest", None), "evidence_tier", None)
+        or ModelEvidenceTier.SEMI_QUANTITATIVE
+    )
+    if d_mode > 0:
+        _rm_m1("d_mode", value=d_mode, output_type=_OT_m1.D32, tier=_e_tier,
+               unit="µm", scale=1e6, container=c1)
+    else:
+        _rm_m1("d32", value=e.d32, output_type=_OT_m1.D32, tier=_e_tier,
+               unit="µm", scale=1e6, container=c1)
+    _rm_m1("Pore size", value=g.pore_size_mean, output_type=_OT_m1.PORE_SIZE,
+           tier=_g_tier, unit="nm", scale=1e9, container=c2)
+    c3.metric("Porosity", f"{g.porosity:.2f}")  # not in OutputType taxonomy yet
+    _rm_m1("G (modulus)", value=m.G_DN, output_type=_OT_m1.MODULUS, tier=_m_tier,
+           unit="kPa", scale=1e-3, container=c4)
 
     e_mf = getattr(e, "model_manifest", None)
     if e_mf is not None:
@@ -1213,23 +1239,48 @@ def render_tab_m1(
             pore_dev = abs(g.pore_size_mean * 1e9 - target_pore) / target_pore * 100
             G_dev = abs(m.G_DN / 1000 - target_G) / target_G * 100
 
+            # B-1b rollout: dashboard KPIs gated through decision_grade.
+            from dpsim.core.decision_grade import OutputType as _OT_dash
+            from dpsim.visualization.decision_grade_render import render_metric as _rm_dash
+            _e_dash_tier = (
+                getattr(getattr(e, "model_manifest", None), "evidence_tier", None)
+                or ModelEvidenceTier.SEMI_QUANTITATIVE
+            )
+            _g_dash_tier = (
+                getattr(getattr(g, "model_manifest", None), "evidence_tier", None)
+                or ModelEvidenceTier.SEMI_QUANTITATIVE
+            )
+            _m_dash_tier = (
+                getattr(getattr(m, "model_manifest", None), "evidence_tier", None)
+                or ModelEvidenceTier.SEMI_QUANTITATIVE
+            )
             if is_stirred:
-                col1.metric("d_mode", f"{_d_mode*1e6:.1f} um",
-                            delta=f"{d_primary_dev:.0f}% from target", delta_color="inverse")
+                _rm_dash("d_mode", value=_d_mode, output_type=_OT_dash.D32,
+                         tier=_e_dash_tier, unit="um", scale=1e6,
+                         delta=f"{d_primary_dev:.0f}% from target",
+                         delta_color="inverse", container=col1)
             else:
-                col1.metric("d32", f"{e.d32*1e6:.2f} um",
-                            delta=f"{d_primary_dev:.0f}% from target", delta_color="inverse")
-            col2.metric("Pore Size", f"{g.pore_size_mean*1e9:.1f} nm",
-                        delta=f"{pore_dev:.0f}% from target", delta_color="inverse")
+                _rm_dash("d32", value=e.d32, output_type=_OT_dash.D32,
+                         tier=_e_dash_tier, unit="um", scale=1e6,
+                         delta=f"{d_primary_dev:.0f}% from target",
+                         delta_color="inverse", container=col1)
+            _rm_dash("Pore Size", value=g.pore_size_mean,
+                     output_type=_OT_dash.PORE_SIZE, tier=_g_dash_tier,
+                     unit="nm", scale=1e9,
+                     delta=f"{pore_dev:.0f}% from target",
+                     delta_color="inverse", container=col2)
             _hs_lo = getattr(m, 'G_DN_lower', 0.0)
             _hs_hi = getattr(m, 'G_DN_upper', 0.0)
             if _hs_lo > 0 and _hs_hi > 0:
-                col3.metric("G_DN", f"{m.G_DN/1000:.1f} kPa",
-                            delta=f"Ref: [{_hs_lo/1000:.1f}, {_hs_hi/1000:.1f}] kPa (single-phase)",
-                            delta_color="off")
+                _rm_dash("G_DN", value=m.G_DN, output_type=_OT_dash.MODULUS,
+                         tier=_m_dash_tier, unit="kPa", scale=1e-3,
+                         delta=f"Ref: [{_hs_lo/1000:.1f}, {_hs_hi/1000:.1f}] kPa (single-phase)",
+                         delta_color="off", container=col3)
             else:
-                col3.metric("G_DN", f"{m.G_DN/1000:.1f} kPa",
-                            delta=f"{G_dev:.0f}% from target", delta_color="inverse")
+                _rm_dash("G_DN", value=m.G_DN, output_type=_OT_dash.MODULUS,
+                         tier=_m_dash_tier, unit="kPa", scale=1e-3,
+                         delta=f"{G_dev:.0f}% from target",
+                         delta_color="inverse", container=col3)
             col4.metric("Pipeline Time", f"{elapsed:.1f}s")
 
             col5, col6, col7, col8 = st.columns(4)

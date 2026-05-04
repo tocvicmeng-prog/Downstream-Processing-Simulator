@@ -258,6 +258,14 @@ class LoadedStateElutionResult:
         "Loaded-state elution uses the load-step bound profile as initial "
         "condition and switches the inlet to protein-free elution buffer."
     )
+    # B-2e incremental scaffolding (v0.6.6): gradient envelope diagnostics
+    # exposed for non-pH gradients (salt, imidazole) so downstream plots /
+    # render can show the active gradient even though the isotherm physics
+    # does not yet consume the value. None when no GradientContext is set
+    # OR when the gradient is the pH-driven one (already reflected in
+    # pH_profile). When populated, contains the GradientContext fields
+    # plus a per-time-sample value array.
+    gradient_diagnostics: dict | None = None
 
     # v0.6.0 (E1) — typed Quantity accessors. Underlying float fields above
     # remain authoritative for arithmetic; these accessors give downstream
@@ -693,7 +701,9 @@ def run_loaded_state_elution(
         pH_start = float(_grad_ctx.start_value)
     else:
         pH_start = float(elution_step.buffer.pH)
-    pH_end = _elution_pH(elution_step)
+    # pH_end is not stored as a local — gradient_value_at_time reads
+    # _grad_ctx.end_value directly when the gradient is pH-driven, and
+    # _elution_pH is consumed only by external callers via the helper.
 
     u = column.superficial_velocity(flow_rate)
     eps_b = column.bed_porosity
@@ -713,15 +723,34 @@ def run_loaded_state_elution(
     )
     mass_transfer_coeff = (3.0 / max(R_p, 1.0e-12)) * k_f
 
+    # B-2e incremental scaffolding: generic gradient-value-at-time profile.
+    # Returns the active gradient's value at time t (linear ramp; the only
+    # shape v0.6.x supports). Used by ph_at_time for the pH-driven path
+    # AND exposed in the result.diagnostics for non-pH gradients (salt,
+    # imidazole) so downstream consumers can see the active envelope.
+    # The isotherm/transport adapter does NOT yet consume non-pH gradient
+    # values — that requires a salt-dependent / imidazole-competition
+    # isotherm extension and is deferred as a scientific scope item.
+
+    def gradient_value_at_time(t: float) -> float | None:
+        """Return the active gradient value at time ``t``, or None if no gradient.
+
+        Honours the GradientContext shape (currently linear only). Caller
+        must check the gradient field type before consuming the value.
+        """
+        if _grad_ctx is None or not _grad_ctx.is_active:
+            return None
+        ramp = _grad_ctx.duration_s if _grad_ctx.duration_s > 0.0 else total_time
+        frac = min(1.0, max(0.0, t / ramp))
+        return float(_grad_ctx.start_value) + frac * (
+            float(_grad_ctx.end_value) - float(_grad_ctx.start_value)
+        )
+
     def ph_at_time(t: float) -> float:
         # B-2e follow-on: typed GradientContext is the source of truth here.
         if _grad_ctx is None or _grad_ctx.gradient_field.lower() != "ph":
             return float(elution_step.buffer.pH)
-        # Use the gradient's own duration when present; keep falling back to
-        # total_time for back-compat with steps that omit it.
-        ramp = _grad_ctx.duration_s if _grad_ctx.duration_s > 0.0 else total_time
-        frac = min(1.0, max(0.0, t / ramp))
-        return pH_start + frac * (pH_end - pH_start)
+        return float(gradient_value_at_time(t) or pH_start)
 
     def rhs(t: float, y: np.ndarray) -> np.ndarray:
         C = np.maximum(y[:n_z].copy(), 0.0)
@@ -793,6 +822,30 @@ def run_loaded_state_elution(
         mass_balance_error = 0.0
         recovery = 0.0
     peak_time, _, _, peak_width = _peak_stats(time, C_outlet)
+
+    # B-2e scaffolding: expose gradient envelope for non-pH gradients.
+    # The isotherm does not yet consume non-pH values, so the field is a
+    # diagnostic carrier only — downstream plots / render can show the
+    # active gradient even though the binding physics ignores it.
+    gradient_diag: dict | None = None
+    if _grad_ctx is not None and _grad_ctx.is_active and _grad_ctx.gradient_field.lower() != "ph":
+        gradient_diag = {
+            "field": _grad_ctx.gradient_field,
+            "start_value": float(_grad_ctx.start_value),
+            "end_value": float(_grad_ctx.end_value),
+            "duration_s": float(_grad_ctx.duration_s),
+            "shape": _grad_ctx.shape,
+            "values": np.array([gradient_value_at_time(t) or 0.0 for t in time]),
+            "isotherm_consumes": False,
+            "advisory": (
+                f"Gradient field '{_grad_ctx.gradient_field}' time-profile "
+                f"is exposed for downstream visualization, but the isotherm "
+                f"in this v0.6.x adapter does not consume it. Binding "
+                f"behavior reflects buffer pH only. Salt-/imidazole-aware "
+                f"isotherm is a future scientific scope item."
+            ),
+        }
+
     return LoadedStateElutionResult(
         time=time,
         C_outlet=C_outlet,
@@ -806,6 +859,7 @@ def run_loaded_state_elution(
         peak_time_s=float(peak_time),
         peak_width_half_s=float(peak_width),
         mass_balance_error=float(mass_balance_error),
+        gradient_diagnostics=gradient_diag,
     )
 
 
