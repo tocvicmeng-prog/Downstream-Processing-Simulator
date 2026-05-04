@@ -41,16 +41,12 @@ ENFORCED_ENUMS: frozenset[str] = frozenset({
 })
 
 
-# Files exempt from the rule (e.g. the enum definition itself, or
-# files that already use .value safely and would produce false
-# positives because they reference the enum class for type-hint reasons).
+# Files exempt from the rule. Currently only the enum definition itself,
+# which legitimately uses bare member references in class-body context.
+# Add new entries here only when the AST checker produces a documented
+# false positive that cannot be resolved by rewriting the offending site.
 EXEMPT_FILES: frozenset[str] = frozenset({
-    # Enum definition is allowed to use the bare member.
     "src/dpsim/datatypes.py",
-    # The reload-safe pattern in compute_min_tier explicitly compares
-    # by .value already; the exemption is defensive against false
-    # positives if the static analysis cannot resolve dynamic
-    # comparisons.
 })
 
 
@@ -128,12 +124,16 @@ def _check_file(path: Path) -> list[tuple[int, int, str]]:
     return checker.violations
 
 
-def test_no_identity_or_bare_equality_comparisons_against_enforced_enums():
+def test_no_identity_comparisons_against_enforced_enums():
     """Q-011: enforce CLAUDE.md `.value`-comparison rule across the codebase.
 
     Walks ``src/dpsim/`` and ``tests/`` with AST and fails if any
-    ``<expr> is <Enum>.<MEMBER>`` or ``<expr> == <Enum>.<MEMBER>``
-    pattern (without `.value` on the other side) is found.
+    ``<expr> is <Enum>.<MEMBER>`` or ``<expr> is not <Enum>.<MEMBER>``
+    pattern is found. Equality comparisons (``==`` / ``!=``) are NOT
+    flagged — Python's ``Enum.__eq__`` falls back to value comparison
+    correctly for same-class members, and the documented danger is
+    identity comparisons that silently break after Streamlit re-mints
+    the enum class on reload (see the class-level docstring above).
     """
     files = _collect_python_files()
     all_violations: list[str] = []

@@ -159,14 +159,21 @@ class CFDZonesPayload(BaseModel):
 
     @model_validator(mode="after")
     def _cross_field_consistency(self) -> Self:
+        """Cross-field validation rules. Field-local rules (schema_version,
+        per-zone ε_brk ≥ ε_avg, exchange from_zone ≠ to_zone, time-window
+        ordering) live on the individual model validators above; the rules
+        below need access to multiple zones / exchanges at once.
+        """
         names = [z.name for z in self.zones]
 
-        # Rule 2: unique zone names
+        # Unique zone names — exchanges and the per-zone state vector are
+        # name-keyed, so duplicates would silently alias.
         if len(set(names)) != len(names):
             dupes = sorted({n for n in names if names.count(n) > 1})
             raise ValueError(f"Duplicate zone name(s): {dupes}")
 
-        # Rule 3: exchange endpoints reference existing zones
+        # Exchange endpoints reference existing zones — guards against
+        # phantom-zone exchanges produced by a partial extract_epsilon.py run.
         valid = set(names)
         for i, ex in enumerate(self.exchanges):
             if ex.from_zone not in valid:
@@ -180,8 +187,11 @@ class CFDZonesPayload(BaseModel):
                     f"not in zone names {sorted(valid)}"
                 )
 
-        # Rule 6: case_metadata.epsilon_volume_weighted_avg matches
-        # Σ(V_i × ε_avg_i) / Σ(V_i) within 1%.
+        # Volume-weighted ε aggregation matches the case metadata
+        # within 1 % — `case_metadata.epsilon_volume_weighted_avg_W_per_kg`
+        # must equal Σ(V_i × ε_avg_i) / Σ(V_i) modulo CFD post-processing
+        # noise. Wider drift indicates corrupted JSON or an extract_epsilon
+        # bug.
         total_v = sum(z.volume_m3 for z in self.zones)
         if total_v <= 0:
             raise ValueError("Total zone volume is non-positive")

@@ -63,13 +63,14 @@ disk thickness, each fin's axial height ≈ 8.5 mm.
 | Tangential pitch (fin face from radial) | 10° | user 2026-05-01 (re-interpretation) |
 | Bend angle (axial) | 90° (perpendicular) | user 2026-05-01 |
 
-**`datatypes.py` mismatches** (codebase should be updated):
-- Line 285 / 318: `blade_height = 0.010` → should be `0.0085`
-- Line 315: `blade_count = 6` → should be `19`
-- Line 316: `blade_angle = 10.0` interpretation: the 10° is **tangential**
-  (fan-pitch from radial), not axial pitch
-- Line 309 comment "alternately bent": means alternating **±axial direction**
-  (UP / DOWN), not alternating axial-pitch sign
+**`datatypes.py` alignment** (resolved in v0.6.0; geometry now matches the
+table above):
+- `blade_height = 0.0085` (1 mm disk + 2 × 8.5 mm fins → 18 mm tip-to-tip)
+- `blade_count = 19` (10 UP + 9 DOWN, alternating perpendicular bend)
+- `blade_angle = 10.0` is interpreted as **tangential** fan-pitch from radial,
+  not axial pitch
+- "alternately bent" denotes alternating **±axial direction** (UP / DOWN),
+  not alternating axial-pitch sign
 
 ### Stirrer B — small rotor-stator
 
