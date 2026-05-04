@@ -3,17 +3,17 @@
 Replaces the legacy ``impeller_xsec`` (Rushton turbine in BSTR) for the
 Stirrer B hardware mode. The legacy component drew a six-blade Rushton
 disk in a fully baffled tank — completely wrong instrument geometry for
-the Ø 32 mm rotor-stator with 36 perforations actually used.
+the Ø 32 mm rotor-stator with 72 perforations actually used.
 
 This v3 component renders:
 
 - **Cross rotor** (4 arms, Ø 25.7 mm × 16 mm tall) inside the stator
   housing.
-- **Perforated stator** (Ø 32.03 × 18 mm, 36 Ø 3 mm perforations in a
-  3 × 12 grid, closed top with Ø 10 mm shaft passage, open bottom).
+- **Perforated stator** (Ø 32.03 × 18 mm, 72 Ø 3 mm perforations in a
+  3 × 24 grid, closed top with Ø 10 mm shaft passage, open bottom).
 - **Bench-loop circulation**: rotor pulls fluid axially in through the
   open stator bottom, accelerates it centrifugally through the rotor
-  swept volume, ejects it radially through the 36 perforations as
+  swept volume, ejects it radially through the 72 perforations as
   high-velocity slot-exit jets, which then circulate back through bulk
   to feed the rotor inlet from below.
 - **Slot-exit zone** (ε_brk ≈ 1200 W/kg) shaded distinctly — this is
@@ -26,8 +26,8 @@ Geometry (verified 2026-05-01 against ``cad/output/`` STEP files):
     Stirrer B rotor — flat sheet "+" with offset finger pairs, root
         Ø 8.5 mm → tip Ø 25.7 mm, R=1 mm fillets, 16 mm axial extent.
     Stirrer B stator — Ø 32.03 mm × 18 mm tall, 2.2 mm wall, closed top
-        with Ø 10 mm shaft passage, open bottom; 36 Ø 3 mm perforations
-        in a 3 × 12 rectangular grid.
+        with Ø 10 mm shaft passage, open bottom; 72 Ø 3 mm perforations
+        in a 3 × 24 rectangular grid.
     Beaker — Ø 100 mm inner × 130 mm tall, 20° outward-flared rim.
 
 Operating point (default rendering): 6000 RPM, paraffin-oil continuous

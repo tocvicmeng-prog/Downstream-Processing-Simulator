@@ -17,8 +17,8 @@
   Geometry verified 2026-05-01 against cad/output/*.step:
     Rotor   — flat sheet "+", root Ø 8.5 mm → tip Ø 25.7 mm, 16 mm tall.
     Stator  — Ø 32.03 mm × 18 mm, 2.2 mm wall, closed top + Ø 10 mm
-               shaft passage, open bottom; 36 Ø 3 mm perforations
-               (3 rows × 12 columns).
+               shaft passage, open bottom; 72 Ø 3 mm perforations
+               (3 rows × 24 columns).
     Beaker  — Ø 100 mm inner × 130 mm tall, 20° outward-flared rim.
 -->
 <html lang="en">
@@ -168,7 +168,7 @@
 </head>
 <body class="__THEME__">
   <div class="frame" role="img"
-       aria-label="Stirrer B rotor-stator in 100 mL glass beaker. Animated cross-section showing the bench-loop circulation, 36 slot-exit jets where 80-95% of breakage occurs (Padron 2005, Hall 2011), three collision-type events.">
+       aria-label="Stirrer B rotor-stator in 100 mL glass beaker. Animated cross-section showing the bench-loop circulation, 72 slot-exit jets where 80-95% of breakage occurs (Padron 2005, Hall 2011), three collision-type events.">
     <button class="toggle-btn" id="toggleBtn" aria-label="Toggle view">SIDE · OPAQUE</button>
     <div class="view-label" id="viewLabel">VIEW 1 / 4</div>
 
@@ -592,8 +592,9 @@
       return rngState / 4294967296;
     }
 
-    // Bottom view: 12 perforations on the stator wall, plus 12
-    // spiral-then-radial particle trajectories showing centrifugal
+    // Bottom view: 24 perforations on the stator wall (one per column;
+    // 3 axial rows = 72 holes total), plus 12 spiral-then-radial
+    // particle trajectories (every other column) showing centrifugal
     // ejection through the perforations.
     var perfs = document.getElementById("perfs-bottom");
     var exitPaths = document.getElementById("exit-paths-fast");
@@ -604,10 +605,11 @@
     var ROTOR_R = 18;        // px (between root Ø8.5 and tip Ø25.7)
     var BULK_R = 80;         // px to bulk recirculation point
 
-    // Perforations on the stator wall (View 2 + View 4)
+    // Perforations on the stator wall (View 2 + View 4):
+    // 24 columns × 15° = full circle.
     if (perfs) {
-      for (var col = 0; col < 12; col++) {
-        var theta = (col * 30) * Math.PI / 180.0;
+      for (var col = 0; col < 24; col++) {
+        var theta = (col * 15) * Math.PI / 180.0;
         var c = document.createElementNS(SVG_NS, "circle");
         c.setAttribute("cx", 160 + STATOR_R * Math.cos(theta));
         c.setAttribute("cy", 180 + STATOR_R * Math.sin(theta));

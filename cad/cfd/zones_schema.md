@@ -190,7 +190,7 @@ from the zones programmatically.
 
 ## Example 2 — Stirrer B, 4 zones (impeller / slot_exit / near_wall / bulk)
 
-Rotor-stator with 36 stator perforations. Slot-exit jets carry 80–95% of
+Rotor-stator with 72 stator perforations (24 columns × 3 rows). Slot-exit jets carry 80–95% of
 breakage events (Padron 2005, Hall 2011), so they get a dedicated zone.
 
 ```json
@@ -230,7 +230,7 @@ breakage events (Padron 2005, Hall 2011), so they get a dedicated zone.
       "shear_rate_avg_per_s": 38000.0,
       "centroid_xyz_m": [0.018, 0.0, 0.015],
       "kolmogorov_length_m": 5.2e-6,
-      "metadata": {"notes": "36 stator holes × 3 rows; ε aggregated within 2mm of slot exit on stator outside"}
+      "metadata": {"notes": "72 stator holes (24 columns × 3 rows); ε aggregated within 2mm of slot exit on stator outside"}
     },
     {
       "name": "near_wall",

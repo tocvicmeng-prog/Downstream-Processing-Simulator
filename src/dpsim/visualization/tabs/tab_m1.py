@@ -618,11 +618,11 @@ def render_tab_m1(
                             # v0.6.3: replaces the legacy Rushton-style
                             # animation (which drew the wrong instrument
                             # entirely — a 6-blade Rushton in a baffled
-                            # BSTR rather than the rotor-stator with 36
+                            # BSTR rather than the rotor-stator with 72
                             # perforations Stirrer B actually is). The new
                             # v3 component renders the cross rotor inside
                             # the perforated stator, the bench-loop
-                            # circulation, the 36 slot-exit jets, and the
+                            # circulation, the 72 slot-exit jets, and the
                             # collision types with break-up dominantly at
                             # the slot exits per Padron 2005 / Hall 2011.
                             render_impeller_xsec_v3(rpm=float(rpm))
@@ -645,10 +645,10 @@ def render_tab_m1(
                     else:
                         st.caption(
                             "Cross rotor (Ø 25.7 mm × 16 mm) inside a "
-                            "perforated stator housing (Ø 32.03 mm, 36 × Ø 3 mm "
-                            "perforations in a 3 × 12 grid). Rotor pumps fluid "
+                            "perforated stator housing (Ø 32.03 mm, 72 × Ø 3 mm "
+                            "perforations in a 3 × 24 grid). Rotor pumps fluid "
                             "axially through the open stator bottom; "
-                            "centrifugal acceleration ejects it radially as 36 "
+                            "centrifugal acceleration ejects it radially as 72 "
                             "slot-exit jets where 80–95 % of breakage occurs "
                             "(Padron 2005, Hall 2011). The transparent view "
                             "shows the bench-loop circulation: rotor inlet → "

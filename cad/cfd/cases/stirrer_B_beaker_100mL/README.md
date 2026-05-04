@@ -1,7 +1,7 @@
 # Stirrer B (rotor-stator) in 100 mL beaker — OpenFOAM case
 
-Bench-scale CFD case for Stirrer B (Ø 32 mm rotor-stator with 36 peripheral
-perforations across 3 rows of 12) in the glass beaker. Stator Ø 3 mm holes
+Bench-scale CFD case for Stirrer B (Ø 32 mm rotor-stator with 72 peripheral
+perforations across 3 rows of 24) in the glass beaker. Stator Ø 3 mm holes
 must be mesh-resolved — they are the dominant breakage zones (80–95 % of
 total breakage in rotor-stator devices, per Padron 2005, Hall 2011).
 
@@ -12,7 +12,7 @@ Geometry preparation and solver runs not yet executed end-to-end.
 
 - Rotor: `cad/output/stirrer_B_rotor.step` (flat sheet "+" with offset
   finger pairs, blunt 2 mm flat tips, R=1 mm fillets)
-- Stator: `cad/output/stirrer_B_stator.step` (Ø 32.03 × 18 mm, 3 × 12
+- Stator: `cad/output/stirrer_B_stator.step` (Ø 32.03 × 18 mm, 3 × 24
   Ø 3 mm perforations, Ø 10 mm shaft passage in closed top)
 - Vessel: `cad/output/beaker_100mm.step`
 

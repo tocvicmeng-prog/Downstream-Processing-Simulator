@@ -758,7 +758,7 @@ Stirrer A is a pitched-blade open impeller in a 100 mL beaker (see `cad/output/s
 
 ### §9.5 Worked example — Stirrer B (4 zones, rotor-stator loop)
 
-Stirrer B is a small rotor-stator with 36 stator perforations (see `cad/output/stirrer_B_rotor` and `stirrer_B_stator`). The defining feature is the **slot exit jet**: 80–95 % of breakage events in rotor-stator devices happen in the small region just outside each stator hole, where the rotating fluid blasts through the gap and dissipates suddenly (Padron 2005; Hall et al. 2011). That region is too small to volume-average away — it gets its own zone.
+Stirrer B is a small rotor-stator with 72 stator perforations (24 columns × 3 rows; see `cad/output/stirrer_B_rotor` and `stirrer_B_stator`). The defining feature is the **slot exit jet**: 80–95 % of breakage events in rotor-stator devices happen in the small region just outside each stator hole, where the rotating fluid blasts through the gap and dissipates suddenly (Padron 2005; Hall et al. 2011). That region is too small to volume-average away — it gets its own zone.
 
 ```
                  BREAKAGE LOOP (Q = 84 µL/s, all 3 edges)

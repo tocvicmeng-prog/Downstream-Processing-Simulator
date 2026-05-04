@@ -290,8 +290,8 @@ def build_stirrer_B_stator() -> cq.Workplane:
     )
     stator = stator.cut(shaft_hole)
 
-    # Perforations: 36 holes (3 rows × 12 columns, uniform rectangular grid)
-    n_perf_circ = 12
+    # Perforations: 72 holes (3 rows × 24 columns, uniform rectangular grid)
+    n_perf_circ = 24
     n_perf_rows = 3
     angle_step = 360.0 / n_perf_circ
     row_spacing = (H - TOP_THICK) / (n_perf_rows + 1)

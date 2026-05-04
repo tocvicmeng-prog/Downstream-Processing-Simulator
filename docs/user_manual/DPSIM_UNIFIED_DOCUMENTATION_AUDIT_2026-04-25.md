@@ -124,7 +124,7 @@ as a point-in-time snapshot; this section is append-only.
 
 | Version | Date | Highlights |
 |---|---|---|
-| v0.6.0 | 2026-05-01 | CAD geometry source-of-truth for the 5 wetted parts (Stirrer A pitched-blade with 19-tab disk geometry verified by photo + manual review; Stirrer B rotor + stator with 36 perforations × 3 rows; 100 mm beaker; jacketed 92 mm vessel). OpenFOAM CFD-PBE pipeline scaffolding (`cad/cfd/`, `src/dpsim/cfd/`). Live Stirrer A cross-section animation with physically faithful flow / droplet behaviour |
+| v0.6.0 | 2026-05-01 | CAD geometry source-of-truth for the 5 wetted parts (Stirrer A pitched-blade with 19-tab disk geometry verified by photo + manual review; Stirrer B rotor + stator with 72 perforations across 24 columns × 3 rows — column count revised 12 → 24 on 2026-05-04; 100 mm beaker; jacketed 92 mm vessel). OpenFOAM CFD-PBE pipeline scaffolding (`cad/cfd/`, `src/dpsim/cfd/`). Live Stirrer A cross-section animation with physically faithful flow / droplet behaviour |
 | post-v0.6.0 (commit a5d984c, 2026-05-01) | 2026-05-01 | DPSim-side CFD-PBE zonal coupling: schema v1.0, Pydantic-validated loader (11 hard-validation paths), `integrate_pbe_with_zones` integrator with bit-exact 1-zone reduction to legacy `PBESolver`, `consistency_check_with_volume_avg`, 31 library tests + 2 CLI smoke tests, `dpsim cfd-zones` subcommand |
 
 ### Canonical-term additions

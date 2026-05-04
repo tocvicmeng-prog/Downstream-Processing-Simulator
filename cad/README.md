@@ -30,7 +30,7 @@ tolerance, visualization only).
 |------|------|-----|--------|
 | Stirrer A — disk-style 12-tab impeller Ø59 mm | `stirrer_A_pitched_blade.step` | `.stl` | `StirrerGeometry.pitched_blade_A()` + photos |
 | Stirrer B — rotor (4-arm cross blade) | `stirrer_B_rotor.step` | `.stl` | `StirrerGeometry.rotor_stator_B()` |
-| Stirrer B — stator (Ø32 × 18 mm, 36 perforations) | `stirrer_B_stator.step` | `.stl` | same + photo |
+| Stirrer B — stator (Ø32 × 18 mm, 72 perforations) | `stirrer_B_stator.step` | `.stl` | same + photo |
 | Beaker Ø100 × 130 mm | `beaker_100mm.step` | `.stl` | `VesselGeometry.glass_beaker()` |
 | Jacketed vessel Ø92 × 160 mm | `jacketed_vessel_92mm.step` | `.stl` | `VesselGeometry.jacketed_vessel()` |
 
@@ -73,8 +73,9 @@ disk thickness, each fin's axial height ≈ 8.5 mm.
 
 ### Stirrer B — small rotor-stator
 
-Photo-confirmed: closed top, open bottom, 36 peripheral perforations in a
-regular rectangular grid (3 rows × 12 columns, NOT staggered).
+Photo-confirmed: closed top, open bottom, 72 peripheral perforations in a
+regular rectangular grid (3 rows × 24 columns, NOT staggered).
+Per 2026-05-04 user correction (column count revised 12 → 24).
 
 | Feature | Value | Source |
 |---------|-------|--------|
@@ -82,7 +83,7 @@ regular rectangular grid (3 rows × 12 columns, NOT staggered).
 | Stator wall thickness | 2.2 mm | datatypes.py:354 + photo |
 | Stator height | 18 mm | datatypes.py:353 + photo |
 | Stator hole Ø | 3 mm | datatypes.py:355 + photo |
-| Stator hole pattern | 3 rows × 12 columns rectangular grid | photo |
+| Stator hole pattern | 3 rows × 24 columns rectangular grid (72 holes) | photo + user 2026-05-04 |
 | Rotor cross-blade tip Ø | 25.7 mm | datatypes.py:341 + photo |
 | Rotor root Ø | 8.5 mm | datatypes.py:342 + photo |
 | Rotor blade count | 4 (cross) | datatypes.py:343 + photo |
@@ -114,7 +115,7 @@ regular rectangular grid (3 rows × 12 columns, NOT staggered).
 - [ ] **Stirrer A** 12 tabs alternating ±10°
 - [ ] **Stirrer A** tab dimensions 9 × 10 × 1 mm
 - [ ] **Stirrer B** stator Ø 32.03 × 18 mm, wall 2.2 mm
-- [ ] **Stirrer B** stator 36 holes Ø 3 mm in 3 × 12 rectangular grid
+- [ ] **Stirrer B** stator 72 holes Ø 3 mm in 3 × 24 rectangular grid
 - [ ] **Stirrer B** rotor 4-arm cross, Ø8.5 root → Ø25.7 tip, 2 mm thick
 - [ ] **Beaker** Ø 100 × 130 mm, wall 1.5 mm
 - [ ] **Jacket vessel** Ø 92 × 160 mm
@@ -136,10 +137,10 @@ regular rectangular grid (3 rows × 12 columns, NOT staggered).
       modeled as a flat through-disk. Real impeller may have a raised hub
       or boss for shaft attachment.
 - [ ] **Stirrer A** — total shaft length 120 mm assumed.
-- [ ] **Stirrer B** — 36 perforations counted approximately from a partial
-      side-view photo. If a top-down view of the entire stator wall is
-      available, please verify the exact count, row positions, and any
-      pattern details (chamfered edges, countersinks, etc.).
+- [x] **Stirrer B** — 72 perforations (24 columns × 3 rows) confirmed by
+      user 2026-05-04 (revised from earlier 36-hole / 12-column estimate).
+      Pattern is a uniform rectangular grid; hole Ø 3 mm; chamfers /
+      countersinks, if any, still TBD.
 - [ ] **Stirrer B** — closed-top thickness 1.5 mm assumed.
 - [ ] **Stirrer B** — rotor cross-blade axial height = stator height
       (18 mm) assumed. Bottom-view photo doesn't reveal axial extent;

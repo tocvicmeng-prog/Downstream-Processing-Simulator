@@ -151,7 +151,7 @@ src/dpsim/cfd/
 
 - **Stator slot geometry matters for Stirrer B**: 80-95% of breakage in
   rotor-stator devices happens in slot exit jets (Padron 2005, Hall 2011).
-  The 36 holes × 3 rows perforation pattern has been measured and applied
+  The 24 columns × 3 rows (72 holes) perforation pattern has been measured and applied
   to the CAD; CFD must resolve it (mesh refinement level 4+).
 - **Viscous correction**: polysaccharide continuous phases have
   viscosity 5-50× water. The Alopaeus kernel's viscous sub-range

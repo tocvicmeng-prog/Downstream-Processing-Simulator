@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — Stirrer B stator hole-count correction (2026-05-04)
+
+### Changed
+
+- **Stirrer B stator perforation count revised from 36 to 72** (24 columns × 3 rows, was 12 × 3). User confirmation 2026-05-04 from a complete top-down view of the stator wall. Affects:
+  - `cad/scripts/build_geometry.py` (`n_perf_circ` 12 → 24)
+  - Regenerated `cad/output/stirrer_B_stator.{step,stl}`
+  - UI animation `src/dpsim/visualization/components/assets/impeller_xsec_v3.html` (24 hole markers at 15° spacing in the bottom view; trajectory count kept at 12 for legibility)
+  - All matching documentation in `cad/`, `cad/cfd/`, `docs/user_manual/`, and the M1 hardware caption in `tabs/tab_m1.py`.
+- The hole geometry (Ø 3 mm, axial row spacing, wall thickness, stator OD) is unchanged. Slot-exit jet physics is unchanged in the model — the higher hole count increases total open area on the stator wall but does not by itself alter the per-jet ε in the validated zonal partition.
+
+### Validation
+
+- CFD case `cad/cfd/cases/stirrer_B_beaker_100mL/` mesh refinement levels remain valid; `snappyHexMeshDict` and `zones.example.json` updated only in commentary. Re-meshing required against the regenerated STL before next CFD run.
+
 ## v0.6.2 — CFD-PBE zonal coupling end-to-end (2026-05-01)
 
 Closes the CFD-PBE coupling loop end-to-end: DPSim integrates a

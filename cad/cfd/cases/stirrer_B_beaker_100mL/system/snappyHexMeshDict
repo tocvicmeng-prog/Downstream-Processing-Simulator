@@ -2,7 +2,7 @@
   DPSim CFD-PBE — snappyHexMesh for Stirrer B (rotor-stator).
   Refinement: level 6 on impeller, level 5 on stator wall, level 4 inside
   the slotExitZone shell capturing the high-shear region just outside
-  the 36 stator perforations. Prism layers on impeller, stator, vessel.
+  the 72 stator perforations. Prism layers on impeller, stator, vessel.
 \*---------------------------------------------------------------------------*/
 FoamFile
 {
