@@ -40,6 +40,7 @@ import dpsim.pipeline.orchestrator as _orch_mod; importlib.reload(_orch_mod)
 import dpsim.trust as _trust_mod; importlib.reload(_trust_mod)
 import dpsim.level3_crosslinking.solver as _xl_mod; importlib.reload(_xl_mod)
 
+from dpsim import __version__ as _DPSIM_VERSION
 from dpsim.core.process_recipe import LifecycleStage
 from dpsim.datatypes import ModelMode
 from dpsim.visualization.design import inject_global_css
@@ -605,7 +606,7 @@ _direction = get_direction()
 
 if _direction == "a":
     render_shell(
-        version="0.4.19",
+        version=_DPSIM_VERSION,
         breadcrumb_recipe="protein_a_pilot.toml",
         modified=_diffs_pending > 0,
         evidence_stages=_evidence_stages,
@@ -631,7 +632,7 @@ else:
         set_triptych_focus,
     )
     _render_top_bar(
-        version="0.4.19",
+        version=_DPSIM_VERSION,
         breadcrumb_recipe="protein_a_pilot.toml",
         modified=_diffs_pending > 0,
         evidence_stages=_evidence_stages,

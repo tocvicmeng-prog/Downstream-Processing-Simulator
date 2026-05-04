@@ -4,7 +4,7 @@
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%20|%203.12-3776AB.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/Version-0.6.0-2DD4BF.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.6.3-2DD4BF.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011%20x64-0078D4.svg)](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases)
 
 > Turn a written lifecycle recipe into predicted microsphere-media behaviour **before** you touch the bench. Predictions carry units, evidence tier, assumptions, validation gates, and wet-lab caveats — every value tells you exactly how much to trust it.

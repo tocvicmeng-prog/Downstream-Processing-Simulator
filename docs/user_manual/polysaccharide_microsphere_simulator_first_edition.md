@@ -260,7 +260,7 @@ The lifecycle UI reports four kinds of output. Read them in this order every tim
 
 # Part II — Platform Catalogue
 
-DPSim v0.3.6 supports **21 polymer families**, organised into a v9.1 baseline (4 platforms), a v9.2/v9.3 expansion (10 platforms), a v9.4 niche set (4 platforms), and a v9.5 multi-variant composite set (3 platforms). Each platform has a different gelation mechanism, different suitable crosslinkers / gelants, and different typical applications.
+DPSim supports **21 polymer families**, organised into a v9.1 baseline (4 platforms), a v9.2/v9.3 expansion (10 platforms), a v9.4 niche set (4 platforms), and a v9.5 multi-variant composite set (3 platforms). Each platform has a different gelation mechanism, different suitable crosslinkers / gelants, and different typical applications.
 
 This section is your "which do I pick?" guide.
 
@@ -350,7 +350,7 @@ Non-biotherapeutic-safe entries (Al³⁺) surface a red warning in the UI: **do 
 
 ## §6 M2 Chemistry Catalogue
 
-DPSim v0.5.1 organises **103 reagents** into **18 chemistry buckets** on the M2 page. The reagent set covers every chemistry class shipped through v9.1–v9.5 plus the v0.5.0 ACS-Converter epic and the v0.5.1 deferred-work follow-on. Pick a bucket first, then a reagent within it.
+DPSim organises **103 reagents** into **18 chemistry buckets** on the M2 page. The reagent set covers every chemistry class shipped through v9.1–v9.5 plus the v0.5.0 ACS-Converter epic and the v0.5.1 deferred-work follow-on. Pick a bucket first, then a reagent within it.
 
 ### §6.1 The 18 chemistry buckets
 

@@ -125,7 +125,7 @@ def _render_theme_toggle() -> None:
 
 def render_top_bar(
     *,
-    version: str = "0.3.8",
+    version: str | None = None,
     breadcrumb_recipe: str = "protein_a_pilot.toml",
     modified: bool = False,
     evidence_stages: list[StageEvidence] | None = None,
@@ -178,6 +178,8 @@ def render_top_bar(
     #   LEFT    [brand] [UI A|B] [breadcrumb] [search]
     #   MIDDLE  [scientific mode pill]
     #   RIGHT   [history] [evidence] [view seg] [theme] [manual icons]
+    if version is None:
+        from dpsim import __version__ as version
     cols = st.columns([0.8, 0.85, 1.4, 2.6, 3.85, 1.0, 0.6, 1.95, 0.85, 0.55])
 
     with cols[0]:

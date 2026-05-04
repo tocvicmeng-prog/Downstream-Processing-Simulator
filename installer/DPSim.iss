@@ -2,7 +2,7 @@
 ; (AppVersion is set via /DMyAppVersion=X.Y.Z on the command line by
 ; build_installer.bat, which derives the value from pyproject.toml.)
 ; Build with: ISCC.exe installer\DPSim.iss
-; Produces:  release\DPSim-0.1.0-Setup.exe
+; Produces:  release\DPSim-<version>-Setup.exe
 
 #define MyAppName       "DPSim"
 ; MyAppVersion is preferably passed on the command line by build_installer.bat
