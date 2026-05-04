@@ -1,5 +1,124 @@
 # Changelog
 
+## v0.6.6 — Tier 1 + Tier 2 + post-Tier-2 work plan close (2026-05-04)
+
+Closes 14 of 19 work-plan items from the 2026-05-04 joint audit
+(`docs/update_workplan_2026-05-04.md`) and the two carry-over
+incremental items. Three of the five validation-release gates from
+work plan §5 are now closeable from code; the remaining two require
+user-side wet-lab data. v0.6.4 and v0.6.5 are work-plan-batch labels
+referenced inside the source — they were never tagged or released.
+This release supersedes them.
+
+### Added — Tier 1 (B-1a … B-1e)
+
+- **B-1a (W-002) — Recipe Guardrail 2 (G7 pH window check):**
+  `core/recipe_validation.py::_g7_ph_window_check` validates each M2
+  step's pH against the reagent's hard / soft / optimum windows
+  (BLOCKER outside hard, WARNING outside soft inside hard, silent
+  inside soft). 23 reagent profiles in
+  `module2_functionalization/reagent_profiles.py` curated with
+  literature-anchored windows (CNBr, CDI, tresyl, epoxide, NaBH4,
+  boronate, IMAC, Protein A, borax, glutaraldehyde). 40 new test cases.
+- **B-1b (W-003) — Decision-grade gates per output type:** new
+  `core/decision_grade.py` with 14 OutputTypes and a NUMBER →
+  INTERVAL → RANK_BAND → SUPPRESS render-mode ladder. 42 test cases.
+  UI-side helper in `visualization/decision_grade_render.py` plus
+  reference-site wiring at 13 metrics across `tabs/tab_m1.py` and
+  `tabs/tab_m3.py` (d_mode/d32, pore_size, modulus, DBC₅/₁₀/₅₀%,
+  pressure_drop, recovery).
+- **B-1c (W-007) — L2 family `valid_domain`:** `valid_domain`
+  populated on every L2 family `ModelManifest` (12 sites across
+  `level2_gelation/*.py`). AST-scanner regression test enforces the
+  contract.
+- **B-1d (W-006) — M1 PBE regime guards:** `cfd/zonal_pbe.py` exposes
+  `d/η_K` and `d32/η_K` per-zone diagnostics, `breakage_C3`
+  calibration constant, and `regime_guard_warnings` for
+  sub-Kolmogorov regimes.
+- **B-1e (W-005) — Taxonomy mapping refactor:** new
+  `core/step_kind_mapping.py` is the single source of truth for
+  `ProcessStepKind ↔ ModificationStepType ↔ allowlists`. 52 test
+  cases including a regression that asserts every enum member is
+  mapped. Closes joint-audit MAJOR-2.
+
+### Added — Tier 2 (B-2a … B-2e)
+
+- **B-2a (W-009) — Wash residual diffusion-partition + hydrolysis:**
+  new `level1_emulsification/wash_residuals.py` solves a lumped-sphere
+  partition-diffusion ODE with first-order hydrolysis using LSODA.
+  Literature half-lives for CNBr (5 min @ pH 11), CDI (5 h @ pH 7),
+  tresyl (1.5 h), NaBH4 (1 h conservative). `CalibrationEntry` gains
+  `assay_detection_limit` / `assay_quantitation_limit` fields.
+- **B-2b (W-008) — CFD-PBE end-to-end validation gates:** new
+  `cfd/validation.py` with 4 operational-quality gates (mesh QA,
+  residual convergence, ε-volume consistency, exchange-flow balance)
+  plus the locked CFD evidence-tier ladder
+  (`assign_cfd_evidence_tier`).
+- **B-2c (W-010) — Typed SI boundary helpers:** 10 new helpers in
+  `core/quantities.py` (`as_si_flow_rate_m3_per_s`,
+  `as_si_volume_m3`, `as_si_pressure_pa`, ...) with property tests
+  on Quantity → SI → Quantity round-trip preservation.
+- **B-2d (W-011) — Deterministic process dossier export:** new
+  `core/process_dossier.py` with hash-locked JSON serialisation, git
+  commit / package-version capture, and content-addressable
+  `compute_dossier_hash`. Closes validation release-gate 5.
+- **B-2e (W-004) — M3 quantitative gating:** new
+  `module3_performance/quantitative_gates.py` with calibration-coverage
+  assessment (q_max / kinetic / pressure_flow / cycle_life),
+  tier-promotion ladder, and `apply_m3_gate_to_manifest` orchestrator
+  hook. `GradientContext` typed handle delivered with M3
+  isotherm-adapter consumption refactored (typed-first,
+  legacy-fallback). Salt / imidazole gradient time-profile scaffolded
+  on `LoadedStateElutionResult.gradient_diagnostics`; isotherm physics
+  consumption deferred (separate scientific scope).
+
+### Added — Tier 3 + carry-overs
+
+- **W-017 — Streamlit `st.components.v1.html` migration:**
+  `visualization/components/_html_helper.py` shim with auto-routing —
+  full HTML documents (the 5 cross-section assets) use the iframe
+  path, HTML fragments use `st.html`. `DPSIM_USE_LEGACY_HTML=1`
+  env-var escape hatch. 12 test cases including a real-asset
+  round-trip. Resolves the post-migration UI regression where the
+  impeller and column animations vanished due to DOMPurify stripping
+  the document wrapper.
+- **B-3a (W-016) — Streamlit `use_container_width` sweep:** 59
+  callsites across 9 visualization files migrated to
+  `width="stretch"`.
+- **B-3c (W-019) — `docs/current_support_matrix.md`:** new single
+  source of truth for what DPSim supports and at what evidence tier,
+  including the validation release-gate ladder.
+
+### Validation release-gate status (work plan §5)
+
+  1. Environment (W-001) — closed in Tier 0
+  2. Calibrated wet-lab dataset — wet-lab side
+  3. Independent holdout validation — wet-lab side
+  4. Decision-grade automatic downgrade (W-003) — closed (B-1b API + B-2e M3 wiring)
+  5. Process dossier export (W-011) — closed (B-2d)
+
+3/5 release gates now closeable from code. Remaining 2 require
+user-side wet-lab data.
+
+### Verification
+
+- 494 tests passed, 8 skipped across the combined Tier 0 + Tier 1 +
+  Tier 2 + post-Tier-2 + carry-overs + integration suites.
+- ruff: clean across all changed paths.
+- mypy: 0 issues on new source files (pre-existing scipy-stubs
+  baseline noise unchanged).
+- Default affinity-media recipe: 0 new BLOCKERs, 0 new WARNINGs.
+
+### Detailed handovers
+
+  - `docs/handover/HANDOVER_tier_0_close_2026-05-04.md`
+  - `docs/handover/HANDOFF_b1a_g7_ph_window_2026-05-04.md`
+  - `docs/handover/HANDOVER_tier_1_close_2026-05-04.md`
+  - `docs/handover/HANDOVER_tier_2_close_2026-05-04.md`
+  - `docs/handover/HANDOVER_post_tier_2_close_2026-05-04.md`
+  - `docs/handover/HANDOVER_carryovers_close_2026-05-04.md`
+  - `docs/handover/HANDOVER_incremental_close_2026-05-04.md`
+
 ## v0.6.3 — Stirrer B stator hole-count correction (2026-05-04)
 
 ### Changed
