@@ -1,0 +1,7 @@
+flowchart LR
+    CAD["📐 CadQuery STEP / STL<br/>cad/scripts/build_geometry.py"] --> SH["snappyHexMesh<br/>level-5 surface, level-4 slot-exit shell"]
+    SH --> SOLVE["pimpleDyMFoam<br/>(sliding mesh)"]
+    SOLVE --> EX["extract_epsilon.py<br/>cell-zone aggregation"]
+    EX --> ZJ["📋 zones.json schema-v1.0"]
+    ZJ --> ZP["dpsim cfd-zones<br/>integrate_pbe_with_zones"]
+    ZP --> DSD["DSD with zone-resolved breakage"]

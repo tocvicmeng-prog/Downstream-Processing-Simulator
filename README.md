@@ -7,22 +7,37 @@
 [![Version](https://img.shields.io/badge/Version-0.6.3-2DD4BF.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011%20x64-0078D4.svg)](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases)
 
-> Turn a written lifecycle recipe into predicted microsphere-media behaviour **before** you touch the bench. Predictions carry units, evidence tier, assumptions, validation gates, and wet-lab caveats — every value tells you exactly how much to trust it.
+> Turn a written lifecycle recipe into predicted microsphere-media behaviour **before** you touch the bench. Every numeric output ships with units, an evidence tier, the assumptions it depends on, the validation gates it has cleared, and the wet-lab caveats that bound it — so each value tells you exactly how much to trust it.
+
+```mermaid
+flowchart LR
+    R["📝 ProcessRecipe<br/>(TOML / Python)"] --> M1["M1 — Emulsification<br/>PBE · L2 gelation · L3 covalent · L4 mechanics"]
+    M1 -->|"DSD, pore, modulus"| M2["M2 — Functionalisation<br/>ACS state · ligand coupling · sequence FSM"]
+    M2 -->|"q_max, k_a, density"| M3["M3 — Column performance<br/>LRM · isotherms · MC bands · Bayesian fit"]
+    M3 --> O["📊 ProcessDossier<br/>(curves · scalars · evidence ladder)"]
+    C["🧪 Calibration store<br/>(wet-lab data)"] -.->|"tier promotion"| M1
+    C -.->|"tier promotion"| M2
+    C -.->|"tier promotion"| M3
+```
+
+*Static PNG of every diagram in this README is in [`docs/figures/`](docs/figures/) for offline / print rendering.*
 
 ---
 
 ## Table of Contents
 
 - [What DPSim Does](#what-dpsim-does)
-- [Functionalities at a Glance](#functionalities-at-a-glance)
+- [Confidence Model](#confidence-model)
+- [Capabilities at a Glance](#capabilities-at-a-glance)
+- [Microsphere Fabrication Pathways](#microsphere-fabrication-pathways)
+- [Hardware Geometry and CFD-PBE Coupling](#hardware-geometry-and-cfd-pbe-coupling)
 - [Installation](#installation)
 - [System Requirements](#system-requirements)
 - [Quickstart](#quickstart)
 - [Repository Structure](#repository-structure)
-- [Microsphere Fabrication Pathways](#microsphere-fabrication-pathways)
-- [Operating Principles](#operating-principles)
+- [Numerical Solver Matrix](#numerical-solver-matrix)
 - [Development Philosophy](#development-philosophy)
-- [Usage Considerations](#usage-considerations)
+- [Limits and the Wet-Lab Loop](#limits-and-the-wet-lab-loop)
 - [Documentation Map](#documentation-map)
 - [Version History](#version-history)
 - [Intellectual Property and Licence](#intellectual-property-and-licence)
@@ -34,76 +49,171 @@
 
 ## What DPSim Does
 
-DPSim is a **lifecycle simulator** for polysaccharide-based affinity microsphere media. It models three sequential process modules:
+DPSim is a **lifecycle simulator** for polysaccharide-based affinity microsphere media. The simulator is organised as three sequential modules whose outputs feed strictly downstream:
 
 | Module | Wet-lab stage | Predicted outputs |
 |---|---|---|
-| **M1** | Double-emulsification microsphere fabrication | Bead size distribution (DSD), d10/d32/d50/d90, pore architecture, mechanical modulus, residual oil/surfactant after wash |
-| **M2** | Functionalisation, reinforcement, ligand coupling | Reactive-site inventory (ACS state vector), ligand density, activity retention, leaching/wash caveats |
-| **M3** | Affinity-column performance | Pack/equilibrate/load/wash/elute behaviour, breakthrough curve, pressure profile, dynamic binding capacity (DBC), recovery, optional Monte-Carlo uncertainty bands |
+| **M1** | Double-emulsification microsphere fabrication | Bead size distribution (DSD: d₁₀ / d₃₂ / d₅₀ / d₉₀), pore architecture, mechanical modulus, residual oil / surfactant after wash |
+| **M2** | Functionalisation, reinforcement, ligand coupling | Reactive-site inventory (the `ACSSiteType` state vector), ligand density, activity retention, leaching / wash caveats |
+| **M3** | Affinity-column performance | Pack / equilibrate / load / wash / elute behaviour, breakthrough curve, pressure profile, dynamic binding capacity (DBC), recovery, optional Monte-Carlo P05/P50/P95 envelopes |
 
 The simulator exists for one reason: **screening**. It tells you what to expect, with explicit uncertainty, so you can narrow your bench parameter space, predict failure modes, and plan calibration experiments before consuming reagents and operator time.
 
 ---
 
-## Functionalities at a Glance
+## Confidence Model
 
-### Modelling capabilities (v0.6.0)
+Internalise these two ideas before reading any DPSim result.
 
-- **21 selectable polymer families** spanning the v9.1 baseline (agarose-chitosan, alginate, cellulose-NIPS, PLGA), the v9.2/v9.3 expansion (10 families), the v9.4 niche set (4 families), and the v9.5 multi-variant composites (3 families).
-- **103 functionalisation reagents** across **18 chemistry buckets** — secondary crosslinking, **ACS conversion** (replaces "hydroxyl activation"; covers ECH/DVS plus the 6 v0.5.0 ACS-converter routes CNBr/CDI/Tresyl/Cyanuric/Glyoxyl/Periodate), **arm-distal activation** (pyridyl-disulfide, v0.5.0), ligand coupling (IEX/HIC/IMAC/GST/heparin), protein coupling (Protein A/G/L canonical + Cys variants on maleimide and pyridyl-disulfide), spacer arms, metal charging, protein pretreatment, washing, quenching, plus eight specialty buckets (click, dye pseudo-affinity, mixed-mode HCIC, thiophilic, boronate, peptide-affinity, oligonucleotide, material-as-ligand).
-- **13 ion-gelant profiles** (per-family + freestanding) with biotherapeutic-safety flags.
-- **26 surface-chemistry site types** tracked through the M2 ACS state vector (v0.5.0 added `PYRIDYL_DISULFIDE`).
-- **Sequence-enforcing FSM** (v0.5.0 G6 guardrail) — recipes are validated at load time against the canonical *ACS Converter → Linker Arm → Ligand → Ion-charging* order, with arm-distal preconditions, metal-charge preconditions, and CNBr 15-min coupling-window enforcement.
-- **Cyanuric-chloride 3-stage staged kinetics** (v0.5.1) — per-Cl rate constants for 1st (0–5 °C) / 2nd (25 °C) / 3rd (60–80 °C) substitution, each ~10× slower than the previous due to electron donation from prior substituents.
-- **Periodate / glyoxyl chain-scission penalty** (v0.5.1) — G_DN multiplicatively reduced when oxidative converters exceed their conversion threshold (periodate 30 % / 70 % max loss; glyoxyl-chained 40 % / 50 % max loss).
-- **Lumped Rate Model (LRM)** chromatography solver with axial-dispersion + film-mass-transfer + Langmuir adsorption physics.
-- **Monte-Carlo LRM uncertainty driver** (v0.3.0) — propagates posterior uncertainty in q_max / K_L / pH parameters through the LRM and reports P05/P50/P95 envelopes on every metric and curve, with reformulated convergence diagnostics (quantile-stability + inter-seed posterior overlap).
-- **Optional Bayesian posterior fitting** (v0.3.1) — fit Langmuir parameters from raw isotherm assay data via pymc/NUTS with mandatory R-hat / ESS / divergence convergence gates.
-- **Calibration store** for ingesting wet-lab measurements and overriding screening defaults.
-- **Evidence-tier inheritance** — every predicted value carries one of five tiers (validated_quantitative → calibrated_local → semi_quantitative → qualitative_trend → unsupported). M3 cannot claim stronger evidence than its M2 inputs; M2 cannot claim stronger than its M1 inputs.
+### Five-tier evidence vocabulary
+
+| Tier | Meaning | When to trust |
+|---|---|---|
+| `validated_quantitative` | Calibrated against this specific system | Suitable for design within the validated domain |
+| `calibrated_local` | Fitted to local wet-lab data; not yet broadly cross-validated | Suitable for screening and local interpolation |
+| `semi_quantitative` | Literature-parameterised or mechanistically plausible | Trends are useful; magnitudes are approximate |
+| `qualitative_trend` | Directional or ranking-only | Use for screening and hypothesis generation only |
+| `unsupported` | Chemistry, unit, regime, or operation not represented | **Do not use for decisions** |
+
+### Tier inheritance — downstream cannot exceed upstream
+
+```mermaid
+flowchart LR
+    M1["M1 tier"] -->|"caps"| M2["M2 tier"]
+    M2 -->|"caps"| M3["M3 tier"]
+    style M1 fill:#0F766E,color:#F8FAFC,stroke:#2DD4BF
+    style M2 fill:#0F766E,color:#F8FAFC,stroke:#2DD4BF
+    style M3 fill:#0F766E,color:#F8FAFC,stroke:#2DD4BF
+```
+
+If M1 is `qualitative_trend`, the entire downstream pipeline is capped at `qualitative_trend`. The simulator does not allow M2 or M3 to claim more confidence than their inputs. The rule is enforced in `RunReport.compute_min_tier`.
+
+### When the number is good enough
+
+| Decision | Required evidence tier |
+|---|---|
+| Hypothesis generation, parameter-space narrowing | `qualitative_trend` is enough |
+| Choice between two screening alternatives | `semi_quantitative` |
+| Quantitative process design (e.g. column scale-up) | `calibrated_local` or `validated_quantitative` |
+| Regulatory submission or release | DPSim is **never** sufficient on its own |
+
+---
+
+## Capabilities at a Glance
+
+### Modelling
+
+- **21 polymer families** spanning the v9.1 baseline (4: agarose-chitosan, alginate, cellulose-NIPS, PLGA), the v9.2 / v9.3 expansion (10), the v9.4 niche set (4), and the v9.5 multi-variant composites (3).
+- **103 functionalisation reagents** across **18 chemistry buckets**: secondary crosslinking; **ACS conversion** (ECH, DVS, plus the six v0.5.0 routes CNBr / CDI / Tresyl / Cyanuric / Glyoxyl / Periodate); **arm-distal activation** (pyridyl-disulfide, v0.5.0); ligand coupling (IEX, HIC, IMAC, GST, heparin); protein coupling (Protein A / G / L canonical and Cys variants on maleimide and pyridyl-disulfide); spacer arms; metal charging; protein pre-treatment, washing, quenching; and eight specialty buckets (click, dye pseudo-affinity, mixed-mode HCIC, thiophilic, boronate, peptide-affinity, oligonucleotide, material-as-ligand).
+- **13 ion-gelant profiles** (per-family + freestanding) carrying biotherapeutic-safety flags (e.g. Al³⁺ flagged unsafe for clinical use under FDA/EP residue limits).
+- **26 surface-chemistry site types** tracked through the M2 `ACSSiteType` state vector; PYRIDYL_DISULFIDE is the most recent addition (v0.5.0).
+- **Sequence-enforcing finite-state machine** (v0.5.0 G6) — recipes are validated at load time against the canonical chemistry order *ACS Converter → Linker Arm → Ligand → Ion-charging*, with arm-distal preconditions, metal-charge preconditions, and a hard 15-min CNBr coupling-window enforcement (v0.5.1 G6.5):
+
+```mermaid
+flowchart LR
+    A["ACS Converter<br/>(CNBr · CDI · Tresyl · Cyanuric · Glyoxyl · Periodate · ECH · DVS)"]
+    B["Linker arm<br/>(pyridyl-disulfide · spacer)"]
+    C["Ligand coupling<br/>(Protein A/G/L · IEX · HIC · IMAC · click · …)"]
+    D["Ion charging / pre-treatment<br/>(Ni²⁺ · Cu²⁺ · pre-treatment · quench)"]
+    A --> B --> C --> D
+```
+
+- **Cyanuric-chloride 3-stage staged kinetics** (v0.5.1) — per-Cl rate constants for the 1st (0–5 °C), 2nd (25 °C), and 3rd (60–80 °C) substitution events, each ~10× slower than the previous due to electron donation from prior substituents.
+- **Periodate / glyoxyl chain-scission penalty** (v0.5.1) — `G_DN` is multiplicatively reduced when oxidative converters exceed their conversion threshold (periodate up to 30 % / 70 % loss; glyoxyl-chained 40 % / 50 %).
+- **Lumped Rate Model (LRM)** chromatography solver with axial-dispersion + film mass transfer + Langmuir adsorption.
+- **Monte-Carlo LRM uncertainty driver** (v0.3.0) — propagates posterior uncertainty in q_max / K_L / pH parameters through the LRM and reports P05 / P50 / P95 envelopes on every metric and curve. Convergence is judged by quantile-stability plateau plus inter-seed posterior overlap; R-hat is informational only.
+- **Optional Bayesian posterior fitting** (v0.3.1) — `fit_langmuir_posterior()` via PyMC / NUTS, behind the `[bayesian]` extra (~700 MB). R-hat / ESS / divergence convergence gates are mandatory and raise `BayesianFitConvergenceError` on failure.
+- **Calibration store** for ingesting wet-lab measurements and overriding screening defaults via the YAML wetlab-ingestion path.
+- **Evidence-tier inheritance** — every predicted value carries a tier; the inheritance rule above is enforced.
+
+### CFD-PBE coupling for M1 scale-up (v0.6.0 → v0.6.2)
+
+- **Schema-v1.0** `zones.json` contract (`cad/cfd/zones_schema.md`) with two ε per zone: `epsilon_avg` for coalescence, `epsilon_breakage_weighted` for breakage.
+- **Pydantic v2 zonal-PBE loader** with 11 hard validation paths; **bit-exact reduction to the bare PBE solver** in the 1-zone degenerate case.
+- **`dpsim cfd-zones` CLI subcommand** with material overrides, kernel preset, and optional `--legacy-eps` cross-check against the legacy Po · N³ · D⁵ / V_tank empirical estimate (30 % tolerance gate).
+- **OpenFOAM case scaffold** (`cad/cfd/cases/`) for both stirrer geometries with zone definitions, refinement levels, and the `extract_epsilon.py` post-processor that emits the schema-v1.0 zones.json.
 
 ### User-facing surfaces
 
-- **Streamlit dashboard** at `localhost:8501` — seven-step lifecycle workflow with interactive inputs, per-module result panels, validation report, evidence ladder, and run history.
-- **CLI** — `python -m dpsim run|lifecycle|recipe|ui` for batch processing and CI integration.
-- **Python API** — direct access to `DownstreamProcessOrchestrator`, `run_method_simulation`, `run_mc`, `fit_langmuir_posterior`, and the calibration store.
-- **Bundled documentation** — First Edition manual + Appendix J wet-lab protocols accessible via the upper-right corner of the dashboard.
+- **Streamlit dashboard** at `localhost:8501` — seven-step lifecycle workflow with interactive inputs, per-module result panels, validation report, evidence ladder, run history, and a live cross-section animation in the M1 *Hardware · Emulsification* box (4-state toggle: side / bottom × opaque / transparent; streamline-following droplets; explicit break-up event animation).
+- **CLI** — `python -m dpsim run | lifecycle | recipe | ui | cfd-zones` for batch processing and CI integration.
+- **Python API** — direct access to `DownstreamProcessOrchestrator`, `run_method_simulation`, `run_mc`, `fit_langmuir_posterior`, `integrate_pbe_with_zones`, and the calibration store.
+- **Bundled documentation** — First Edition manual + Appendix J wet-lab protocols + Appendix K CFD-PBE zonal coupling reference, all reachable from the dashboard's upper-right corner.
+
+---
+
+## Microsphere Fabrication Pathways
+
+DPSim covers **six classes** of polysaccharide-microsphere fabrication chemistry. The default first-run recipe is Pathway 1 (AGAROSE_CHITOSAN + Protein A); the others are reachable from the M1 family selector.
+
+| # | Pathway | Mechanism (one-liner) | Polymer families | Strengths | Trade-offs |
+|---|---|---|---|---|---|
+| 1 | Thermal helix-coil + covalent secondary network | Hot agarose ± chitosan emulsified into oil; cooling drives helix-coil junctions; an amine-reactive crosslinker (genipin / glutaraldehyde / ECH / DVS / BDDE / STMP) locks chitosan as a second IPN | AGAROSE_CHITOSAN (default), AGAROSE, CHITOSAN, AGAROSE_DEXTRAN | High modulus (1–10 MPa), well-validated, protein-compatible | Slow crosslinking (genipin: 24 h), hot emulsification, blue tint from genipin |
+| 2 | Ionotropic gelation (egg-box / helix aggregation) | Anionic polysaccharide droplets meet a multivalent cation bath; bridges form near-instantly. No covalent chemistry | ALGINATE (Ca²⁺), KAPPA_CARRAGEENAN (K⁺), PECTIN (Ca²⁺, low-methoxy), GELLAN (K⁺ or Ca²⁺), HYALURONATE (Ca²⁺ cofactor; covalent BDDE canonical) | Room-temperature, mild on biology, food-grade options | Ionic crosslinks dissolve in saline / pH extremes; lower modulus (~10–50 kPa). Trivalent gelants (Al³⁺) stronger but biotherapeutic-unsafe |
+| 3 | Non-Solvent-Induced Phase Separation (NIPS) | Cellulose dissolved in NaOH/urea, NMMO, ionic liquid, or DMAc/LiCl; emulsified droplets contact water; Cahn-Hilliard phase separation gives porous network. Quench depth controls morphology | CELLULOSE — sub-routes `naoh_urea`, `nmmo`, `emim_ac`, `dmac_licl` | Bicontinuous porosity, excellent protein compatibility, no covalent crosslinker | Solvent recovery dominates cost; the Cahn-Hilliard L2 solver is the simulator's most numerically demanding model |
+| 4 | Solvent-evaporation glassy microspheres | PLGA/DCM emulsified into aqueous PVA; DCM diffuses out and evaporates; PLGA vitrifies as glassy microsphere below T_g. No crosslinking | PLGA — grade presets 50:50, 75:25, 85:15, 100:0 (PLA) | Bioresorbable, FDA-familiar, tunable degradation | Organic-solvent handling; potential drug degradation during evaporation; glassy mechanics (>1 GPa) |
+| 5 | Material-as-ligand (B9 pattern) | The polymer matrix *is* the affinity ligand. No coupling chemistry; M3 elutes by competitive eluent | AMYLOSE (captures MBP-tagged fusions; eluent 10 mM maltose), CHITIN (captures CBD/intein fusions, NEB IMPACT; 50 mM DTT triggers self-cleavage) | No coupling step; orthogonal selectivity | Limited capacity vs Protein A; tag-dependent |
+| 6 | Multi-variant composites (v9.5) | IPN or PEC architectures combining two pathways for pH-controlled release or food-texture targets | AGAROSE_ALGINATE (Chen 2022), ALGINATE_CHITOSAN (Liu 2017), PECTIN_CHITOSAN (Birch 2014), GELLAN_ALGINATE (Pereira 2018), PULLULAN_DEXTRAN (Singh 2008) | Tunable response window; richer mechanical envelope | Two coupled chemistries → higher calibration burden |
+
+The full polymer-family selection chart, with chemistry-to-application mapping and primary references, is in [`docs/user_manual/polysaccharide_microsphere_simulator_first_edition.md`](docs/user_manual/polysaccharide_microsphere_simulator_first_edition.md) §5.5.
+
+---
+
+## Hardware Geometry and CFD-PBE Coupling
+
+M1 supports two hardware modes selected at recipe time. Each ships parametric CAD geometry (CadQuery → STEP AP242 + STL) plus an OpenFOAM case scaffold for ε-field validation.
+
+| Mode | Geometry | Use case |
+|---|---|---|
+| **Stirrer A** | Disk Ø 59 mm × 1 mm with 19 perimeter tabs (10 UP / 9 DOWN, alternating; 10° tangential pitch). Pitched-blade impeller in a 100 mL beaker | Pitched-blade reference; figure-8 axial recirculation |
+| **Stirrer B** | Cross rotor (Ø 25.7 mm × 16 mm) inside a perforated stator (Ø 32.03 × 18 mm, 2.2 mm wall, **72 Ø 3 mm perforations** in a 3 × 24 rectangular grid, closed top with Ø 10 mm shaft passage) | High-shear rotor-stator; the canonical breakage-jet geometry |
+
+### Why the slot exit matters
+
+Padron 2005 and Hall 2011 establish that **80–95 % of breakage in rotor-stator devices happens in the small region just outside each stator perforation**, where rotating fluid blasts through the gap and dissipates suddenly. A volume-averaged ε will therefore systematically under-predict breakage. DPSim's CFD-PBE coupling (v0.6.2) addresses this by partitioning the vessel into zones — `impeller`, `slot_exit`, `near_wall`, `bulk` — each carrying its own ε for breakage and for coalescence, which the zonal PBE then integrates with one-way convective exchanges:
+
+```mermaid
+flowchart LR
+    CAD["📐 CadQuery STEP / STL<br/>cad/scripts/build_geometry.py"] --> SH["snappyHexMesh<br/>level-5 surface, level-4 slot-exit shell"]
+    SH --> SOLVE["pimpleDyMFoam<br/>(sliding mesh)"]
+    SOLVE --> EX["extract_epsilon.py<br/>cell-zone aggregation"]
+    EX --> ZJ["📋 zones.json schema-v1.0"]
+    ZJ --> ZP["dpsim cfd-zones<br/>integrate_pbe_with_zones"]
+    ZP --> DSD["DSD with zone-resolved breakage"]
+```
+
+The pipeline is shipped as a starting point. End-to-end predictions for absolute scale-up require a PIV validation campaign (envelope in Appendix K §K.4.6).
 
 ---
 
 ## Installation
 
-DPSim ships **three** installation paths. Pick the one that matches your situation.
+DPSim ships **three** installation paths.
 
 ### 1. One-click Windows installer (recommended for end-users)
 
-Download from the GitHub Releases page:
-
-> [**Releases → DPSim-0.6.0-Setup.exe**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
+> [**Releases → DPSim-Setup.exe (latest)**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
 
 Double-click the `.exe`. The installer:
 
 1. Shows the EULA page first — Holocyte Pty Ltd IP, GPL-3.0, GitHub source URL.
 2. Installs to `%LOCALAPPDATA%\Programs\DPSim` (per-user; no admin needed).
-3. Detects whether Python 3.11/3.12 is on PATH and offers to open the python.org download page if missing.
+3. Detects whether Python 3.11 / 3.12 is on PATH and offers to open the python.org download page if missing.
 4. Creates an isolated `.venv\` and pip-installs the bundled wheel.
 5. Adds Start-Menu and (optional) desktop shortcuts.
 6. Offers to launch the dashboard immediately.
 
 ### 2. Portable ZIP (no installation)
 
-Download from the same Releases page:
+> [**Releases → DPSim-Windows-x64-portable.zip (latest)**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
 
-> [**Releases → DPSim-0.6.0-Windows-x64-portable.zip**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
-
-Extract anywhere (e.g. `D:\Apps\DPSim`). Run `install.bat` once, then `launch_ui.bat` to start. To uninstall, delete the folder — no registry or Start-Menu trace.
+Extract anywhere (e.g. `D:\Apps\DPSim`). Run `install.bat` once, then `launch_ui.bat`. To uninstall, delete the folder — no registry or Start-Menu trace.
 
 ### 3. Source install (developers)
 
 ```bash
 git clone https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator
-cd "Downstream-Processing-Simulator"
+cd Downstream-Processing-Simulator
 pip install -e .
 ```
 
@@ -113,7 +223,7 @@ Optional extras:
 pip install -e ".[dev]"           # tests + linting
 pip install -e ".[ui]"            # streamlit + plotly
 pip install -e ".[optimization]"  # botorch + gpytorch + torch
-pip install -e ".[bayesian]"      # pymc + arviz (G4 NUTS posterior fit)
+pip install -e ".[bayesian]"      # pymc + arviz (NUTS posterior fit)
 pip install -e ".[all]"           # everything
 ```
 
@@ -132,10 +242,10 @@ python -m dpsim lifecycle configs/fast_smoke.toml
 |---|---|---|
 | Operating system | Windows 11 x64 (Windows 10 x64 also works) | macOS / Linux work for the source install but no native installer is shipped |
 | Python | **3.11 or 3.12** | 3.13+ unsupported per [`docs/decisions/ADR-001`](docs/decisions/) (scipy BDF + numba JIT cache issues) |
-| RAM | 8 GB recommended (4 GB minimum) | MC-LRM with N≥1000 samples can use 1-2 GB |
+| RAM | 8 GB recommended (4 GB minimum) | MC-LRM with N ≥ 1000 samples can use 1–2 GB |
 | Disk | 2 GB free for the local `.venv\` | Wheel itself is ≈ 2 MB |
-| Network | Internet during first install | pip downloads ~1 GB of scientific dependencies (numpy, scipy, plotly, streamlit, …) |
-| GPU | Not required | Optional for `[optimization]` extra (botorch on CUDA) |
+| Network | Internet during first install | pip downloads ~1 GB of scientific dependencies |
+| GPU | Not required | Optional for `[optimization]` extra (BoTorch on CUDA) |
 
 ---
 
@@ -153,9 +263,9 @@ The dashboard binds to `http://localhost:8501`. Your default browser should open
 
 The default recipe is **agarose-chitosan + Protein A**, calibrated for first-time users:
 
-1. Open the **Polymer Family** tab on M1, leave AGAROSE_CHITOSAN selected.
-2. Open M2, pick the `epoxy_protein_a` template.
-3. Open M3, leave the default Protein A method (bind pH 7.4, elute pH 3.5).
+1. On M1, open the **Polymer Family** tab and leave AGAROSE_CHITOSAN selected.
+2. On M2, pick the `epoxy_protein_a` template.
+3. On M3, leave the default Protein A method (bind pH 7.4, elute pH 3.5).
 4. Click **Run Lifecycle Simulation**.
 5. Review the **Validation & Evidence** panel — every numeric output carries its evidence tier.
 
@@ -165,6 +275,7 @@ The default recipe is **agarose-chitosan + Protein A**, calibrated for first-tim
 python -m dpsim run configs/default.toml
 python -m dpsim recipe export-default --output recipe.toml
 python -m dpsim lifecycle configs/fast_smoke.toml --recipe recipe.toml
+python -m dpsim cfd-zones --zones zones.json --kernel alopaeus
 ```
 
 ### Python API
@@ -192,7 +303,7 @@ samples = PosteriorSamples.from_marginals(
 )
 solver = make_langmuir_lrm_solver(column=col, C_feed=1.0, ...)
 bands = run_mc(samples, solver, n=200, n_seeds=4, n_jobs=4)
-print(bands.scalar_quantiles["mass_eluted"])  # P05/P50/P95
+print(bands.scalar_quantiles["mass_eluted"])  # P05 / P50 / P95
 ```
 
 ---
@@ -204,24 +315,30 @@ Downstream-Processing-Simulator/
 ├── src/dpsim/                          # Production source
 │   ├── core/                           # Quantities, parameters, ProcessRecipe, evidence roll-up
 │   ├── lifecycle/                      # M1→M2→M3 orchestrator
-│   ├── pipeline/                       # M1 fabrication pipeline (legacy L1-L4 kernels)
+│   ├── pipeline/                       # M1 fabrication pipeline (legacy L1-L4 kernels; called by lifecycle)
 │   ├── level1_emulsification/          # Population balance + hydrodynamics
 │   ├── level2_gelation/                # Polymer-family L2 solvers + composite dispatch + ion registry
 │   ├── level3_crosslinking/            # Primary network kinetics
 │   ├── level4_mechanical/              # Bead mechanics
-│   ├── module2_functionalization/      # ACS state, reagent profiles (96 entries), reactions
+│   ├── module2_functionalization/      # ACS state, REAGENT_PROFILES, reactions, sequence FSM
 │   ├── module3_performance/            # LRM, isotherms, hydrodynamics, MC-LRM driver, solver-lambdas
+│   ├── cfd/                            # Schema-v1.0 zonal-PBE loader + integrator (v0.6.2)
 │   ├── calibration/                    # Calibration data, store, wet-lab ingestion, posterior samples, Bayesian fit
-│   ├── visualization/                  # Streamlit app, M1/M2/M3 tabs, plot modules
+│   ├── visualization/                  # Streamlit app, M1/M2/M3 tabs, plot modules, live xsec animation
 │   ├── optimization/                   # Bayesian optimisation (optional [optimization] extra)
 │   ├── reagent_library*.py             # M1 crosslinker / surfactant / gelant registries
 │   └── datatypes.py                    # PolymerFamily, ACSSiteType, ModelEvidenceTier, ModelMode enums
 │
+├── cad/                                # Parametric CAD geometry (v0.6.0)
+│   ├── scripts/build_geometry.py       # CadQuery generator for Stirrer A/B + beaker + jacketed vessel
+│   ├── output/                         # Generated STEP AP242 + STL
+│   └── cfd/                            # OpenFOAM case scaffold + post-processor + zone schema
 ├── tests/                              # 510+ tests across all modules + AST gates
 ├── configs/                            # Default + smoke + stirred-vessel TOML recipes
-├── data/wetlab_calibration_examples/   # Q-013/Q-014 example campaigns (YAML)
+├── data/wetlab_calibration_examples/   # Example wet-lab campaigns (YAML)
 ├── docs/
-│   ├── user_manual/                    # First Edition manual + Appendix J + PDFs
+│   ├── user_manual/                    # First Edition manual + Appendix J + Appendix K + PDFs
+│   ├── figures/                        # PNG renders of README Mermaid diagrams (regeneration script included)
 │   ├── handover/                       # Cycle handovers (planning + close documents)
 │   ├── decisions/                      # ADRs
 │   └── *.md                            # Topic-specific design notes
@@ -234,145 +351,21 @@ Downstream-Processing-Simulator/
 └── pyproject.toml                      # Package metadata, dependencies, extras
 ```
 
----
-
-## Microsphere Fabrication Pathways
-
-DPSim covers **four classes** of polysaccharide-microsphere fabrication chemistry. Pick a pathway based on your application.
-
-### Pathway 1 — Thermal helix-coil + covalent secondary network
-
-**Mechanism.** A hot polysaccharide solution (typically agarose ± chitosan) is emulsified into oil with a surfactant. On cooling below the gel temperature (~38 °C for agarose), helix-coil junction zones form. A subsequent amine-reactive crosslinker (genipin / glutaraldehyde / epichlorohydrin / DVS / BDDE / STMP) covalently locks chitosan into a second interpenetrating network.
-
-**Polymer families:** AGAROSE_CHITOSAN (default, the v9.1 baseline), AGAROSE (Sepharose-class baseline), CHITOSAN, AGAROSE_DEXTRAN (Capto-class core-shell).
-
-**Strengths.** High modulus (1–10 MPa), well-validated, protein-compatible.
-**Trade-offs.** Slow crosslinking (24 h for genipin), hot emulsification, blue tint from genipin.
-
-### Pathway 2 — Ionotropic gelation (egg-box / helix aggregation)
-
-**Mechanism.** An anionic polysaccharide solution is emulsified or extruded as droplets, which contact a multivalent cation bath. The cation bridges paired carboxylate or sulfate residues into junction zones, forming a gel near-instantly. No covalent chemistry.
-
-**Variants and ions:**
-
-| Family | Ion | Mechanism reference |
-|---|---|---|
-| ALGINATE | Ca²⁺ (CaCl₂ external bath, GDL/CaCO₃ internal release, or CaSO₄ internal release) | Egg-box of G-block guluronate (Draget 1997) |
-| KAPPA_CARRAGEENAN | K⁺ (specific helix aggregation) | Pereira 2021 |
-| PECTIN | Ca²⁺ (low-methoxy, DE < 50%) | Voragen 2009 |
-| GELLAN | K⁺ or Ca²⁺ (low-acyl) | Morris 2012 |
-| HYALURONATE | Ca²⁺ (cofactor only; covalent BDDE is canonical) | Hahn 2006 |
-
-**Strengths.** Room-temperature processing, mild on biology, food-grade options.
-**Trade-offs.** Ionic crosslinks dissolve in saline / pH extremes; lower modulus (~10–50 kPa) than covalent systems. Trivalent gelants (Al³⁺) are stronger but biotherapeutic-unsafe (FDA/EP residue regulation).
-
-### Pathway 3 — Non-Solvent-Induced Phase Separation (NIPS)
-
-**Mechanism.** Cellulose is dissolved in a solvent (NaOH/urea, NMMO, ionic liquid, DMAc/LiCl) and emulsified. Droplets contact a non-solvent (water), which diffuses in and triggers phase separation via a Cahn-Hilliard free-energy functional. Quench depth controls morphology — shallow gives cellular gels, deep gives bicontinuous porous networks.
-
-**Polymer families:** CELLULOSE (NIPS) — sub-routes: `naoh_urea` (default), `nmmo`, `emim_ac`, `dmac_licl`.
-
-**Strengths.** Bicontinuous porosity (open structure), excellent protein compatibility, no covalent crosslinker needed.
-**Trade-offs.** Solvent recovery dominates cost; the Cahn-Hilliard L2 solver is the simulator's most numerically demanding model.
-
-### Pathway 4 — Solvent-evaporation glassy microspheres
-
-**Mechanism.** PLGA dissolved in DCM is emulsified into an aqueous PVA phase. DCM diffuses out, evaporates, and PLGA concentration rises until it vitrifies into a glassy microsphere. No crosslinking — mechanical stability comes from the entangled glassy state below T_g.
-
-**Polymer families:** PLGA — grade presets 50:50, 75:25, 85:15, 100:0 (PLA).
-
-**Strengths.** Bioresorbable, FDA-familiar, tunable degradation.
-**Trade-offs.** Organic-solvent handling; potential drug degradation during evaporation; glassy mechanics (1 GPa+).
-
-### Pathway 5 — Material-as-ligand (B9 pattern)
-
-**Mechanism.** The polymer matrix IS the affinity ligand. No coupling chemistry required; M3 elution uses a competitive-eluent workflow.
-
-| Family | Captures | Eluent |
-|---|---|---|
-| AMYLOSE | MBP-tagged fusion proteins | 10 mM maltose |
-| CHITIN | CBD/intein-tagged fusions (NEB IMPACT) | 50 mM DTT triggers self-cleavage |
-
-### Pathway 6 — Multi-variant composites (v9.5)
-
-For pH-controlled drug delivery and food-texture systems:
-
-| Family | Components | Notes |
-|---|---|---|
-| AGAROSE_ALGINATE | Thermal agarose + Ca²⁺ alginate IPN | ~30% G_DN reinforcement (Chen 2022) |
-| ALGINATE_CHITOSAN | Alginate Ca²⁺ skeleton + chitosan PEC shell | pH window 5.5–6.5 (Liu 2017) |
-| PECTIN_CHITOSAN | Pectin Ca²⁺ skeleton + chitosan PEC shell | DE-dependent (Birch 2014) |
-| GELLAN_ALGINATE | Dual ionic-gel; alginate dominant | +20% gellan helix reinforcement (Pereira 2018) |
-| PULLULAN_DEXTRAN | Neutral α-glucan composite | ECH or STMP crosslinking (Singh 2008) |
-
-The full polymer-family selection chart, with chemistry-to-application mapping, is in [`docs/user_manual/polysaccharide_microsphere_simulator_first_edition.md`](docs/user_manual/polysaccharide_microsphere_simulator_first_edition.md) §5.5.
+> **Note on the dual M1 codepath.** `pipeline/` hosts the legacy L1-L4 kernels that are still load-bearing for M1 fabrication; `level1_emulsification/` is the population-balance / hydrodynamics layer that the lifecycle orchestrator and the CFD-PBE coupling both consume. Both are real and current; do not delete one looking for the other.
 
 ---
 
-## Operating Principles
-
-DPSim's seven-step lifecycle workflow is the authoritative user contract:
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                Lifecycle Simulation Flow                         │
-└──────────────────────────────────────────────────────────────────┘
-   ┌──────────────┐    ┌─────────────┐    ┌─────────────┐
-   │  Step 1      │ →  │  Step 2     │ →  │  Step 3     │
-   │  Target      │    │  M1 recipe  │    │  M2 recipe  │
-   │  product     │    │             │    │             │
-   │  profile     │    │             │    │             │
-   └──────────────┘    └─────────────┘    └─────────────┘
-                                                  │
-                                                  ↓
-   ┌──────────────┐    ┌─────────────┐    ┌─────────────┐
-   │  Step 7      │ ←  │  Step 6     │ ←  │  Step 4     │
-   │  Calibration │    │ Validation  │    │  M3 column  │
-   │  + wet-lab   │    │ + Evidence  │    │  method     │
-   └──────────────┘    └─────────────┘    └─────────────┘
-                              ↑                   │
-                              │                   ↓
-                       ┌──────────────┐    ┌─────────────┐
-                       │  Step 5      │ ←  │ProcessRecipe│
-                       │  Run lifecyc.│    │             │
-                       └──────────────┘    └─────────────┘
-```
-
-Each step writes into a single in-memory `ProcessRecipe` object — the same object drives the UI, CLI, validation layer, and lifecycle orchestrator. **What you see in the UI is exactly what runs.**
-
-### Five-tier evidence vocabulary
-
-Internalise these before reading any DPSim result:
-
-| Tier | Meaning | When to trust |
-|---|---|---|
-| `validated_quantitative` | Calibrated against this specific system | Suitable for design within the validated domain |
-| `calibrated_local` | Fitted to local wet-lab data; not yet broadly cross-validated | Suitable for screening and local interpolation |
-| `semi_quantitative` | Literature-parameterised or mechanistically plausible | Trends are useful; magnitudes are approximate |
-| `qualitative_trend` | Directional or ranking-only | Use for screening and hypothesis generation only |
-| `unsupported` | Chemistry, unit, regime, or operation not represented | **Do not use for decisions** |
-
-### Evidence-tier inheritance rule
-
-```
-M1 calibration tier   ──cap──→   M2 calibration tier
-                                      │
-                                      ↓ cap
-                                M3 calibration tier
-```
-
-If M1 is `qualitative_trend`, the entire downstream pipeline is capped at `qualitative_trend`. The simulator does not allow M2 or M3 to claim more confidence than their inputs. This rule is enforced in `RunReport.compute_min_tier`.
-
-### Numerical solver matrix
+## Numerical Solver Matrix
 
 | Model | Default solver | Rationale |
 |---|---|---|
 | Population balance (M1 emulsification) | scipy LSODA | Non-stiff PBE moments |
 | Cahn-Hilliard NIPS (cellulose) | Spectral semi-implicit | Stiff fourth-order PDE |
-| Lumped Rate Model (M3, default) | scipy `solve_ivp(method="BDF")` | Non-gradient case |
+| Lumped Rate Model (M3, default) | `solve_ivp(method="BDF")` | Non-gradient case |
 | LRM with gradient elution | BDF | LSODA oscillates with time-varying binding equilibrium |
-| Catalysis packed bed (PFR + Michaelis-Menten) | LSODA | ~700× faster than BDF on non-stiff problem |
+| Catalysis packed bed (PFR + Michaelis-Menten) | LSODA | ~700× faster than BDF on the non-stiff problem |
 | MC-LRM tail samples | BDF with 10× tightened tolerances | Tier-1 numerical safeguard per SA-Q1 / D-046 |
+| Zonal PBE integrator (CFD-PBE) | LSODA via `solve_ivp` | Reuses Alopaeus and Coulaloglou-Tavlarides kernels |
 
 LSODA fallback for high-affinity Langmuir paths is **explicitly rejected** — the codebase has documented LSODA stalls there.
 
@@ -380,76 +373,62 @@ LSODA fallback for high-affinity Langmuir paths is **explicitly rejected** — t
 
 ## Development Philosophy
 
-DPSim is built on five principles. They permeate the codebase:
-
 1. **First-principles decomposition.** Every model is reasoned from physics or chemistry first; convention follows analysis. Algorithm choices are justified by complexity, convergence, and numerical stability.
-
-2. **Modularity and parallel-module pattern.** Adding a new polymer family does **not** modify existing solvers. Instead, a new file is created alongside, the new family delegates to the closest existing solver in a sandbox, then re-tags the result with family-specific manifest provenance. This guarantees bit-for-bit equivalence with calibrated kernels by construction (D-016 / D-017 / D-027 / D-037).
-
+2. **Modularity and the parallel-module pattern.** Adding a new polymer family does **not** modify existing solvers. A new file is created alongside; the new family delegates to the closest existing solver in a sandbox, then re-tags the result with family-specific manifest provenance. This guarantees bit-for-bit equivalence with calibrated kernels by construction (D-016 / D-017 / D-027 / D-037).
 3. **Evidence as a first-class citizen.** Every value carries a tier. Every assumption is surfaced. Every model has a `ModelManifest` with `evidence_tier`, `valid_domain`, `assumptions`, `diagnostics`, and `calibration_ref` fields. The UI displays them; users cannot accidentally use an `unsupported` value.
-
-4. **Computational economics.** Every design decision considers compute / memory / time cost against the value of the output. Over-engineering is a defect. Solver tolerances and integration bounds are tuned per model (CLAUDE.md pins the matrix).
-
+4. **Computational economics.** Every design decision considers compute / memory / time cost against the value of the output. Over-engineering is a defect. Solver tolerances and integration bounds are tuned per model (see `CLAUDE.md`).
 5. **Reproducibility and auditability.** Every pipeline run produces deterministic or statistically-characterised outputs. All parameters, seeds, and environmental dependencies are documented. Any result can be reproduced from the `ProcessRecipe`.
 
 ### Quality gates (CI-enforced)
 
 - **ruff = 0** — zero lint warnings.
 - **mypy = 0** — zero type errors on new files.
-- **AST gate** — `tests/test_v9_3_enum_comparison_enforcement.py` walks `src/dpsim/` and `tests/`, failing the build on any `is`/`is not` comparison against `PolymerFamily`, `ACSSiteType`, `ModelEvidenceTier`, or `ModelMode`. (Reason: Streamlit reloads `dpsim.datatypes` on every rerun, minting a new enum class — identity comparisons silently break after the first rerun.)
-- **Smoke baseline preservation** — every release verifies that legacy v0.2.x output is byte-identical when the new feature is opted out (e.g. `monte_carlo_n_samples=0`).
+- **AST enum-comparison gate** — `tests/test_v9_3_enum_comparison_enforcement.py` walks `src/dpsim/` and `tests/`, failing the build on any `is` / `is not` comparison against `PolymerFamily`, `ACSSiteType`, `ModelEvidenceTier`, or `ModelMode`. Reason: Streamlit reloads `dpsim.datatypes` on every rerun, minting a new enum class — identity comparisons silently break after the first rerun.
+- **Smoke baseline preservation** — every release verifies that legacy v0.2.x output is byte-identical when the new feature is opted out (e.g. `monte_carlo_n_samples = 0`).
 - **Coverage gates** — every reagent in `REAGENT_PROFILES` must surface in at least one M2 dropdown bucket; every value in `ALLOWED_FUNCTIONAL_MODES` must live in exactly one bucket.
 
 ---
 
-## Usage Considerations
-
-### When to trust DPSim's number
-
-| Decision | Required evidence tier |
-|---|---|
-| Hypothesis generation, parameter-space narrowing | `qualitative_trend` is enough |
-| Design choice between two screening alternatives | `semi_quantitative` |
-| Quantitative process design (e.g. column scale-up) | `calibrated_local` or `validated_quantitative` |
-| Regulatory submission or release | DPSim is **never** sufficient on its own |
+## Limits and the Wet-Lab Loop
 
 ### What DPSim is not
 
 - Not a regulatory tox / stability study substitute.
 - Not a GMP batch-record generator (the exported wet-lab SOP is a development scaffold).
-- Not a guarantee of clinical / diagnostic / manufacturing fitness.
+- Not a guarantee of clinical, diagnostic, or manufacturing fitness.
 - Not a predictor for novel polymers outside the family registry.
-- Not a refusal engine — it warns you when you exceed validation regimes, but it still runs.
+- Not a refusal engine — it warns when you exceed validation regimes, but it still runs.
 
 ### The wet-lab loop
 
-DPSim is a screening tool first. The wet-lab loop turns it into a quantitative tool for your specific system:
+DPSim is a screening tool first. The wet-lab loop turns it into a quantitative tool for *your* specific system:
 
 1. Run a screening simulation. Get `semi_quantitative` magnitudes.
-2. DPSim's wet-lab caveats and validation report tell you which assays will most reduce uncertainty.
-3. Upload measured data into the calibration store.
+2. The validation report tells you which assays will most reduce uncertainty.
+3. Upload measured data into the calibration store (`dpsim.calibration.wetlab_ingestion` accepts YAML campaigns; examples in `data/wetlab_calibration_examples/`).
 4. Re-run. The simulator now reports `calibrated_local` evidence within the validated domain.
 
 ### Hazard considerations
 
-The reagent library covers 96 chemistries. Several are classified as carcinogenic, mutagenic, reproductively toxic, or strongly sensitising (e.g. CNBr, glutaraldehyde, DCM, cyanuric chloride, AlCl₃, borax). Every reagent profile carries a `hazard_class` field that the UI surfaces, and Appendix J carries SDS-lite blocks for every reagent. **Always consult your institution's safety office and the reagent's full SDS before bench work.**
+The reagent library covers 103 chemistries. Several are classified as carcinogenic, mutagenic, reproductively toxic, or strongly sensitising (e.g. CNBr, glutaraldehyde, DCM, cyanuric chloride, AlCl₃, borax). Every reagent profile carries a `hazard_class` field that the UI surfaces, and Appendix J carries SDS-lite blocks for every reagent. **Always consult your institution's safety office and the reagent's full SDS before bench work.**
 
 ---
 
 ## Documentation Map
 
-### User-facing documentation (start here)
+### User-facing (start here)
 
 | File | Audience | Purpose |
 |---|---|---|
 | [`docs/user_manual/polysaccharide_microsphere_simulator_first_edition.md`](docs/user_manual/polysaccharide_microsphere_simulator_first_edition.md) | Operators, junior researchers | Comprehensive instruction manual: workflow, polymer families, M2 chemistry, M3 / MC, calibration, formulas, troubleshooting |
 | [`docs/user_manual/appendix_J_functionalization_protocols.md`](docs/user_manual/appendix_J_functionalization_protocols.md) | Wet-lab researchers | 103-reagent functionalisation protocols with SDS-lite hazard blocks |
+| [`docs/user_manual/appendix_K_cfd_pbe_zonal_coupling.md`](docs/user_manual/appendix_K_cfd_pbe_zonal_coupling.md) | Process engineers | CFD-PBE zonal coupling — zone partitioning, mesh requirements, validation envelope |
 | [`docs/quickstart.md`](docs/quickstart.md) | First-time users | One-page getting-started |
 | [`docs/configuration.md`](docs/configuration.md) | All users | TOML and `ProcessRecipe` parameter reference |
 | [`docs/INDEX.md`](docs/INDEX.md) | All users | Documentation navigation |
-| `docs/user_manual/*.pdf` | All users | Built PDF versions of the manual + Appendix J — also accessible from the dashboard's upper-right corner |
+| `docs/user_manual/*.pdf` | All users | Built PDF versions of the manual + appendices — also accessible from the dashboard |
 
-### Developer documentation
+### Developer
 
 | File | Audience | Purpose |
 |---|---|---|
@@ -460,6 +439,7 @@ The reagent library covers 96 chemistries. Several are classified as carcinogeni
 | [`docs/decisions/`](docs/decisions/) | Maintainers | Architecture Decision Records (ADRs) |
 | [`docs/DPS_CLEAN_SLATE_ARCHITECTURE.md`](docs/DPS_CLEAN_SLATE_ARCHITECTURE.md) | Architects | Clean-slate architecture reference |
 | [`installer/README.md`](installer/README.md) | Release engineers | Windows installer + portable ZIP build pipeline |
+| [`docs/figures/README.md`](docs/figures/README.md) | All | Mermaid sources + PNG exports of every diagram in this README |
 
 ---
 
@@ -467,24 +447,26 @@ The reagent library covers 96 chemistries. Several are classified as carcinogeni
 
 DPSim follows a **fork-line versioning** convention: `v0.x` is the DPSim fork's release line; `v9.x` is the upstream simulator's release line (last upstream release `v9.2.2` on 2026-04-24). Internal cycle labels (Tier-1/2/3 batches, G1–G5 module groups) are orthogonal to either version line.
 
-| Version | Date | Headline | Key additions |
-|---|---|---|---|
-| **v0.1.0** | 2026-04-19 | Initial DPSim fork | Package rename `dpsim`, lifecycle CLI, clean-slate architecture primitives |
-| **v0.2.0** | 2026-04-25 | Functional-Optimization (Tiers 1-3) | 50 SA-screened candidates processed; 14 polymer families promoted; 50 reagent profiles added; ACS site types extended to 25; closed-vocabulary discipline established |
-| **v0.3.0** | 2026-04-25 | P5++ MC-LRM core | `PosteriorSamples` G1 + `run_mc()` G2 + `MethodSimulationResult.monte_carlo` G3 dispatch; Tier-1 numerical safeguards; reformulated convergence diagnostics |
-| **v0.3.1** | 2026-04-25 | Optional Bayesian fit (G4) | `fit_langmuir_posterior()` via pymc/NUTS, behind `[bayesian]` extra; mandatory R-hat / ESS / divergence gates |
-| **v0.3.2** | 2026-04-25 | UI bands + dossier MC (G5) | Plotly P05/P50/P95 envelope plot; ProcessDossier MC export with curve decimation |
-| **v0.3.3** | 2026-04-25 | v9.5 multi-variant composites | PECTIN_CHITOSAN, GELLAN_ALGINATE, PULLULAN_DEXTRAN promoted; borax reversibility warning |
-| **v0.3.4** | 2026-04-25 | M2 dropdown audit fix | M2 reagent coverage 50/94 → 94/94 (100%); 8 new chemistry buckets |
-| **v0.3.5** | 2026-04-25 | Audit follow-ons | Ion-gelant picker (1/13 → 13/13); ACS visibility (≤9/25 → 23/25); crosslinker registry split documented |
-| **v0.3.6** | 2026-04-25 | Closed all v0.3.x follow-ons | Click alkyne reference (24/25); low-N MC warning; joblib parallelism wired; solver-lambda helper; pectin DE / gellan K⁺ / pullulan STMP variants |
-| **v0.3.7** | 2026-04-25 | First Edition manual refresh | ~1100-line manual rewrite; Appendix J § J.11 addendum (13 new SDS-lite protocol stubs) |
-| **v0.3.8** | 2026-04-25 | Release tooling | Windows installer + portable ZIP build pipeline; `__DPSIM_VERSION__` placeholder discipline |
-| **v0.4.x** | 2026-04-26 | Direction-A standalone alignment + Streamlit 1.55 fixes | Pipeline-spine integration; theme toggle; M3 Resin Lifetime Projection; CSS-injection regression fix |
-| **v0.5.0** | 2026-04-27 | M2 ACS Converter epic | First-class `ACS_CONVERSION` + `ARM_ACTIVATION` step types; 7 ACS-converter reagents (CNBr / CDI / Tresyl / Cyanuric / Glyoxyl / Periodate / Pyridyl-disulfide) with closed-loop coupling; new `PYRIDYL_DISULFIDE` ACS member; 147-row family-reagent matrix expansion; G6 sequence FSM guardrail; periodate aldehyde-multiplier 2× fix; "Hydroxyl Activation" UI bucket renamed to "ACS Conversion" + new "Arm-distal Activation" bucket |
-| **v0.5.1** | 2026-04-27 | ACS Converter deferred-work follow-on | Cyanuric 3-stage staged kinetics; periodate / glyoxyl chain-scission penalty on G_DN; per-protein pyridyl-disulfide variants (Cys-Protein A / G / L); G6.5 strengthened to BLOCKER on > 15 min CNBr-to-coupling gap |
-| **v0.5.2** | 2026-04-27 | Codex-review fixes (release-breakers in v0.5.1) | Orchestrator preflight + PROTEIN_COUPLING dispatch allowlists expanded for new ACS-conversion / arm-activation reagents; new `ProcessStepKind.ARM_ACTIVATE`; G6.1 phase-ranking + reagent-key override; G6.5 CNBr time-window now unit-aware (s / min / h via new `_qty_to_seconds`) |
-| **v0.6.0** | 2026-05-01 | CAD geometry handoff + OpenFOAM CFD-PBE scaffolding + Stirrer A xsec v2 | Parametric CadQuery geometry generator producing STEP+STL for Stirrer A (19-tab disk), Stirrer B rotor-stator, beaker, jacketed vessel; OpenFOAM CFD-PBE pipeline scaffold; `datatypes.py` Stirrer A correction (6→19 tabs, 10→8.5 mm height, blade_angle reinterpreted as tangential pitch); UI caps (RPM 2000→2500, cooling 15/20→50 °C/min); new live cross-section component with 4-state toggle (side/bottom × opaque/transparent) + streamline-following droplets via `<animateMotion>` + explicit break-up event animation |
+| Version | Date | Headline |
+|---|---|---|
+| **v0.6.3** | 2026-05-04 | Stirrer B stator hole-count correction (3 × 12 = 36 → 3 × 24 = 72) — physically faithful CAD + UI animation |
+| **v0.6.2** | 2026-05-01 | CFD-PBE zonal coupling end-to-end — schema-v1.0 zones.json, zonal PBE integrator, OpenFOAM post-processor, `dpsim cfd-zones` CLI |
+| **v0.6.0** | 2026-05-01 | CAD geometry handoff + OpenFOAM CFD-PBE scaffolding + Stirrer A xsec v2 (parametric CadQuery generator; live cross-section animation) |
+| **v0.5.2** | 2026-04-27 | Codex-review fixes for v0.5.1 release-breakers |
+| **v0.5.1** | 2026-04-27 | ACS Converter deferred-work follow-on (cyanuric staged kinetics; periodate / glyoxyl chain-scission penalty) |
+| **v0.5.0** | 2026-04-27 | M2 ACS Converter epic — 7 ACS-converter reagents, G6 sequence FSM, `PYRIDYL_DISULFIDE` site type |
+| **v0.4.19** | 2026-04-26 | Direction-A standalone alignment + Streamlit 1.55 fixes |
+| **v0.3.8** | 2026-04-25 | Release tooling — Windows installer + portable ZIP pipeline |
+| **v0.3.7** | 2026-04-25 | First Edition manual refresh + Appendix J v0.3.x addendum |
+| **v0.3.6** | 2026-04-25 | Closed all v0.3.x follow-ons (alkyne reference; joblib MC; pectin DE / gellan K⁺ / pullulan STMP variants) |
+| **v0.3.5** | 2026-04-25 | UI audit follow-ons (ion-gelant picker; ACS visibility; crosslinker registry split) |
+| **v0.3.4** | 2026-04-25 | M2 dropdown coverage 50/94 → 94/94; 8 new chemistry buckets |
+| **v0.3.3** | 2026-04-25 | v9.5 Tier-3 multi-variant composites |
+| **v0.3.2** | 2026-04-25 | UI bands + ProcessDossier MC export (G5) |
+| **v0.3.1** | 2026-04-25 | Optional Bayesian posterior fitting (G4) |
+| **v0.3.0** | 2026-04-25 | MC-LRM uncertainty propagation (G1+G2+G3) |
+| **v0.2.0** | 2026-04-25 | Functional optimisation (Tiers 1-3) — 14 polymer families, 50 reagent profiles, ACS extension |
+| **v0.1.0** | 2026-04-19 | Initial DPSim fork — package rename, lifecycle CLI, clean-slate architecture |
 
 The full per-release change log is in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -494,7 +476,7 @@ The full per-release change log is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Intellectual property
 
-The intellectual property in this software, including the source code, documentation, simulator architecture, M2 chemistry state model, M3 chromatography solvers, calibration framework, MC-LRM uncertainty driver, and accompanying assets, **belongs to Holocyte Pty Ltd**.
+The intellectual property in this software, including the source code, documentation, simulator architecture, M2 chemistry state model, M3 chromatography solvers, calibration framework, MC-LRM uncertainty driver, CFD-PBE zonal coupling, parametric CAD geometry, and accompanying assets, **belongs to Holocyte Pty Ltd**.
 
 See [`NOTICE`](NOTICE) for the full project ownership notice.
 
@@ -513,7 +495,7 @@ Redistributions and derivative works must themselves be licensed under GPL-3.0 a
 
 ### Source code availability
 
-The canonical source-code repository is published on GitHub at:
+The canonical source-code repository is on GitHub at:
 
 > <https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator>
 
@@ -528,6 +510,7 @@ Bundled dependencies retain their upstream licences:
 - pydantic, h5py (MIT / BSD)
 - botorch, gpytorch, pytorch (BSD / MIT) — optional `[optimization]` extra
 - pymc, arviz (Apache 2.0) — optional `[bayesian]` extra
+- cadquery (Apache 2.0) — used by the CAD geometry generator
 
 See `pyproject.toml` for the pinned versions.
 
@@ -538,9 +521,23 @@ See `pyproject.toml` for the pinned versions.
 If you use DPSim in published work, please cite:
 
 ```
-Holocyte Pty Ltd. (2026). DPSim — Downstream Processing Simulator (v0.6.0).
+Holocyte Pty Ltd. (2026). DPSim — Downstream Processing Simulator (v0.6.3).
 GNU General Public License v3.0.
 https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator
+```
+
+### BibTeX
+
+```bibtex
+@software{holocyte_dpsim_2026,
+  author       = {{Holocyte Pty Ltd}},
+  title        = {{DPSim} --- {Downstream Processing Simulator}},
+  year         = {2026},
+  version      = {v0.6.3},
+  url          = {https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator},
+  license      = {GPL-3.0-or-later},
+  note         = {Polysaccharide-microsphere fabrication, functionalisation, and affinity-chromatography lifecycle simulator}
+}
 ```
 
 For the underlying scientific methods, please also cite the primary literature referenced in Appendix J and in each `ReagentProfile.calibration_source` field.
@@ -556,6 +553,7 @@ Open an issue at the GitHub repository:
 > <https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/issues>
 
 Include:
+
 - DPSim version (`python -c "import dpsim; print(dpsim.__version__)"`)
 - Python version (`python --version`)
 - Operating system
@@ -587,7 +585,7 @@ Commercial users requiring SLA-backed support, custom calibration campaigns, or 
 
 DPSim and its documentation are provided **for informational, research, and screening purposes only**. They do not constitute professional engineering advice, medical advice, regulatory submission, or formal peer review.
 
-Every result must be interpreted with explicit unit consistency checks; pH, temperature, reagent, and buffer compatibility checks; calibration-domain checks; M1 residual oil / surfactant carryover limits; M2 site and mass balance; M2 ligand density / leaching / free-protein wash / activity-retention assays; M3 pressure / compression / Reynolds-Peclet / breakthrough / recovery checks; explicit assumptions; and wet-lab caveats.
+Every result must be interpreted with explicit unit-consistency checks; pH, temperature, reagent, and buffer compatibility checks; calibration-domain checks; M1 residual oil / surfactant carryover limits; M2 site and mass balance, ligand density, leaching, free-protein wash, and activity-retention assays; and M3 pressure, compression, Reynolds-Peclet, breakthrough, and recovery checks — alongside explicit assumptions and wet-lab caveats.
 
 DPSim does **not** prove a resin is fit for clinical, diagnostic, or manufacturing use without independent calibration, release assays, and process validation. The exported wet-lab SOP is a **development scaffold** that must be reviewed under your local safety and quality systems before bench execution.
 

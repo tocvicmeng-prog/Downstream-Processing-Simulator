@@ -1,0 +1,8 @@
+flowchart LR
+    R["📝 ProcessRecipe<br/>(TOML / Python)"] --> M1["M1 — Emulsification<br/>PBE · L2 gelation · L3 covalent · L4 mechanics"]
+    M1 -->|"DSD, pore, modulus"| M2["M2 — Functionalisation<br/>ACS state · ligand coupling · sequence FSM"]
+    M2 -->|"q_max, k_a, density"| M3["M3 — Column performance<br/>LRM · isotherms · MC bands · Bayesian fit"]
+    M3 --> O["📊 ProcessDossier<br/>(curves · scalars · evidence ladder)"]
+    C["🧪 Calibration store<br/>(wet-lab data)"] -.->|"tier promotion"| M1
+    C -.->|"tier promotion"| M2
+    C -.->|"tier promotion"| M3
