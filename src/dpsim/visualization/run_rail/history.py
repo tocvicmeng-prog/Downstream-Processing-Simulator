@@ -263,7 +263,7 @@ def render_history_dropdown(
             if st.button(
                 "↻ Load history from disk",
                 key="_dpsim_history_load_disk",
-                use_container_width=True,
+                width="stretch",
             ):
                 n = load_history_from_disk()
                 if n > 0:
@@ -299,7 +299,7 @@ def render_history_dropdown(
         if current_recipe is not None and st.button(
             "↻ Reload",
             key=f"_dpsim_history_reload_{selected.run_id}",
-            use_container_width=True,
+            width="stretch",
             help="Apply this historical run's recipe state to the live recipe.",
         ):
             reload_run(selected, recipe=current_recipe)
@@ -310,7 +310,7 @@ def render_history_dropdown(
             if st.button(
                 "💾 Save",
                 key="_dpsim_history_save_disk",
-                use_container_width=True,
+                width="stretch",
                 help="Persist all history to disk.",
             ):
                 target = save_history_to_disk()
@@ -319,7 +319,7 @@ def render_history_dropdown(
             if st.button(
                 "↻ Load",
                 key="_dpsim_history_load_disk_existing",
-                use_container_width=True,
+                width="stretch",
                 help="Reload history from disk (overwrites current session).",
             ):
                 n = load_history_from_disk()

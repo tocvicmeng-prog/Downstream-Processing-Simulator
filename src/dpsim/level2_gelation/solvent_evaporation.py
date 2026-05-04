@@ -237,6 +237,16 @@ def solve_solvent_evaporation(
     manifest = ModelManifest(
         model_name="L2.Gelation.SolventEvaporationPLGA",
         evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+        # B-1c (W-007): PLGA-in-DCM solvent-evaporation envelope. Outside
+        # the DCM-volume-fraction band the fixed-radius approximation
+        # breaks; outside T the PLGA Tg / DCM vapour pressure shift.
+        valid_domain={
+            "c_PLGA_pct_w_v_in_DCM": (5.0, 25.0),
+            "phi_PLGA_init": (0.05, 0.30),
+            "T_C": (20.0, 60.0),
+            "solvent": ("DCM", "ethyl_acetate"),
+            "PLGA_LA_GA_ratio": ((50, 50), (85, 15)),
+        },
         assumptions=[
             "1D spherical Fickian diffusion of DCM",
             "fixed droplet radius (no moving boundary)",

@@ -200,7 +200,7 @@ def _column_card(
         if st.button(
             f"Open {title}",
             key=f"_dpsim_triptych_focus_{column_id}",
-            use_container_width=True,
+            width="stretch",
         ):
             set_triptych_focus(column_id)
             st.rerun()

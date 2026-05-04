@@ -128,9 +128,17 @@ def _retag_composite(
     base_diag["polymer_family"] = family_value
     base_diag["tier"] = "v9.5_tier_3_composite"
 
+    # B-1c (W-007): v9.5 composite gels delegate to a base family solver.
+    # Inherit domain and tag as composite-research so the analogy chain is
+    # surfaced to the render path.
+    inherited_domain = (
+        dict(base_manifest.valid_domain) if base_manifest is not None else {}
+    )
+    inherited_domain.setdefault("calibration_status", "v9_5_composite_research")
     new_manifest = ModelManifest(
         model_name=f"L2.{family_value}.qualitative_trend_v9_5",
         evidence_tier=evidence_tier,
+        valid_domain=inherited_domain,
         calibration_ref=(
             calibration_ref
             if calibration_ref is not None

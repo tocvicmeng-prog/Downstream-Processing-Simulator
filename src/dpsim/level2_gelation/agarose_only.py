@@ -128,6 +128,15 @@ def solve_agarose_only_gelation(
     new_manifest = ModelManifest(
         model_name="L2.agarose_only.thermal_v9_2",
         evidence_tier=ModelEvidenceTier.CALIBRATED_LOCAL,
+        # B-1c (W-007): operating envelope inherited from the AGAROSE_CHITOSAN
+        # baseline calibration with c_chitosan=0. Outside this envelope the
+        # delegate solver may extrapolate but the tier should degrade.
+        valid_domain={
+            "c_agarose_pct_w_v": (1.0, 8.0),
+            "T_C": (4.0, 50.0),
+            "pH": (5.0, 9.0),
+            "ionic_strength_M": (0.0, 0.5),
+        },
         calibration_ref=(
             result.model_manifest.calibration_ref
             if result.model_manifest is not None

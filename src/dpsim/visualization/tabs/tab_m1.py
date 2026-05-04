@@ -257,7 +257,7 @@ def _render_non_ac_family(*, tab_container, family, is_stirred_default, model_mo
     st.divider()
     run_btn = st.button(
         "\u25b6 Run M1: Fabrication Pipeline", type="primary",
-        use_container_width=True, key="m1v9_run_non_ac",
+        width="stretch", key="m1v9_run_non_ac",
     )
     if not run_btn:
         return
@@ -964,7 +964,7 @@ def render_tab_m1(
             if st.button(
                 "Open Stage 07 · Calibration",
                 key="m1_open_calibration_stage",
-                use_container_width=True,
+                width="stretch",
             ):
                 st.session_state["_dpsim_shell_active_stage"] = "calibrate"
                 st.rerun()
@@ -1141,7 +1141,7 @@ def render_tab_m1(
         # ── Run M1 Button ────────────────────────────────────────────────────
         st.divider()
         m1_run_btn = st.button("\u25b6 Run M1: Fabrication Pipeline", type="primary",
-                                use_container_width=True,
+                                width="stretch",
                                 disabled=bool(_m1_val.blockers or _recipe_blockers))
 
         if m1_run_btn:
@@ -1246,11 +1246,11 @@ def render_tab_m1(
             sub1, sub2, sub3, sub4, sub5 = st.tabs(_sub_labels)
 
             with sub1:
-                st.plotly_chart(plot_results_dashboard(result), use_container_width=True)
+                st.plotly_chart(plot_results_dashboard(result), width="stretch")
 
             with sub2:
                 st.subheader("Level 1: Emulsification -- Droplet Size Distribution")
-                st.plotly_chart(plot_droplet_size_distribution(e), use_container_width=True)
+                st.plotly_chart(plot_droplet_size_distribution(e), width="stretch")
                 c1, c2, c3 = st.columns(3)
                 c1.write(f"**d10** = {e.d10*1e6:.2f} um")
                 c1.write(f"**d32** = {e.d32*1e6:.2f} um")
@@ -1281,7 +1281,7 @@ def render_tab_m1(
 
             with sub3:
                 st.subheader("Level 2: Gelation \u2014 Pore Structure")
-                st.plotly_chart(plot_phase_field(g), use_container_width=True)
+                st.plotly_chart(plot_phase_field(g), width="stretch")
                 c1, c2, c3 = st.columns(3)
                 c1.write(f"**Pore size** = {g.pore_size_mean*1e9:.1f} nm")
                 c2.write(f"**Porosity** = {g.porosity:.3f}")
@@ -1296,7 +1296,7 @@ def render_tab_m1(
 
             with sub4:
                 st.subheader("Level 3: Crosslinking Kinetics")
-                st.plotly_chart(plot_crosslinking_kinetics(x), use_container_width=True)
+                st.plotly_chart(plot_crosslinking_kinetics(x), width="stretch")
                 c1, c2, c3 = st.columns(3)
                 c1.write(f"**Crosslink fraction** = {x.p_final:.4f}")
                 c1.write(f"**G_crosslinked** = {x.G_chitosan_final:.0f} Pa")
@@ -1333,10 +1333,10 @@ def render_tab_m1(
 
                 left, right = st.columns(2)
                 with left:
-                    st.plotly_chart(plot_hertz_contact(m), use_container_width=True)
+                    st.plotly_chart(plot_hertz_contact(m), width="stretch")
                 with right:
-                    st.plotly_chart(plot_kav_curve(m), use_container_width=True)
-                st.plotly_chart(plot_modulus_comparison(m), use_container_width=True)
+                    st.plotly_chart(plot_kav_curve(m), width="stretch")
+                st.plotly_chart(plot_modulus_comparison(m), width="stretch")
                 # v6.1: network classification + evidence badge
                 _ntype = getattr(m, 'network_type', 'unknown')
                 if _ntype != 'unknown':

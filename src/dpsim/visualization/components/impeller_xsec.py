@@ -33,7 +33,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
-import streamlit.components.v1 as components
+from ._html_helper import render_inline_html
 
 _ASSET_PATH: Final[Path] = Path(__file__).parent / "assets" / "impeller_xsec.html"
 
@@ -86,4 +86,4 @@ def render_impeller_xsec(
         .replace("__N_BLADES__", str(int(n_blades)))
         .replace("__THEME__", "light" if light_theme else "dark")
     )
-    components.html(html, height=height + 8, scrolling=False)
+    render_inline_html(html, height_px=height + 8, scrolling=False)

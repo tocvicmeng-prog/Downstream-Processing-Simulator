@@ -663,7 +663,7 @@ def render_tab_m2(tab_container, _smgr) -> None:
             "</div>"
         )
         m2_run_btn = st.button("\u25b6 Run M2: Functionalization", type="primary",
-                                use_container_width=True, disabled=not _m2_can_run)
+                                width="stretch", disabled=not _m2_can_run)
 
         if m2_run_btn:
             _smgr.invalidate_downstream(from_module=2)
@@ -767,10 +767,10 @@ def render_tab_m2(tab_container, _smgr) -> None:
 
                 _fig_wf = plot_acs_waterfall(_m2.modification_history)
                 if _fig_wf is not None:
-                    st.plotly_chart(_fig_wf, use_container_width=True)
+                    st.plotly_chart(_fig_wf, width="stretch")
                 _fig_sa = plot_surface_area_comparison(_m2.surface_model)
                 if _fig_sa is not None:
-                    st.plotly_chart(_fig_sa, use_container_width=True)
+                    st.plotly_chart(_fig_sa, width="stretch")
 
             # ── Wet-lab caveats card ─────────────────────────────────────
             with st.container(border=True):

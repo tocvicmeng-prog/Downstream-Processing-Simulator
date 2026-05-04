@@ -206,3 +206,95 @@ def unwrap_to_unit(value, expected_unit: str) -> float:
     raise TypeError(
         f"unwrap_to_unit: expected Quantity or float, got {type(value).__name__}"
     )
+
+
+# ─── B-2c (W-010) typed SI boundary helpers ─────────────────────────────────
+#
+# Per the work plan, full Quantity adoption inside every solver is out of
+# scope; instead we expose one helper per high-frequency quantity type that
+# accepts ``Quantity | float`` and returns a plain ``float`` in the canonical
+# SI unit. Solver function signatures wrap these helpers at entry to give
+# the M1/M2/M3 solvers one place to validate units without polluting their
+# numeric kernels.
+#
+# Convention: ``as_si_<quantity>_<unit>`` (e.g. ``as_si_pressure_pa``).
+# Float inputs are TRUSTED as already in SI (the same convention as
+# ``unwrap_to_unit``) — this is the "boundary helper" model, not the full
+# unit-algebra model. A future PR can switch to mandatory Quantity inputs
+# by raising in the float branch; the call sites stay the same.
+
+
+def as_si_time_s(value) -> float:
+    """Coerce a duration to SI seconds. Accepts Quantity or bare float (s)."""
+    return unwrap_to_unit(value, "s")
+
+
+def as_si_length_m(value) -> float:
+    """Coerce a length to SI metres. Accepts Quantity or bare float (m)."""
+    return unwrap_to_unit(value, "m")
+
+
+def as_si_volume_m3(value) -> float:
+    """Coerce a volume to SI m^3. Accepts Quantity or bare float (m^3).
+
+    Used for bed volume, total reactor volume, dose volume, etc.
+    """
+    return unwrap_to_unit(value, "m3")
+
+
+def as_si_flow_rate_m3_per_s(value) -> float:
+    """Coerce a volumetric flow rate to SI m^3/s.
+
+    Used for column loading, wash flow, gradient flow, etc.
+    """
+    return unwrap_to_unit(value, "m3/s")
+
+
+def as_si_pressure_pa(value) -> float:
+    """Coerce a pressure or modulus to SI pascals.
+
+    Used for column pressure drop, bead modulus, surface tension scaling.
+    """
+    return unwrap_to_unit(value, "Pa")
+
+
+def as_si_concentration_mol_per_m3(value) -> float:
+    """Coerce a molar concentration to SI mol/m^3 (== mM).
+
+    Used for feed concentration, reagent concentration, ion strength.
+    """
+    return unwrap_to_unit(value, "mol/m3")
+
+
+def as_si_capacity_mol_per_m3(value) -> float:
+    """Coerce an adsorption capacity to SI mol/m^3 of bed volume.
+
+    DPSim convention: q_max and DBC are reported per bed volume, not per
+    bead volume. Aliases ``as_si_concentration_mol_per_m3``; provided as a
+    semantic distinction so reading the call site clarifies intent.
+    """
+    return unwrap_to_unit(value, "mol/m3")
+
+
+def as_si_ligand_density_mol_per_m3(value) -> float:
+    """Coerce ligand density to SI mol/m^3 of bed volume. (Capacity alias.)"""
+    return unwrap_to_unit(value, "mol/m3")
+
+
+def as_si_mass_concentration_kg_per_m3(value) -> float:
+    """Coerce a mass concentration to SI kg/m^3 (== g/L == mg/mL).
+
+    Used for residual surfactant, polymer concentration in feed phases.
+    """
+    return unwrap_to_unit(value, "kg/m3")
+
+
+def as_si_temperature_K(value) -> float:
+    """Coerce a temperature to SI Kelvin. Handles °C ↔ K offset."""
+    if isinstance(value, Quantity):
+        return float(value.as_unit("K").value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    raise TypeError(
+        f"as_si_temperature_K: expected Quantity or float, got {type(value).__name__}"
+    )

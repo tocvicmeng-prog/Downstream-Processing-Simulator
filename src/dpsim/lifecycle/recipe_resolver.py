@@ -939,27 +939,16 @@ def _step_type_from_process_kind(
     kind: ProcessStepKind,
     reagent_profile,
 ) -> ModificationStepType | None:
-    """Map process operation kind to the existing M2 backend enum."""
+    """Map process operation kind to the existing M2 backend enum.
 
-    if kind == ProcessStepKind.CROSSLINK:
-        return ModificationStepType.SECONDARY_CROSSLINKING
-    if kind == ProcessStepKind.ACTIVATE:
-        return ModificationStepType.ACTIVATION
-    if kind == ProcessStepKind.INSERT_SPACER:
-        return ModificationStepType.SPACER_ARM
-    if kind == ProcessStepKind.COUPLE_LIGAND:
-        if reagent_profile.reaction_type == "protein_coupling" or reagent_profile.is_macromolecule:
-            return ModificationStepType.PROTEIN_COUPLING
-        return ModificationStepType.LIGAND_COUPLING
-    if kind == ProcessStepKind.METAL_CHARGE:
-        return ModificationStepType.METAL_CHARGING
-    if kind == ProcessStepKind.PROTEIN_PRETREATMENT:
-        return ModificationStepType.PROTEIN_PRETREATMENT
-    if kind in _M2_QUENCH_KINDS:
-        return ModificationStepType.QUENCHING
-    if kind in _M2_WASH_KINDS:
-        return ModificationStepType.WASHING
-    return None
+    Delegates to ``core.step_kind_mapping`` (B-1e / W-005, v0.6.4) which
+    is now the single source of truth. The function is kept for the
+    in-module call site so the import surface is unchanged for test code
+    that monkeypatched it in earlier versions.
+    """
+    from dpsim.core.step_kind_mapping import process_kind_to_modification_type
+
+    return process_kind_to_modification_type(kind, reagent_profile=reagent_profile)
 
 
 def _validate_m2_stage_coverage(

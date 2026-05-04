@@ -7,7 +7,7 @@ The lifecycle orchestrator calls ``validate_recipe_first_principles`` before
 entry point — recipes that the existing per-stage validation tolerates but
 which the scientific-advisor flags as unable to produce decision-grade output.
 
-Four guardrails (numbered per the scientific-advisor's audit §3):
+Active guardrails (numbered per the scientific-advisor's audit §3):
 
   G1: M1 wash mass-balance closure — predicted residual oil after wash must
       not exceed the target's ``max_residual_oil_volume_fraction``.
@@ -22,8 +22,18 @@ Four guardrails (numbered per the scientific-advisor's audit §3):
   G5: Surface-area inheritance — when an FMC is supplied, the M3 capacity
       claim is only quantitative when ``ligand_accessible_area`` is at least
       10 % of ``reagent_accessible_area``.
-
-Guardrail 2 (pH/pKa window) is deferred to v0.4.0+.
+  G6: ACS-Converter sequence FSM — enforces the canonical
+      ACTIVATE → INSERT_SPACER → ARM_ACTIVATE → COUPLE_LIGAND → METAL_CHARGE
+      ordering, plus arm-distal preconditions, metal-charge preconditions,
+      CIP reductive lock-in, the CNBr 15-min coupling window, and the
+      back-to-back-converter smell test.
+  G7: pH window check (B-1a / W-002, v0.6.4) — for each M2 functionalization
+      step, validate the recipe pH against the reagent's hard (chemistry-
+      feasibility) and soft (rate-optimum) pH windows declared on
+      ``ReagentProfile``. Outside hard → BLOCKER; inside hard but outside
+      soft → WARNING; inside soft → silent pass. Profiles without pH
+      windows declared (``ph_min_hard is None``) are skipped silently for
+      backward compatibility.
 """
 
 from __future__ import annotations
@@ -78,6 +88,7 @@ def validate_recipe_first_principles(
     _g4_family_reagent_compatibility(recipe, report)
     _g5_surface_area_inheritance(fmc, report)
     _g6_acs_converter_sequence(recipe, report)
+    _g7_ph_window_check(recipe, report)
     return report
 
 
@@ -627,6 +638,116 @@ def _g6_acs_converter_sequence(
             )
         prev_was_converter = is_converter
         prev_rkey = rkey
+
+
+# ─── G7 — pH window check (B-1a / W-002, v0.6.4) ─────────────────────────────
+
+
+def _g7_ph_window_check(
+    recipe: ProcessRecipe,
+    report: ValidationReport,
+) -> None:
+    """Validate each M2 step's pH against the reagent's pH safety windows.
+
+    For every step in ``M2_FUNCTIONALIZATION``, look up the reagent profile
+    by ``step.parameters['reagent_key']`` and apply this decision policy:
+
+      * pH outside the hard window (chemistry-feasibility limits) →
+        BLOCKER ``FP_G7_PH_OUT_OF_HARD_WINDOW``. The reaction will not
+        produce the intended product (or will damage the matrix).
+      * pH inside hard but outside soft (rate-optimum band) →
+        WARNING ``FP_G7_PH_RATE_DEGRADED``. The reaction proceeds but
+        yield is degraded; downstream M3 numbers should be tier-downgraded.
+      * pH inside soft → silent pass.
+
+    Profiles without curated windows (``ph_min_hard is None``) are skipped,
+    preserving backward compatibility with v0.6.3 recipes that reference
+    uncurated reagent keys. Steps with no ``pH`` parameter are skipped
+    (the step did not declare a pH; nothing to check).
+
+    Two-step reagents (e.g. aldehyde formation followed by NaBH4 reductive
+    amination) are checked phase-by-phase: each ProcessStep carries its own
+    ``reagent_key`` and pH, and is validated against its own profile.
+    Protein-stability vs reaction-pH conflicts (e.g. Protein A coupling)
+    are encoded directly in the profile's soft window — the narrower of
+    the two competing constraints wins by construction.
+    """
+    # Local import keeps recipe_validation independent of M2 at import time
+    # (matches the G4 pattern; both PolymerFamily and REAGENT_PROFILES live
+    # in the M2 package and would create a longer import chain otherwise).
+    from dpsim.module2_functionalization.reagent_profiles import REAGENT_PROFILES
+
+    for step in recipe.steps_for_stage(LifecycleStage.M2_FUNCTIONALIZATION):
+        reagent_key = str(step.parameters.get("reagent_key", "")).strip()
+        if not reagent_key:
+            continue
+        profile = REAGENT_PROFILES.get(reagent_key)
+        if profile is None:
+            continue
+        # Uncurated profile (no G7 windows declared) — silent skip preserves
+        # the v0.6.3 baseline for any reagent whose pH chemistry has not yet
+        # been authored into the profile library.
+        if profile.ph_min_hard is None or profile.ph_max_hard is None:
+            continue
+        ph = _qty_value(step.parameters.get("pH"))
+        if ph is None:
+            # Step did not declare a pH (e.g. unit operation that is not
+            # pH-defined). Nothing to validate.
+            continue
+
+        hard_min = profile.ph_min_hard
+        hard_max = profile.ph_max_hard
+        if ph < hard_min or ph > hard_max:
+            soft_band = (
+                f"[{profile.ph_min_soft:.2f}, {profile.ph_max_soft:.2f}]"
+                if profile.ph_min_soft is not None
+                and profile.ph_max_soft is not None
+                else f"[{hard_min:.2f}, {hard_max:.2f}]"
+            )
+            report.add(
+                ValidationSeverity.BLOCKER,
+                "FP_G7_PH_OUT_OF_HARD_WINDOW",
+                (
+                    f"Step {step.name!r}: pH {ph:.2f} for reagent "
+                    f"{reagent_key!r} is outside the chemistry-feasibility "
+                    f"window [{hard_min:.2f}, {hard_max:.2f}]. The reaction "
+                    f"will not produce the intended product or will damage "
+                    f"the polymer matrix."
+                ),
+                module="M2",
+                recommendation=(
+                    f"Adjust step pH into the optimum band {soft_band}, or "
+                    f"switch to a reagent compatible with the chosen pH."
+                ),
+            )
+            continue
+
+        soft_min = profile.ph_min_soft
+        soft_max = profile.ph_max_soft
+        if soft_min is None or soft_max is None:
+            # Hard window declared but no soft band — pass silently once
+            # inside the hard window. (No profile in v0.6.4 takes this
+            # branch; reserved for future asymmetric curations.)
+            continue
+        if ph < soft_min or ph > soft_max:
+            report.add(
+                ValidationSeverity.WARNING,
+                "FP_G7_PH_RATE_DEGRADED",
+                (
+                    f"Step {step.name!r}: pH {ph:.2f} for reagent "
+                    f"{reagent_key!r} is outside the optimum window "
+                    f"[{soft_min:.2f}, {soft_max:.2f}] but inside the "
+                    f"chemistry-feasibility window [{hard_min:.2f}, "
+                    f"{hard_max:.2f}]. Reaction yield will be degraded by "
+                    f"competing hydrolysis or sub-optimal kinetics."
+                ),
+                module="M2",
+                recommendation=(
+                    "Move pH into the optimum band, or treat the downstream "
+                    "M2/M3 coupling-yield numbers as ranking-only."
+                ),
+            )
+        # else: pH is inside the soft band — silent pass per protocol.
 
 
 # ─── G5 — surface-area inheritance ───────────────────────────────────────────

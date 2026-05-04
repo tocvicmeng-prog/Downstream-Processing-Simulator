@@ -576,7 +576,7 @@ def render_tab_m3(tab_container) -> None:
         st.divider()
         _m3_can_run = "m2_result" in st.session_state
         m3_run_btn = st.button("\u25b6 Run M3: Performance Simulation", type="primary",
-                                use_container_width=True, disabled=not _m3_can_run)
+                                width="stretch", disabled=not _m3_can_run)
 
         if m3_run_btn:
             with st.spinner("Running Module 3: Performance simulation..."):
@@ -801,11 +801,11 @@ def render_tab_m3(tab_container) -> None:
                         plot_breakthrough_curve(
                             time=_bt.time, C_outlet=_bt.C_outlet, C_feed=_C_feed_mol_bt,
                             dbc_5=_bt.dbc_5pct, dbc_10=_bt.dbc_10pct, dbc_50=_bt.dbc_50pct,
-                        ), use_container_width=True,
+                        ), width="stretch",
                     )
                     st.plotly_chart(
                         plot_chromatogram(time=_bt.time, uv_signal=_bt.uv_signal),
-                        use_container_width=True,
+                        width="stretch",
                     )
 
                     if "m2_result" in st.session_state:
@@ -818,7 +818,7 @@ def render_tab_m3(tab_container) -> None:
                             particle_porosity=_m2r_bt.m1_contract.porosity,
                             G_DN=_m2r_bt.G_DN_updated, E_star=_m2r_bt.E_star_updated,
                         )
-                        st.plotly_chart(plot_pressure_flow_curve(_col_bt), use_container_width=True)
+                        st.plotly_chart(plot_pressure_flow_curve(_col_bt), width="stretch")
 
                     st.caption(
                         "Mechanistic prediction: Lumped Rate Model (LRM) with Langmuir isotherm. "
@@ -848,11 +848,11 @@ def render_tab_m3(tab_container) -> None:
                             plot_chromatogram(
                                 time=_ge_time, uv_signal=_ge_uv,
                                 gradient_values=_ge_grad, gradient_affects_binding=_grad_affects,
-                            ), use_container_width=True,
+                            ), width="stretch",
                         )
 
                     _ge_peaks = getattr(_ge, "peaks", [])
-                    st.plotly_chart(plot_peak_table(_ge_peaks), use_container_width=True)
+                    st.plotly_chart(plot_peak_table(_ge_peaks), width="stretch")
 
                     st.caption(
                         "Ranking only - gradient-sensitive adapters update binding during elution; "
@@ -910,7 +910,7 @@ def render_tab_m3(tab_container) -> None:
                                 gradient_values=_elu.pH_profile,
                                 gradient_affects_binding=True,
                             ),
-                            use_container_width=True,
+                            width="stretch",
                         )
                     for _wrn in _pa.warnings + _eff.warnings + _imp.warnings:
                         st.info(_wrn)
@@ -943,7 +943,7 @@ def render_tab_m3(tab_container) -> None:
                     _conversion_arr = np.clip(1.0 - _cat.S_outlet / max(_S_in, 1e-12), 0.0, 1.0)
                     st.plotly_chart(
                         plot_conversion_vs_time(time_hours=_time_h_cat, conversion=_conversion_arr),
-                        use_container_width=True,
+                        width="stretch",
                     )
 
                     _S_range_mm = np.linspace(0.01, max(S_feed * 3, 10.0), 200)
@@ -951,16 +951,16 @@ def render_tab_m3(tab_container) -> None:
                         plot_michaelis_menten(
                             S_range=_S_range_mm, V_max=V_max, K_m=K_m,
                             eta=_cat.effectiveness_factor,
-                        ), use_container_width=True,
+                        ), width="stretch",
                     )
 
                     _phi_range = np.logspace(-2, 2, 200)
-                    st.plotly_chart(plot_effectiveness_factor(_phi_range), use_container_width=True)
+                    st.plotly_chart(plot_effectiveness_factor(_phi_range), width="stretch")
 
                     if hasattr(_cat, "activity_history") and len(_cat.activity_history) > 0:
                         st.plotly_chart(
                             plot_activity_decay(time_hours=_time_h_cat, activity=_cat.activity_history),
-                            use_container_width=True,
+                            width="stretch",
                         )
 
                     _phi_val = _cat.thiele_modulus

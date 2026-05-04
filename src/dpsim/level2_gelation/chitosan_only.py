@@ -172,6 +172,15 @@ def solve_chitosan_only_gelation(
         model_name="L2.chitosan_only.semi_quantitative_v9_2",
         evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
         calibration_ref="berger_2004_eur_j_pharm_57_35",
+        # B-1c (W-007): chitosan dissolves in dilute acetic acid below pKa 6.4.
+        # Above pH 6.4 the amine deprotonates and chitosan precipitates.
+        valid_domain={
+            "c_chitosan_pct_w_v": (0.5, 3.0),
+            "pH": (3.0, 6.4),
+            "T_C": (4.0, 40.0),
+            "ionic_strength_M": (0.0, 0.5),
+            "DDA_min": 0.75,  # min degree of deacetylation for solubility
+        },
         assumptions=[
             "Chitosan-only gel; no agarose secondary network present.",
             "Amine protonation modeled by pKa=6.4 sigmoid (Sorlier 2001).",

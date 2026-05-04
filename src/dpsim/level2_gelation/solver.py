@@ -290,6 +290,12 @@ class CahnHilliardSolver:
         model_manifest = ModelManifest(
             model_name="L2.Pore.CahnHilliard1D.Radial",
             evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+            # B-1c (W-007): 1D radial CH spinodal-decomposition envelope.
+            valid_domain={
+                "phi_polymer_init": (0.10, 0.60),
+                "T_C": (0.0, 80.0),
+                "geometry": ("spherical_1D",),
+            },
             assumptions=["Cahn-Hilliard free energy", "mobility arrest", "1D radial approximation"],
         )
         return GelationResult(
@@ -612,6 +618,12 @@ class CahnHilliard2DSolver:
         model_manifest = ModelManifest(
             model_name="L2.Pore.CahnHilliard2D",
             evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+            # B-1c (W-007): 2D CH spinodal-decomposition envelope.
+            valid_domain={
+                "phi_polymer_init": (0.10, 0.60),
+                "T_C": (0.0, 80.0),
+                "geometry": ("planar_2D",),
+            },
             assumptions=["Cahn-Hilliard free energy", "mobility arrest", "2D approximation"],
         )
         return GelationResult(
@@ -805,6 +817,14 @@ def solve_gelation_empirical(params: SimulationParameters, props: MaterialProper
     model_manifest = ModelManifest(
         model_name="L2.Pore.EmpiricalCorrelation",
         evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+        # B-1c (W-007): empirical pore-concentration scaling envelope from
+        # Pernodet AFM data on agarose; do not extrapolate past the
+        # calibration band.
+        valid_domain={
+            "c_polymer_pct_w_v": (1.0, 12.0),
+            "T_gel_C": (4.0, 50.0),
+            "pore_d50_nm": (10.0, 500.0),
+        },
         assumptions=_assumptions,
         diagnostics=timing_diagnostics,
     )

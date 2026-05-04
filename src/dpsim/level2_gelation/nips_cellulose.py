@@ -367,6 +367,16 @@ def solve_nips_cellulose(
     manifest = ModelManifest(
         model_name="L2.Gelation.NIPSCellulose",
         evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+        # B-1c (W-007): cellulose NIPS in NaOH/urea cryo-dissolution regime
+        # (Cai & Zhang 2005). Outside the cold-alkali window the solvent
+        # rejects cellulose and the ternary phase diagram is unfit.
+        valid_domain={
+            "c_cellulose_pct_w_v": (3.0, 12.0),
+            "T_C": (-10.0, 25.0),
+            "NaOH_pct_w_v": (4.0, 8.0),
+            "urea_pct_w_v": (10.0, 16.0),
+            "non_solvent": ("water", "ethanol"),
+        },
         assumptions=[
             "1D spherical ternary (polymer/solvent/non-solvent)",
             "Cahn-Hilliard on polymer + Fickian on solvent",

@@ -28,7 +28,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final, Literal
 
-import streamlit.components.v1 as components
+from ._html_helper import render_inline_html
 
 ColumnPhase = Literal["load", "wash", "elute", "cip"]
 
@@ -77,4 +77,4 @@ def render_column_xsec(
         .replace("__PARTICLE_COUNT__", str(int(particle_count)))
         .replace("__THEME__", "light" if light_theme else "dark")
     )
-    components.html(html, height=height + 40, scrolling=False)
+    render_inline_html(html, height_px=height + 40, scrolling=False)

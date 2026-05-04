@@ -243,6 +243,16 @@ def solve_ionic_ca_gelation(
     manifest = ModelManifest(
         model_name="L2.Gelation.IonicCaShrinkingCore",
         evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+        # B-1c (W-007): alginate ionic-Ca external-bath gelation envelope.
+        # Outside the bath-Ca and alginate-c bands, the shrinking-core
+        # approximation fails (e.g. high alginate gives gel-rim arrest).
+        valid_domain={
+            "c_alginate_pct_w_v": (1.0, 4.0),
+            "C_Ca_bath_M": (0.05, 0.5),
+            "pH": (5.0, 9.0),
+            "T_C": (4.0, 40.0),
+            "f_guluronate": (0.3, 0.8),
+        },
         assumptions=[
             "1D spherical symmetry",
             "Fickian Ca²⁺ diffusion",
@@ -504,6 +514,17 @@ def solve_internal_gelation(
     manifest = ModelManifest(
         model_name="L2.Gelation.IonicCaInternalRelease",
         evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+        # B-1c (W-007): GDL/CaCO3 internal-release gelation. Useful pH window
+        # follows GDL hydrolysis kinetics; outside, gelation is too slow or
+        # too fast for the shrinking-core approximation.
+        valid_domain={
+            "c_alginate_pct_w_v": (1.0, 4.0),
+            "C_CaCO3_init_mM": (10.0, 200.0),
+            "L_GDL_init_mM": (10.0, 400.0),
+            "pH_init": (5.0, 8.0),
+            "T_C": (15.0, 40.0),
+            "f_guluronate": (0.3, 0.8),
+        },
         assumptions=[
             "1D spherical with no-flux outer boundary",
             "GDL, gluconic acid, CaCO₃ spatially uniform",

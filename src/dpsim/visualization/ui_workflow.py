@@ -776,7 +776,7 @@ def render_target_product_profile_editor(
         )
         notes = st.text_area("Target notes", value=recipe.target.notes, key="p6_target_notes")
 
-    if st.button("Apply target profile", type="primary", use_container_width=True):
+    if st.button("Apply target profile", type="primary", width="stretch"):
         update_target_profile(
             recipe,
             name=name,
@@ -812,7 +812,7 @@ def render_target_product_profile_editor(
             },
         ],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -875,7 +875,7 @@ def render_lifecycle_run_panel(
     BG_RUN_KEY = "_dpsim_background_run"
     POLL_INTERVAL_S = 0.5
 
-    if st.button("Run full lifecycle", type="primary", use_container_width=True,
+    if st.button("Run full lifecycle", type="primary", width="stretch",
                  disabled=session_state.get(BG_RUN_KEY) is not None):
         run_id = "streamlit-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         context = RunContext(
@@ -958,7 +958,7 @@ def render_lifecycle_run_panel(
     result = session_state.get("lifecycle_result")
     rows = lifecycle_result_summary_rows(result)
     if rows:
-        st.dataframe(rows, hide_index=True, use_container_width=True)
+        st.dataframe(rows, hide_index=True, width="stretch")
     else:
         st.info("No full lifecycle run has been executed in this session.")
 
@@ -981,7 +981,7 @@ def render_lifecycle_results_panel(
     st.subheader("Validation And Evidence")
     summary_rows = lifecycle_result_summary_rows(result)
     if summary_rows:
-        st.dataframe(summary_rows, hide_index=True, use_container_width=True)
+        st.dataframe(summary_rows, hide_index=True, width="stretch")
 
     tabs = st.tabs(
         [
@@ -997,23 +997,23 @@ def render_lifecycle_results_panel(
     )
     with tabs[0]:
         if summary_rows:
-            st.dataframe(summary_rows, hide_index=True, use_container_width=True)
+            st.dataframe(summary_rows, hide_index=True, width="stretch")
         else:
             st.info("No full lifecycle run has been executed in this session.")
     with tabs[1]:
         rows = validation_report_rows(validation_report)
         if rows:
-            st.dataframe(rows, use_container_width=True, hide_index=True)
+            st.dataframe(rows, width="stretch", hide_index=True)
         else:
             st.info("No validation report is available yet. Run the full lifecycle simulation first.")
     with tabs[2]:
         if evidence_rows:
-            st.dataframe(evidence_rows, use_container_width=True, hide_index=True)
+            st.dataframe(evidence_rows, width="stretch", hide_index=True)
         else:
             st.info("No model evidence manifests are available yet.")
     with tabs[3]:
         if diagnostic_rows:
-            st.dataframe(diagnostic_rows, use_container_width=True, hide_index=True)
+            st.dataframe(diagnostic_rows, width="stretch", hide_index=True)
         else:
             st.info("No lifecycle diagnostics are available yet.")
     with tabs[4]:
@@ -1025,14 +1025,14 @@ def render_lifecycle_results_panel(
             file_name="dpsim_wet_lab_sop_draft.md",
             mime="text/markdown",
             key="p6_protocol_download_results",
-            use_container_width=True,
+            width="stretch",
         )
         st.code(protocol_md[:6000], language="markdown")
     with tabs[6]:
         render_calibration_status_panel(session_state)
     with tabs[7]:
         if history_rows:
-            st.dataframe(history_rows, use_container_width=True, hide_index=True)
+            st.dataframe(history_rows, width="stretch", hide_index=True)
         else:
             st.info("No lifecycle run history is available yet.")
 
@@ -1045,7 +1045,7 @@ def render_calibration_status_panel(session_state: Mapping[str, Any]) -> None:
     rows = calibration_status_rows(session_state)
     if rows:
         st.markdown("**Loaded calibration entries**")
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.info(
             "No calibration entries are loaded. Add wet-lab calibration data "
@@ -1054,7 +1054,7 @@ def render_calibration_status_panel(session_state: Mapping[str, Any]) -> None:
     comparison_rows = calibration_comparison_rows(session_state)
     if comparison_rows:
         st.markdown("**Measured vs simulated comparison**")
-        st.dataframe(comparison_rows, use_container_width=True, hide_index=True)
+        st.dataframe(comparison_rows, width="stretch", hide_index=True)
 
 
 def render_scientific_visuals_panel(session_state: Mapping[str, Any]) -> None:
@@ -1077,7 +1077,7 @@ def render_scientific_visuals_panel(session_state: Mapping[str, Any]) -> None:
             st.markdown("**M1 bead-size distribution**")
             st.bar_chart(dsd_df, x="bead_diameter_um", y="volume_fraction")
             st.line_chart(dsd_df, x="bead_diameter_um", y="volume_cdf")
-            st.dataframe(dsd_rows, use_container_width=True, hide_index=True)
+            st.dataframe(dsd_rows, width="stretch", hide_index=True)
         else:
             st.info("No M1 bead-size distribution payload is available yet.")
         if variant_rows:
@@ -1085,7 +1085,7 @@ def render_scientific_visuals_panel(session_state: Mapping[str, Any]) -> None:
             st.markdown("**DSD representative transfer into M3**")
             st.line_chart(variant_df, x="bead_diameter_um", y=["qmax_mol_m3", "dbc10_mol_m3"])
             st.line_chart(variant_df, x="bead_diameter_um", y=["pressure_bar", "bed_compression_fraction"])
-            st.dataframe(variant_rows, use_container_width=True, hide_index=True)
+            st.dataframe(variant_rows, width="stretch", hide_index=True)
     with tabs[1]:
         if breakthrough_rows:
             bt_df = _dataframe_or_rows(breakthrough_rows)
@@ -1093,7 +1093,7 @@ def render_scientific_visuals_panel(session_state: Mapping[str, Any]) -> None:
             st.line_chart(bt_df, x="time_min", y="C_outlet_mol_m3", color="trace")
             st.markdown("**M3 normalized outlet and UV traces**")
             st.line_chart(bt_df, x="time_min", y=["normalized_concentration", "uv_signal_mAU"])
-            st.dataframe(breakthrough_rows, use_container_width=True, hide_index=True)
+            st.dataframe(breakthrough_rows, width="stretch", hide_index=True)
         else:
             st.info("No M3 breakthrough or loaded-elution trace is available yet.")
     with tabs[2]:
@@ -1102,7 +1102,7 @@ def render_scientific_visuals_panel(session_state: Mapping[str, Any]) -> None:
             st.markdown("**Method pressure and compression by operation**")
             st.bar_chart(pressure_df, x="step", y="pressure_bar")
             st.line_chart(pressure_df, x="step_index", y=["bed_compression_fraction", "residence_time_min"])
-            st.dataframe(pressure_rows, use_container_width=True, hide_index=True)
+            st.dataframe(pressure_rows, width="stretch", hide_index=True)
         else:
             st.info("No method step pressure profile is available yet.")
     with tabs[3]:
@@ -1112,7 +1112,7 @@ def render_scientific_visuals_panel(session_state: Mapping[str, Any]) -> None:
                 subset = [row for row in ligand_rows if row["units"] == units]
                 st.caption(units)
                 st.bar_chart(_dataframe_or_rows(subset), x="metric", y="value")
-            st.dataframe(ligand_rows, use_container_width=True, hide_index=True)
+            st.dataframe(ligand_rows, width="stretch", hide_index=True)
         else:
             st.info("No M2/M3 ligand-capacity diagnostics are available yet.")
     with tabs[4]:
@@ -1122,7 +1122,7 @@ def render_scientific_visuals_panel(session_state: Mapping[str, Any]) -> None:
                 subset = [row for row in overlay_rows if row["units"] == units]
                 st.caption(units)
                 st.bar_chart(_dataframe_or_rows(subset), x="metric", y="value", color="series")
-            st.dataframe(overlay_rows, use_container_width=True, hide_index=True)
+            st.dataframe(overlay_rows, width="stretch", hide_index=True)
         else:
             st.info("No mapped calibration entries are available for visual overlay.")
 
@@ -1139,7 +1139,7 @@ def render_lifecycle_workflow_panel(recipe: ProcessRecipe, session_state: Mappin
             {"step": step.label, "status": step.status, "detail": step.detail}
             for step in workflow
         ],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -1154,12 +1154,12 @@ def render_lifecycle_workflow_panel(recipe: ProcessRecipe, session_state: Mappin
         with review_tabs[0]:
             rows = validation_report_rows(validation_report)
             if rows:
-                st.dataframe(rows, use_container_width=True, hide_index=True)
+                st.dataframe(rows, width="stretch", hide_index=True)
             else:
                 st.info("No lifecycle validation report is available yet.")
         with review_tabs[1]:
             if evidence_rows:
-                st.dataframe(evidence_rows, use_container_width=True, hide_index=True)
+                st.dataframe(evidence_rows, width="stretch", hide_index=True)
             else:
                 st.info("No model evidence manifests are available yet.")
         with review_tabs[2]:
@@ -1169,12 +1169,12 @@ def render_lifecycle_workflow_panel(recipe: ProcessRecipe, session_state: Mappin
                 file_name="dpsim_wet_lab_sop_draft.md",
                 mime="text/markdown",
                 key="p6_protocol_download_overview",
-                use_container_width=True,
+                width="stretch",
             )
             st.code(protocol_md[:4000], language="markdown")
         with review_tabs[3]:
             if calibration_rows:
-                st.dataframe(calibration_rows, use_container_width=True, hide_index=True)
+                st.dataframe(calibration_rows, width="stretch", hide_index=True)
             else:
                 st.info("No calibration entries are loaded.")
 
@@ -1210,7 +1210,7 @@ def render_stage_context_panel(recipe: ProcessRecipe, stage: LifecycleStage) -> 
     st.subheader(stage_label)
     rows = stage_recipe_snapshot_rows(recipe, stage)
     if rows:
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.info("No recipe steps are currently defined for this lifecycle stage.")
 

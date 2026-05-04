@@ -50,6 +50,13 @@ class CalibrationEntry:
     fit_method: str = "manual"    # "manual", "least_squares", "bayesian"
     valid_domain: dict = field(default_factory=dict)  # parameter ranges where calibration applies
     posterior_uncertainty: float = 0.0  # standard deviation of fitted parameter
+    # v0.6.5 (B-2a / W-009): assay quantitation / detection limit.
+    # Below this measured value the assay is operationally non-detectable;
+    # the wash-residuals model uses it to gate "meets_assay_limit" flags
+    # and to upgrade the evidence tier from QUALITATIVE_TREND when present.
+    # Units must match the parameter (mol/m^3 for concentrations).
+    assay_detection_limit: float = 0.0     # 0 = not measured / not declared
+    assay_quantitation_limit: float = 0.0  # LOQ; >= LOD when both set
 
     def to_dict(self) -> dict:
         """Serialize to dict for JSON storage."""
@@ -71,6 +78,8 @@ class CalibrationEntry:
             "fit_method": self.fit_method,
             "valid_domain": self.valid_domain,
             "posterior_uncertainty": self.posterior_uncertainty,
+            "assay_detection_limit": self.assay_detection_limit,
+            "assay_quantitation_limit": self.assay_quantitation_limit,
         }
 
     @classmethod
@@ -94,5 +103,7 @@ class CalibrationEntry:
             fit_method=d.get("fit_method", "manual"),
             valid_domain=d.get("valid_domain", {}),
             posterior_uncertainty=float(d.get("posterior_uncertainty", 0.0)),
+            assay_detection_limit=float(d.get("assay_detection_limit", 0.0)),
+            assay_quantitation_limit=float(d.get("assay_quantitation_limit", 0.0)),
         )
 

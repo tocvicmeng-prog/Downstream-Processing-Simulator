@@ -146,7 +146,7 @@ if doc.reagent_table:
         }
         for r in doc.reagent_table
     ])
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
 # Procedure
 st.subheader("Procedure")

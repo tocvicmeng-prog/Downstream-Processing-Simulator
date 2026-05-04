@@ -577,6 +577,24 @@ def run_chromatography_method(
             "impurity_clearance_warnings": list(impurity_clearance.warnings),
         },
     )
+
+    # B-2e (W-004): apply the M3 quantitative-output gate when calibration
+    # entries are passed via process_state. Backward-compatible — when
+    # absent, the manifest tier is unchanged. The gate can only DEMOTE
+    # the tier; mode guards and family caps stay authoritative.
+    if process_state is not None:
+        cal_entries = process_state.get("calibration_entries")
+        if cal_entries:
+            from dpsim.module3_performance.quantitative_gates import (
+                apply_m3_gate_to_manifest,
+            )
+            manifest = apply_m3_gate_to_manifest(
+                manifest,
+                cal_entries,
+                profile_key=str(process_state.get("calibration_profile_key", "")),
+                target_molecule=str(process_state.get("target_molecule", "")),
+            )
+
     return ChromatographyMethodResult(
         method_steps=steps,
         step_results=step_results,

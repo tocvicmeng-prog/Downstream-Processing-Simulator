@@ -565,6 +565,63 @@ def integrate_pbe_with_zones(
     else:
         vol_balance_err = 0.0
 
+    # ─── B-1d (W-006) M1 PBE regime guards ──────────────────────────────────
+    # d/η_K ratio places each zone on the inertial-vs-viscous breakage map:
+    #   d/η_K << 1  : sub-Kolmogorov; viscous breakage dominates and the
+    #                 standard inertial kernel (CT) loses physical meaning.
+    #                 Alopaeus C3 viscous correction is the recommended fix.
+    #   d/η_K ~ 5–10: transitional regime — typical of stirred-vessel
+    #                 emulsifications.
+    #   d/η_K >> 10 : inertial subrange; standard kernels apply.
+    # Below the warning threshold the aggregated d32 should be treated as
+    # ranking-only by the render path (B-1b decision_grade gate). The
+    # threshold value mirrors the Liao & Lucas 2009 review.
+    _SUB_KOLMOGOROV_RATIO = 5.0
+
+    eta_K_per_zone: dict[str, float] = {}
+    d32_over_eta_K_per_zone: dict[str, float] = {}
+    sub_kolmogorov_zones: list[str] = []
+    for zone in payload.zones:
+        eps_break = float(zone.epsilon_breakage_weighted_W_per_kg)
+        # Prefer the CFD-supplied Kolmogorov length when present; recompute
+        # from the breakage-weighted ε otherwise (consistent with kernel use).
+        if zone.kolmogorov_length_m is not None and zone.kolmogorov_length_m > 0.0:
+            eta_K = float(zone.kolmogorov_length_m)
+        elif nu_c is not None and eps_break > 0.0:
+            eta_K = (nu_c ** 3 / eps_break) ** 0.25
+        else:
+            eta_K = 0.0
+        eta_K_per_zone[zone.name] = eta_K
+        d32_z = per_zone_d32.get(zone.name, 0.0)
+        ratio = d32_z / eta_K if eta_K > 0.0 and d32_z > 0.0 else 0.0
+        d32_over_eta_K_per_zone[zone.name] = ratio
+        if 0.0 < ratio < _SUB_KOLMOGOROV_RATIO:
+            sub_kolmogorov_zones.append(zone.name)
+
+    finite_ratios = [r for r in d32_over_eta_K_per_zone.values() if r > 0.0]
+    d32_over_eta_K_aggregated_min = min(finite_ratios) if finite_ratios else 0.0
+
+    regime_guard_warnings: list[str] = []
+    if sub_kolmogorov_zones:
+        regime_guard_warnings.append(
+            f"Sub-Kolmogorov regime in zone(s) {sorted(sub_kolmogorov_zones)}: "
+            f"d32/eta_K < {_SUB_KOLMOGOROV_RATIO:.1f}. Inertial breakage kernels "
+            f"(CT) lose accuracy here. Use Alopaeus with breakage_C3 > 0 "
+            f"(currently breakage_C3={float(kernels.breakage_C3):.3g}) or treat "
+            f"d32 as ranking-only."
+        )
+    aggregated_d32_local = d32_agg
+    if (
+        aggregated_d32_local > 0.0
+        and d32_over_eta_K_aggregated_min > 0.0
+        and d32_over_eta_K_aggregated_min < _SUB_KOLMOGOROV_RATIO
+    ):
+        regime_guard_warnings.append(
+            f"Aggregated d32 ({aggregated_d32_local * 1e6:.2f} µm) sits at "
+            f"d32/eta_K_min = {d32_over_eta_K_aggregated_min:.2f}; below the "
+            f"{_SUB_KOLMOGOROV_RATIO:.1f} inertial-subrange threshold."
+        )
+
     return ZonalEmulsificationResult(
         d_pivots=d_pivots.copy(),
         aggregated_counts=aggregated_counts,
@@ -588,6 +645,15 @@ def integrate_pbe_with_zones(
             "n_zones": n_zones,
             "n_bins": n_bins,
             "n_exchanges": len(exch_tuples),
+            # B-1d (W-006) regime guards on the zonal CFD-PBE path.
+            "eta_K_per_zone_m": eta_K_per_zone,
+            "d32_over_eta_K_per_zone": d32_over_eta_K_per_zone,
+            "d32_over_eta_K_aggregated_min": d32_over_eta_K_aggregated_min,
+            "sub_kolmogorov_zones": sub_kolmogorov_zones,
+            "sub_kolmogorov_ratio_threshold": _SUB_KOLMOGOROV_RATIO,
+            "breakage_C3": float(kernels.breakage_C3),
+            "breakage_model": kernels.breakage_model.value,
+            "regime_guard_warnings": regime_guard_warnings,
         },
     )
 

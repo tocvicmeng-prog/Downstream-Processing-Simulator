@@ -125,9 +125,18 @@ def _retag(
         base_diag.update(extra_diagnostics)
     base_diag["polymer_family"] = family_value
 
+    # B-1c (W-007): inherit the delegate solver's valid_domain (if any) so
+    # tier-2 analogy results carry their source family's operating envelope.
+    # Callers may pass extra_diagnostics={"analogy_source_family": "<base>"} to
+    # surface the delegation chain; this is the analogy_source_family hook.
+    inherited_domain = (
+        dict(base_manifest.valid_domain) if base_manifest is not None else {}
+    )
+    inherited_domain.setdefault("calibration_status", "tier2_analogy_inheritance")
     new_manifest = ModelManifest(
         model_name=f"L2.{family_value}.semi_quantitative_v9_3",
         evidence_tier=evidence_tier,
+        valid_domain=inherited_domain,
         calibration_ref=(
             calibration_ref
             if calibration_ref is not None

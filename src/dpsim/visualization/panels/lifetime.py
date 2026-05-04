@@ -122,7 +122,7 @@ def render_lifetime_panel(*, as_card: bool = False) -> LifetimeProjection | None
                     yaxis_title="Capacity (mol/m\u00b3)",
                     height=350,
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
             # ── Confidence Label ──
             st.warning(

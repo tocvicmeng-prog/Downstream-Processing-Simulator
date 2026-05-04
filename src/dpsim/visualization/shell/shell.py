@@ -315,7 +315,7 @@ def _render_run_history_ghost_button() -> None:
     if st.button(
         label,
         key="_dpsim_topbar_run_history",
-        use_container_width=True,
+        width="stretch",
         help="Open run history & baseline picker",
     ):
         st.session_state["_dpsim_show_history_drawer"] = True
@@ -505,7 +505,7 @@ def render_stage_nav_footer() -> None:
             if st.button(
                 f"← Stage 0{prev_idx + 1} · {short}",
                 key="_dpsim_stage_nav_prev",
-                use_container_width=True,
+                width="stretch",
             ):
                 set_active_stage(prev_id)  # type: ignore[arg-type]
                 st.rerun()
@@ -525,7 +525,7 @@ def render_stage_nav_footer() -> None:
                 f"Stage 0{next_idx + 1} · {short} →",
                 key="_dpsim_stage_nav_next",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             ):
                 set_active_stage(next_id)  # type: ignore[arg-type]
                 st.rerun()

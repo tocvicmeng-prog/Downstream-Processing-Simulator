@@ -97,9 +97,16 @@ def _retag_tier3(
     base_diag["polymer_family"] = family_value
     base_diag["tier"] = "v9.4_tier_3"
 
+    # B-1c (W-007): tier-3 families are research-priority delegations. Inherit
+    # delegate domain but tag it as research-only so render path can downgrade.
+    inherited_domain = (
+        dict(base_manifest.valid_domain) if base_manifest is not None else {}
+    )
+    inherited_domain.setdefault("calibration_status", "tier3_research_only")
     new_manifest = ModelManifest(
         model_name=f"L2.{family_value}.qualitative_trend_v9_4",
         evidence_tier=evidence_tier,
+        valid_domain=inherited_domain,
         calibration_ref=(
             calibration_ref
             if calibration_ref is not None

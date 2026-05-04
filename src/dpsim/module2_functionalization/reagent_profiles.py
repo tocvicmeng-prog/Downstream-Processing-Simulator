@@ -312,6 +312,25 @@ class ReagentProfile:
     chain_scission_threshold: float = 1.0   # conversion above which scission begins
     chain_scission_max_g_dn_loss: float = 0.0  # max fractional G_DN loss at saturation
 
+    # ── v0.6.4 (B-1a / W-002) pH-window guardrail fields ──
+    # Recipe Guardrail 2 (G7 in core/recipe_validation.py) reads these to
+    # check each M2 step's pH against the reagent's safety/optimum windows.
+    # All four default to None: a profile that has not been pH-curated is
+    # skipped silently (backward-compatible with v0.6.3 and earlier).
+    #
+    # Decision policy implemented by _g7_ph_window_check:
+    #   pH < ph_min_hard or pH > ph_max_hard → BLOCKER (chemistry infeasible)
+    #   outside [soft, soft] but inside [hard, hard] → WARNING (rate-degraded)
+    #   inside [ph_min_soft, ph_max_soft] → silent pass
+    #
+    # Existing ph_optimum (defaults 7.0) is informational; G7 does not gate on
+    # it. ph_min/ph_max (defaults 0.0/14.0) are the kinetic-validity bounds
+    # consumed elsewhere — not the same concept as G7 hard/soft windows.
+    ph_min_hard: Optional[float] = None
+    ph_max_hard: Optional[float] = None
+    ph_min_soft: Optional[float] = None
+    ph_max_soft: Optional[float] = None
+
 
 # ─── Phase B Reagent Library (4 profiles) ─────────────────────────────
 
@@ -350,6 +369,10 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "glutaraldehyde_secondary": ReagentProfile(
         name="Glutaraldehyde (secondary crosslinking)",
         cas="111-30-8",
+        # G7 (B-1a): hard 5/10 = extreme pH polymerises; soft 7/8 standard
+        # Schiff-base + Michael-addition coupling range.
+        ph_min_hard=5.0, ph_max_hard=10.0,
+        ph_min_soft=7.0, ph_max_soft=8.0,
         reaction_type="crosslinking",
         target_acs=ACSSiteType.AMINE_PRIMARY,
         product_acs=None,
@@ -379,6 +402,10 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "ech_activation": ReagentProfile(
         name="Epichlorohydrin (OH activation)",
         cas="106-89-8",
+        # G7 (B-1a): hard 8/13 = below slow, above damages polymer; soft 9/13
+        # spans amine-coupling (9-11) and hydroxyl-coupling (11.5-13) regimes.
+        ph_min_hard=8.0, ph_max_hard=13.0,
+        ph_min_soft=9.0, ph_max_soft=13.0,
         reaction_type="activation",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.EPOXIDE,
@@ -409,6 +436,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "dvs_activation": ReagentProfile(
         name="Divinyl sulfone (OH activation)",
         cas="77-77-0",
+        # G7 (B-1a): mirrors ech_activation epoxide windows.
+        ph_min_hard=8.0, ph_max_hard=13.0,
+        ph_min_soft=9.0, ph_max_soft=13.0,
         reaction_type="activation",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.VINYL_SULFONE,
@@ -610,6 +640,11 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "protein_a_coupling": ReagentProfile(
         name="Protein A (IgG affinity)",
         cas="91932-65-9",
+        # G7 (B-1a): hard 7/10 mirrors existing ph_min/ph_max kinetic range;
+        # soft 8.5/9.5 narrow band around optimum 9 (Cytiva CDI-coupled SpA
+        # protocol). Default recipe pH 9.0 sits inside soft → silent pass.
+        ph_min_hard=7.0, ph_max_hard=10.0,
+        ph_min_soft=8.5, ph_max_soft=9.5,
         reagent_identity="Recombinant Protein A (rSPA)",
         installed_ligand="Protein A",
         functional_mode="affinity_ligand",
@@ -642,6 +677,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "protein_g_coupling": ReagentProfile(
         name="Protein G (IgG affinity, broad subclass)",
         cas="122441-07-8",
+        # G7 (B-1a): mirrors protein_a_coupling windows.
+        ph_min_hard=7.0, ph_max_hard=10.0,
+        ph_min_soft=8.5, ph_max_soft=9.5,
         reagent_identity="Recombinant Protein G (rSPG)",
         installed_ligand="Protein G",
         functional_mode="affinity_ligand",
@@ -676,6 +714,10 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "ethanolamine_quench": ReagentProfile(
         name="Ethanolamine (epoxide quench)",
         cas="141-43-5",
+        # G7 (B-1a): hard 7/10 covers usable amine-quench window; soft 8/9.5
+        # for efficient epoxide ring-opening. Default recipe pH 8.5 → silent.
+        ph_min_hard=7.0, ph_max_hard=10.0,
+        ph_min_soft=8.0, ph_max_soft=9.5,
         reagent_identity="Ethanolamine",
         installed_ligand="beta-hydroxyethylamine (blocked)",
         functional_mode="quencher",
@@ -724,6 +766,10 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "nabh4_quench": ReagentProfile(
         name="Sodium borohydride (aldehyde quench)",
         cas="16940-66-2",
+        # G7 (B-1a): hard 5/10 = below imine unstable, above NaBH4 decomposes;
+        # soft 7/9 from Borch et al. 1971 reductive amination conditions.
+        ph_min_hard=5.0, ph_max_hard=10.0,
+        ph_min_soft=7.0, ph_max_soft=9.0,
         reagent_identity="Sodium borohydride (NaBH4)",
         installed_ligand="Alcohol -CH2OH (blocked)",
         functional_mode="quencher",
@@ -1236,6 +1282,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "bdge_activation": ReagentProfile(
         name="BDGE activation (18 A spacer epoxide)",
         cas="2425-79-8",
+        # G7 (B-1a): mirrors ech_activation epoxide windows.
+        ph_min_hard=8.0, ph_max_hard=13.0,
+        ph_min_soft=9.0, ph_max_soft=13.0,
         reagent_identity="1,4-Butanediol diglycidyl ether",
         installed_ligand="Epoxide (long-arm)",
         functional_mode="activator",
@@ -1605,6 +1654,10 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "nickel_charging": ReagentProfile(
         name="Nickel(II) charging (Ni-NTA/IDA)",
         cas="7786-81-4", reagent_identity="Nickel(II) sulfate",
+        # G7 (B-1a): hard 4/9 = below chelator protonated, above strips Ni;
+        # soft 7/8 IMAC binding optimum.
+        ph_min_hard=4.0, ph_max_hard=9.0,
+        ph_min_soft=7.0, ph_max_soft=8.0,
         installed_ligand="Ni2+-loaded chelator",
         functional_mode="metal_charging", reaction_type="metal_charging",
         chemistry_class="metal_chelation",
@@ -1621,6 +1674,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "cobalt_charging": ReagentProfile(
         name="Cobalt(II) charging (Co-NTA/IDA)",
         cas="10026-24-1", reagent_identity="Cobalt(II) chloride",
+        # G7 (B-1a): mirrors nickel_charging IMAC windows.
+        ph_min_hard=4.0, ph_max_hard=9.0,
+        ph_min_soft=7.0, ph_max_soft=8.0,
         installed_ligand="Co2+-loaded chelator",
         functional_mode="metal_charging", reaction_type="metal_charging",
         chemistry_class="metal_chelation",
@@ -1637,6 +1693,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "copper_charging": ReagentProfile(
         name="Copper(II) charging (Cu-IDA)",
         cas="7758-99-8", reagent_identity="Copper(II) sulfate",
+        # G7 (B-1a): mirrors nickel_charging IMAC windows.
+        ph_min_hard=4.0, ph_max_hard=9.0,
+        ph_min_soft=7.0, ph_max_soft=8.0,
         installed_ligand="Cu2+-loaded chelator",
         functional_mode="metal_charging", reaction_type="metal_charging",
         chemistry_class="metal_chelation",
@@ -1653,6 +1712,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "zinc_charging": ReagentProfile(
         name="Zinc(II) charging (Zn-NTA/IDA)",
         cas="7446-20-0", reagent_identity="Zinc(II) sulfate",
+        # G7 (B-1a): mirrors nickel_charging IMAC windows.
+        ph_min_hard=4.0, ph_max_hard=9.0,
+        ph_min_soft=7.0, ph_max_soft=8.0,
         installed_ligand="Zn2+-loaded chelator",
         functional_mode="metal_charging", reaction_type="metal_charging",
         chemistry_class="metal_chelation",
@@ -1912,6 +1974,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "nickel_charging_nta": ReagentProfile(
         name="Nickel(II) charging of NTA sites",
         cas="7786-81-4",
+        # G7 (B-1a): mirrors nickel_charging IMAC windows.
+        ph_min_hard=4.0, ph_max_hard=9.0,
+        ph_min_soft=7.0, ph_max_soft=8.0,
         reagent_identity="Nickel(II) sulfate",
         installed_ligand="Ni2+-NTA",
         functional_mode="metal_charging",
@@ -1938,6 +2003,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "nickel_charging_ida": ReagentProfile(
         name="Nickel(II) charging of IDA sites",
         cas="7786-81-4",
+        # G7 (B-1a): mirrors nickel_charging IMAC windows.
+        ph_min_hard=4.0, ph_max_hard=9.0,
+        ph_min_soft=7.0, ph_max_soft=8.0,
         reagent_identity="Nickel(II) sulfate",
         installed_ligand="Ni2+-IDA",
         functional_mode="metal_charging",
@@ -1998,6 +2066,10 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "cnbr_activation": ReagentProfile(
         name="Cyanogen bromide (OH activation)",
         cas="506-68-3",
+        # G7 (B-1a): pH windows. Hard 10.5/12 = below hydrolyses, above damages
+        # agarose. Soft 11.0/11.5 from Kohn & Wilchek 1981 narrow optimum.
+        ph_min_hard=10.5, ph_max_hard=12.0,
+        ph_min_soft=11.0, ph_max_soft=11.5,
         reaction_type="acs_conversion",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.CYANATE_ESTER,
@@ -2033,6 +2105,10 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "cdi_activation": ReagentProfile(
         name="1,1′-Carbonyldiimidazole (OH activation)",
         cas="530-62-1",
+        # G7 (B-1a): hard 7/10 = below reverses, above hydrolyses; soft 8/9
+        # from Hearn 1981 anhydrous-coupling optimum.
+        ph_min_hard=7.0, ph_max_hard=10.0,
+        ph_min_soft=8.0, ph_max_soft=9.0,
         reaction_type="acs_conversion",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.IMIDAZOLYL_CARBONATE,
@@ -2392,6 +2468,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "bis_epoxide_crosslinking": ReagentProfile(
         name="Bis-epoxide family (PEGDGE/EGDGE/BDDE)",
         cas="2425-79-8 (BDDE) / 1675-54-3 (EGDGE) / variable (PEGDGE)",
+        # G7 (B-1a): mirrors ech_activation epoxide windows.
+        ph_min_hard=8.0, ph_max_hard=13.0,
+        ph_min_soft=9.0, ph_max_soft=13.0,
         reaction_type="crosslinking",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=None,
@@ -2676,6 +2755,10 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "apba_boronate_coupling": ReagentProfile(
         name="m-Aminophenylboronic acid (boronate affinity)",
         cas="206658-89-1",
+        # G7 (B-1a): hard 6/10 = below ester opens, above boronate ionises;
+        # soft 7/9 cis-diol coupling optimum.
+        ph_min_hard=6.0, ph_max_hard=10.0,
+        ph_min_soft=7.0, ph_max_soft=9.0,
         reaction_type="coupling",
         target_acs=ACSSiteType.EPOXIDE,
         product_acs=None,
@@ -3067,6 +3150,10 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "tresyl_chloride_activation": ReagentProfile(
         name="Tresyl chloride (OH → sulfonate leaving)",
         cas="1648-55-7",
+        # G7 (B-1a): hard 7/10 = below inert, above hydrolyses; soft 7.5/9
+        # from Nilsson & Mosbach 1981 standard tresyl coupling range.
+        ph_min_hard=7.0, ph_max_hard=10.0,
+        ph_min_soft=7.5, ph_max_soft=9.0,
         reaction_type="acs_conversion",
         target_acs=ACSSiteType.HYDROXYL,
         product_acs=ACSSiteType.SULFONATE_LEAVING,
@@ -3179,6 +3266,10 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "borax_reversible_crosslinking": ReagentProfile(
         name="Borax (reversible cis-diol crosslinker; research/temp porogen)",
         cas="1303-96-4",
+        # G7 (B-1a): hard 7/11 = below reversibility lost; soft 8.5/9.5
+        # operating range for borax-diol equilibrium.
+        ph_min_hard=7.0, ph_max_hard=11.0,
+        ph_min_soft=8.5, ph_max_soft=9.5,
         reaction_type="crosslinking",
         target_acs=ACSSiteType.CIS_DIOL,
         product_acs=None,
@@ -3252,6 +3343,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "generic_amine_to_imidazolyl_carbonate": ReagentProfile(
         name="Generic amine → CDI-activated support (carbamate)",
         cas="N/A (class reagent)",
+        # G7 (B-1a): mirrors cdi_activation windows.
+        ph_min_hard=7.0, ph_max_hard=10.0,
+        ph_min_soft=8.0, ph_max_soft=9.0,
         reaction_type="coupling",
         target_acs=ACSSiteType.IMIDAZOLYL_CARBONATE,
         product_acs=None,
@@ -3281,6 +3375,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "generic_amine_to_sulfonate": ReagentProfile(
         name="Generic amine → tresyl-activated support (SN2 displacement)",
         cas="N/A (class reagent)",
+        # G7 (B-1a): mirrors tresyl_chloride_activation windows.
+        ph_min_hard=7.0, ph_max_hard=10.0,
+        ph_min_soft=7.5, ph_max_soft=9.0,
         reaction_type="coupling",
         target_acs=ACSSiteType.SULFONATE_LEAVING,
         product_acs=None,
@@ -3465,6 +3562,9 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
     "generic_amine_to_cyanate_ester": ReagentProfile(
         name="Generic amine → CNBr-activated support (isourea linkage)",
         cas="N/A (class reagent)",
+        # G7 (B-1a): mirrors cnbr_activation windows.
+        ph_min_hard=10.5, ph_max_hard=12.0,
+        ph_min_soft=11.0, ph_max_soft=11.5,
         reaction_type="coupling",
         target_acs=ACSSiteType.CYANATE_ESTER,
         product_acs=None,
