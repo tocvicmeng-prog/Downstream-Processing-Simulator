@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Stirrer B stator hole-count correction (2026-05-04)
+## v0.6.3 — Stirrer B stator hole-count correction (2026-05-04)
 
 ### Changed
 
