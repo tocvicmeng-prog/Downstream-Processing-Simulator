@@ -28,6 +28,7 @@ from .orchestrator import (
     _build_m3_chrom_manifest,
     run_breakthrough,
 )
+from .quantitative_gates import GradientContext
 
 
 class ChromatographyOperation(Enum):
@@ -68,6 +69,36 @@ class ChromatographyMethodStep:
     gradient_end: float | None = None
     target_residence_time_s: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
+    # B-2e (W-004) follow-on: typed gradient handle. When set, this carries
+    # the canonical gradient parameters (start/end/duration/shape) and the
+    # legacy gradient_field / gradient_start / gradient_end fields are kept
+    # only for back-compat with v0.6.x callers. New code should populate
+    # gradient_context and leave the legacy fields at default.
+    gradient_context: GradientContext | None = None
+
+
+def _resolve_gradient(step: "ChromatographyMethodStep") -> GradientContext | None:
+    """Return the active GradientContext for ``step`` (typed-first, legacy-fallback).
+
+    If ``step.gradient_context`` is set and active, returns it directly.
+    Otherwise falls back to the legacy ``gradient_field`` / ``gradient_start``
+    / ``gradient_end`` fields, building a GradientContext from them on the fly
+    so the rest of the M3 code only ever consumes a typed object.
+    """
+    if step.gradient_context is not None and step.gradient_context.is_active:
+        return step.gradient_context
+    field_name = (step.gradient_field or "").strip()
+    if not field_name:
+        return None
+    if step.gradient_start is None or step.gradient_end is None:
+        return None
+    return GradientContext(
+        gradient_field=field_name,
+        start_value=float(step.gradient_start),
+        end_value=float(step.gradient_end),
+        duration_s=float(step.duration_s),
+        shape="linear",
+    )
 
 
 @dataclass
@@ -383,6 +414,13 @@ def default_protein_a_method_steps(
             gradient_field="ph",
             gradient_start=7.4,
             gradient_end=3.5,
+            gradient_context=GradientContext(
+                gradient_field="ph",
+                start_value=7.4,
+                end_value=3.5,
+                duration_s=300.0,
+                shape="linear",
+            ),
         ),
     ]
 
@@ -648,11 +686,13 @@ def run_loaded_state_elution(
         process_state=process_state,
         default_K_a_max=K_a_max,
     )
-    pH_start = (
-        float(elution_step.gradient_start)
-        if elution_step.gradient_field.lower() == "ph" and elution_step.gradient_start is not None
-        else float(elution_step.buffer.pH)
-    )
+    # B-2e follow-on: consume the typed GradientContext if available; fall
+    # back to legacy fields via the resolver so v0.6.x callers still work.
+    _grad_ctx = _resolve_gradient(elution_step)
+    if _grad_ctx is not None and _grad_ctx.gradient_field.lower() == "ph":
+        pH_start = float(_grad_ctx.start_value)
+    else:
+        pH_start = float(elution_step.buffer.pH)
     pH_end = _elution_pH(elution_step)
 
     u = column.superficial_velocity(flow_rate)
@@ -674,9 +714,13 @@ def run_loaded_state_elution(
     mass_transfer_coeff = (3.0 / max(R_p, 1.0e-12)) * k_f
 
     def ph_at_time(t: float) -> float:
-        if elution_step.gradient_field.lower() != "ph":
+        # B-2e follow-on: typed GradientContext is the source of truth here.
+        if _grad_ctx is None or _grad_ctx.gradient_field.lower() != "ph":
             return float(elution_step.buffer.pH)
-        frac = min(1.0, max(0.0, t / total_time))
+        # Use the gradient's own duration when present; keep falling back to
+        # total_time for back-compat with steps that omit it.
+        ramp = _grad_ctx.duration_s if _grad_ctx.duration_s > 0.0 else total_time
+        frac = min(1.0, max(0.0, t / ramp))
         return pH_start + frac * (pH_end - pH_start)
 
     def rhs(t: float, y: np.ndarray) -> np.ndarray:
@@ -1277,8 +1321,10 @@ def _ligand_accessibility_factor(fmc, activity: float) -> float:
 def _elution_pH(step: ChromatographyMethodStep | None) -> float:
     if step is None:
         return 3.5
-    if step.gradient_field.lower() == "ph" and step.gradient_end is not None:
-        return float(step.gradient_end)
+    # B-2e follow-on: typed GradientContext takes precedence; legacy fallback.
+    grad = _resolve_gradient(step)
+    if grad is not None and grad.gradient_field.lower() == "ph":
+        return float(grad.end_value)
     return float(step.buffer.pH)
 
 

@@ -179,7 +179,26 @@ def render_tab_m3(tab_container) -> None:
                     bed_porosity=bed_porosity,
                     G_DN=m2r_prev.G_DN_updated, E_star=m2r_prev.E_star_updated)
                 _dP = _preview_col.pressure_drop(flow_rate_mL / 60e6)
-                st.metric("Estimated Pressure Drop", f"{_dP / 1000:.1f} kPa")
+                # B-1b UI integration (reference site): route the pressure
+                # preview through the decision-grade gate. The tier comes
+                # from whichever upstream M2 manifest is available; when
+                # absent, fall back to SEMI_QUANTITATIVE which matches the
+                # PRESSURE_DROP policy floor (NUMBER render).
+                from dpsim.core.decision_grade import OutputType as _OT
+                from dpsim.visualization.decision_grade_render import render_metric
+                _m2_tier = (
+                    getattr(getattr(m2r_prev, "model_manifest", None),
+                            "evidence_tier", None)
+                    or ModelEvidenceTier.SEMI_QUANTITATIVE
+                )
+                render_metric(
+                    "Estimated Pressure Drop",
+                    value=_dP,
+                    output_type=_OT.PRESSURE_DROP,
+                    tier=_m2_tier,
+                    unit="kPa",
+                    scale=1.0 / 1000.0,
+                )
 
         # v0.4.11: Live phase view — rendered inline at full size to match
         # the Direction-A reference (was hidden in a collapsed expander
