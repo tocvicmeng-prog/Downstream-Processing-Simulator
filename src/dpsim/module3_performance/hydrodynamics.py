@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
+from typing import Optional
 
 
 logger = logging.getLogger(__name__)
@@ -28,11 +29,23 @@ class ColumnGeometry:
     Attributes:
         diameter: Column inner diameter [m].
         bed_height: Packed bed height [m].
-        particle_diameter: Mean particle diameter [m] (d50 from M1).
+        particle_diameter: Sauter mean particle diameter d32 [m] from M1
+            (post-B-1g). Use ``M1ExportContract.bead_d32``, not d50,
+            because Kozeny-Carman / Ergun derive from the surface-area-
+            equivalent diameter — see ``_column_with_microsphere``.
         bed_porosity: Inter-particle void fraction [-].
         particle_porosity: Intra-particle porosity [-].
         G_DN: Double-network shear modulus [Pa] from M1/M2.
         E_star: Effective Young's modulus [Pa] from M1/M2.
+        frit_permeability_m2: Optional frit Darcy permeability [m^2]
+            (B-1g / W-024). When set together with ``frit_thickness_m``,
+            ``frit_pressure_drop`` adds a series resistance
+            ΔP_frit = μ·u·t/k_f to the Kozeny-Carman bed contribution.
+            For a typical 10 µm sintered PE frit, k_f ≈ 1×10⁻¹³ m².
+            Default ``None`` → no frit contribution (backwards compat).
+        frit_thickness_m: Optional frit thickness [m]. Both this and
+            ``frit_permeability_m2`` must be set (non-``None``) for the
+            frit contribution to be non-zero.
     """
 
     diameter: float = 0.01           # [m]
@@ -42,6 +55,8 @@ class ColumnGeometry:
     particle_porosity: float = 0.70  # [-]
     G_DN: float = 10000.0            # [Pa]
     E_star: float = 30000.0          # [Pa]
+    frit_permeability_m2: Optional[float] = None  # [m^2]
+    frit_thickness_m: Optional[float] = None      # [m]
 
     @property
     def cross_section_area(self) -> float:
@@ -66,10 +81,50 @@ class ColumnGeometry:
         """
         return flow_rate / self.cross_section_area
 
+    def frit_pressure_drop(self, flow_rate: float, mu: float = 1e-3) -> float:
+        """Frit / distributor series-resistance pressure drop [Pa].
+
+        B-1g (W-024, v0.7.0): adds the Darcy-permeability contribution
+        ΔP_frit = μ · u · t_frit / k_f when both ``frit_permeability_m2``
+        and ``frit_thickness_m`` are set on the geometry. Returns 0.0
+        when either field is ``None``, preserving backwards compatibility
+        for callers that do not specify a frit.
+
+        On small analytical columns at high flow rates, the frit can
+        contribute 10–30 % of the total bed ΔP and must not be ignored
+        when computing the operational pressure envelope.
+
+        Args:
+            flow_rate: Volumetric flow rate [m^3/s].
+            mu: Dynamic viscosity [Pa.s] (default: water at 20 °C).
+                In v0.7.0, callers should resolve μ via
+                :func:`dpsim.core.viscosity.resolve_mobile_phase_viscosity`
+                (B-1f / W-023) rather than relying on this default.
+
+        Returns:
+            Frit pressure drop [Pa] (≥ 0). Returns 0.0 when no frit is
+            configured.
+        """
+        if self.frit_permeability_m2 is None or self.frit_thickness_m is None:
+            return 0.0
+        if self.frit_permeability_m2 <= 0.0 or self.frit_thickness_m < 0.0:
+            raise ValueError(
+                f"frit_permeability_m2={self.frit_permeability_m2!r}, "
+                f"frit_thickness_m={self.frit_thickness_m!r} — "
+                "permeability must be > 0 and thickness must be ≥ 0."
+            )
+        u = self.superficial_velocity(flow_rate)
+        return mu * u * self.frit_thickness_m / self.frit_permeability_m2
+
     def pressure_drop(self, flow_rate: float, mu: float = 1e-3) -> float:
         """Kozeny-Carman pressure drop across the packed bed [Pa].
 
         dP = 150 * mu * u * L * (1 - eps)^2 / (dp^2 * eps^3)
+
+        Note: this method covers the bed contribution only. The frit /
+        distributor series resistance is in :meth:`frit_pressure_drop`;
+        ``compute_pressure_envelope`` (B-2f) sums the two for the total
+        column ΔP.
 
         Args:
             flow_rate: Volumetric flow rate [m^3/s].

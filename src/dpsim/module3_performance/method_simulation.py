@@ -306,14 +306,22 @@ def _column_with_microsphere(
     column: ColumnGeometry,
     microsphere: "FunctionalMicrosphere | None",
 ) -> ColumnGeometry:
-    """Override the recipe column's particle properties with M2 microsphere state."""
+    """Override the recipe column's particle properties with M2 microsphere state.
+
+    B-1g (W-021, v0.7.0): ``particle_diameter`` is sourced from the Sauter
+    mean ``bead_d32``, not the median ``bead_d50``. Kozeny-Carman /
+    Ergun derive from the surface-area-equivalent diameter, which for a
+    polydisperse population is d32 by definition. For typical lognormal
+    DSDs (σ_ln ≈ 0.3) d32 ≈ 0.80 · d50, so using d50 systematically
+    underestimates ΔP by a factor (d50/d32)² ≈ 1.56×.
+    """
     if microsphere is None:
         return column
     m1 = microsphere.m1_contract
     return ColumnGeometry(
         diameter=column.diameter,
         bed_height=column.bed_height,
-        particle_diameter=m1.bead_d50,
+        particle_diameter=m1.bead_d32,
         bed_porosity=column.bed_porosity,
         particle_porosity=m1.porosity,
         G_DN=microsphere.G_DN_updated or m1.G_DN,
@@ -508,13 +516,19 @@ def _column_for_quantile(
     microsphere: "FunctionalMicrosphere | None",
     diameter_m: float,
 ) -> ColumnGeometry:
-    """Build a per-quantile column varying particle_diameter only."""
+    """Build a per-quantile column varying particle_diameter only.
+
+    B-1g (W-021): when no per-quantile diameter is supplied, the
+    fallback uses the Sauter mean ``bead_d32`` (not ``bead_d50``)
+    for the same reason as ``_column_with_microsphere`` — see the
+    docstring there.
+    """
     if microsphere is not None:
         m1 = microsphere.m1_contract
         return ColumnGeometry(
             diameter=base.diameter,
             bed_height=base.bed_height,
-            particle_diameter=float(diameter_m) if diameter_m > 0 else m1.bead_d50,
+            particle_diameter=float(diameter_m) if diameter_m > 0 else m1.bead_d32,
             bed_porosity=base.bed_porosity,
             particle_porosity=m1.porosity,
             G_DN=microsphere.G_DN_updated or m1.G_DN,
