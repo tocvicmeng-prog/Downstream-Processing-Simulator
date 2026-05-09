@@ -28,8 +28,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 
 # Enums that are subject to the .value-comparison rule (per CLAUDE.md).
 # Add new enums here when they need the same protection.
