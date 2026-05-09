@@ -904,6 +904,12 @@ def render_tab_m3(tab_container) -> None:
                         for _n in _envelope.notes:
                             st.write(f"• {_n}")
 
+                # B-2i (W-032) — streaming pressure monitor (offline replay).
+                from dpsim.visualization.tabs.tab_m3_monitor import (
+                    render_pressure_monitor_section as _render_monitor,
+                )
+                _render_monitor(envelope=_envelope, container=st)
+
                 st.divider()
 
             # Build sub-tabs for M3 results
