@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import copy
 import math
-from collections.abc import MutableMapping, Sequence
+from collections.abc import Sequence
 from typing import Any
 
 from dpsim.core.process_recipe import (
@@ -35,7 +35,11 @@ UI_SOURCE = "streamlit_ui"
 IGG_MW_DA_DEFAULT = 66500.0
 
 
-def ensure_process_recipe_state(store: MutableMapping[str, Any]) -> ProcessRecipe:
+def ensure_process_recipe_state(store: Any) -> ProcessRecipe:
+    # ``store`` is typed as ``Any`` rather than ``MutableMapping[str, Any]``
+    # because the call sites pass Streamlit's ``SessionStateProxy``, which
+    # is runtime-compatible with MutableMapping but is not declared as
+    # one in the streamlit type stubs.
     """Return the session recipe, initializing and serializing it when absent.
 
     Streamlit session state can persist arbitrary objects, but the recipe is
@@ -58,7 +62,7 @@ def ensure_process_recipe_state(store: MutableMapping[str, Any]) -> ProcessRecip
 
 
 def save_process_recipe_state(
-    store: MutableMapping[str, Any],
+    store: Any,
     recipe: ProcessRecipe,
 ) -> ProcessRecipe:
     """Persist ``recipe`` in Streamlit state through the recipe IO serializer."""

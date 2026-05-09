@@ -444,7 +444,11 @@ def _render_dock_pending_edits() -> None:
     from dpsim.visualization.ui_recipe import ensure_process_recipe_state
 
     try:
-        recipe = ensure_process_recipe_state(st.session_state)
+        # st.session_state is a Streamlit SessionStateProxy; runtime-
+        # compatible with MutableMapping[str, Any] (it implements
+        # __getitem__/__setitem__/__contains__) but not nominally typed
+        # as one in the streamlit stub.
+        recipe = ensure_process_recipe_state(st.session_state)  # type: ignore[arg-type]
     except Exception:  # pragma: no cover — defensive
         st.html(
             chrome.eyebrow("Pending edits")

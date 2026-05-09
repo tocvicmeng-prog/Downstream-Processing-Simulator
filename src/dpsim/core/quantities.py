@@ -146,7 +146,17 @@ class Quantity:
 
         src_unit, src_scale = _LINEAR_TO_SI.get(self.unit, (None, None))
         dst_unit, dst_scale = _LINEAR_TO_SI.get(target_unit, (None, None))
-        if src_unit is None or dst_unit is None or src_unit != dst_unit:
+        # Check src_scale / dst_scale explicitly so mypy can narrow them
+        # to ``float`` for the division below (src_unit / dst_unit being
+        # None correlates with scale being None, but mypy doesn't see
+        # the dict-tuple correlation).
+        if (
+            src_unit is None
+            or dst_unit is None
+            or src_scale is None
+            or dst_scale is None
+            or src_unit != dst_unit
+        ):
             raise ValueError(f"Cannot convert {self.unit!r} to {target_unit!r}")
         factor = src_scale / dst_scale
         return Quantity(

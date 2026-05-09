@@ -124,7 +124,10 @@ def solve_gelation_by_family(
             params=params, props=props_sandbox, R_droplet=R_droplet,
             mode=mode, timing=timing,
         )
-        # Re-tag for amylose
+        # Re-tag for amylose. The dextran solver always populates
+        # ``model_manifest``; assert before passing through dataclass.replace
+        # so mypy can narrow the Optional.
+        assert result.model_manifest is not None
         new_manifest = _dc_replace(
             result.model_manifest,
             model_name="L2.amylose_mbp.semi_quantitative_v9_2",
@@ -206,6 +209,7 @@ def solve_gelation_by_family(
             params=params, props=sandbox, R_droplet=R_droplet,
             mode=mode, timing=timing,
         )
+        assert result.model_manifest is not None
         new_manifest = _dc_replace(
             result.model_manifest,
             model_name="L2.chitin_cbd.semi_quantitative_v9_3",

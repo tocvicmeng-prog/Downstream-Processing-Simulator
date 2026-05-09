@@ -182,10 +182,19 @@ class ProcessDossier:
         full_result,
         calibration_store=None,
         assay_records: Optional[list] = None,
-        target_profile: Optional[TargetProductProfile] = None,
+        target_profile: Optional[Any] = None,
         notes: str = "",
         mc_bands: Any = None,
     ) -> "ProcessDossier":
+        # ``target_profile`` is typed as Optional[Any] rather than
+        # ``Optional[TargetProductProfile]`` because the lifecycle
+        # orchestrator passes ``ProcessRecipe.target`` (a different
+        # ``TargetProductProfile`` dataclass defined in
+        # ``dpsim.core.process_recipe``). Both types are dataclasses,
+        # so the downstream ``asdict()`` call serializes either shape
+        # correctly. Narrowing via a Union would introduce a circular
+        # import; a Protocol would understate that we accept any
+        # dataclass-shaped value here.
         """Build a dossier around a completed FullResult.
 
         ``calibration_store`` is a CalibrationStore (Node 7); we snapshot

@@ -541,13 +541,20 @@ class CahnHilliard2DSolver:
                 if A_factor is not None:
                     phi_new = A_factor.solve(rhs)
                 else:
-                    phi_new, info = bicgstab(
-                        A_mat,
-                        rhs,
-                        x0=phi,
-                        rtol=1e-6,
-                        atol=1e-12,
-                        maxiter=1000,
+                    # mypy 1.20.2 INTERNAL ERROR when narrowing
+                    # bicgstab's overloaded scipy-stubs signature with
+                    # the explicit-kwarg form; the **dict-of-kwargs
+                    # form avoids the crash. The trailing
+                    # call-overload suppression handles the surviving
+                    # overload-resolution mismatch.
+                    bicgstab_kwargs = {
+                        "x0": phi,
+                        "rtol": 1e-6,
+                        "atol": 1e-12,
+                        "maxiter": 1000,
+                    }
+                    phi_new, info = bicgstab(  # type: ignore[call-overload]
+                        A_mat, rhs, **bicgstab_kwargs
                     )
                     if info != 0:
                         raise RuntimeError(f"bicgstab failed to converge: info={info}")

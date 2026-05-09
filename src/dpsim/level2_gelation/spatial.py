@@ -62,7 +62,11 @@ def build_laplacian_matrix(r: np.ndarray, dr: float) -> sparse.csr_matrix:
 
     # Build in normalised coordinates → L_hat has units 1/dr_hat^2 = N^2
     # Physical Laplacian = L_hat / R^2
-    L_hat = sparse.diags(
+    # scipy-stubs has tightly-overloaded signatures for sparse.diags;
+    # our list[ndarray] + list[int] + shape + format kwarg combination
+    # is a valid runtime call that doesn't match a single overload
+    # cleanly. The runtime semantics are correct.
+    L_hat = sparse.diags(  # type: ignore[call-overload]
         [lower_diag, main_diag, upper_diag],
         [-1, 0, 1],
         shape=(N, N),
@@ -139,10 +143,13 @@ def build_laplacian_2d(N: int, h: float) -> sparse.csr_matrix:
     sparse.csr_matrix
         Shape (N*N, N*N).
     """
-    # 1D second derivative with Neumann BCs
+    # 1D second derivative with Neumann BCs.
+    # See diags() type-ignore note above (line 65) — same scipy-stubs
+    # overload-resolution issue.
     e = np.ones(N)
-    L1d = sparse.diags([e[:-1], -2.0 * e, e[:-1]], [-1, 0, 1],
-                        shape=(N, N), format='lil')
+    L1d = sparse.diags(  # type: ignore[call-overload]
+        [e[:-1], -2.0 * e, e[:-1]], [-1, 0, 1],
+        shape=(N, N), format='lil')
     # Neumann BCs: ghost value equals interior value -> fold into diagonal
     L1d[0, 0] = -1.0
     L1d[-1, -1] = -1.0
@@ -248,6 +255,11 @@ def build_mobility_laplacian_2d(M_field: np.ndarray, N: int,
         cols.extend(k_hi.tolist())
         vals.extend((-m_face).tolist())
 
-    L_M = sparse.coo_matrix((vals, (rows, cols)), shape=(total, total))
+    # scipy-stubs types coo_matrix's first arg as a tuple of arrays;
+    # we pass nested lists (which scipy accepts at runtime).
+    L_M = sparse.coo_matrix(
+        (vals, (rows, cols)),  # type: ignore[arg-type]
+        shape=(total, total),
+    )
     return L_M.tocsr()
 

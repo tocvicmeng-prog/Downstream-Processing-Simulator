@@ -32,7 +32,19 @@ dependencies = [
 optimization = ["botorch~=0.17.2", "gpytorch~=1.15.2", "torch~=2.11.0"]
 interactive = ["plotly>=5.18", "jupyter"]
 ui = ["streamlit>=1.30", "plotly>=5.18"]
-dev = ["pytest>=7.4", "pytest-timeout>=2.3", "hypothesis>=6.90", "rich>=13.0", "numba>=0.59"]
+dev = [
+    "pytest>=7.4",
+    "pytest-timeout>=2.3",
+    "hypothesis>=6.90",
+    "rich>=13.0",
+    "numba>=0.59",
+    # v0.7.0 tech-debt close: type stubs for the third-party libraries
+    # that ship typeshed packages. Other deps (joblib, torch, botorch,
+    # gpytorch) are silenced via the ``[tool.mypy.overrides]`` block.
+    "scipy-stubs",
+    "types-PyYAML",
+    "pandas-stubs",
+]
 # v0.3.1 (G4): optional Bayesian posterior fitting for the MC-LRM driver.
 # pymc + arviz are heavy (~700 MB combined). The base install never imports
 # them; bayesian_fit.fit_langmuir_posterior raises PymcNotInstalledError
@@ -70,3 +82,42 @@ target-version = "py311"
 # plots_m2.py: `make_subplots` is imported for an optional codepath; ruff suggests
 # importlib.util.find_spec but that adds runtime cost for a static check.
 "src/dpsim/visualization/plots_m2.py" = ["F401"]
+
+
+[tool.mypy]
+# v0.7.0 (post-release tech-debt close): mypy baseline.
+# scipy-stubs, types-PyYAML, and pandas-stubs are installed as dev
+# dependencies (see optional-dependencies table); the overrides below
+# silence missing-stub noise for libraries that genuinely lack typeshed
+# packages (joblib, torch, botorch, gpytorch, optimization extras).
+
+[[tool.mypy.overrides]]
+# Third-party deps without typeshed stubs as of 2026-05.
+# Re-evaluate after each upstream release: drop the override once the
+# package ships an inline py.typed marker or types-XXX appears on PyPI.
+module = [
+    "joblib",
+    "joblib.*",
+    "torch",
+    "torch.*",
+    "botorch",
+    "botorch.*",
+    "gpytorch",
+    "gpytorch.*",
+    # Numerical / scientific extras
+    "numba",
+    "numba.*",
+    # Bayesian extra (optional; gated by `dpsim[bayesian]`)
+    "pymc",
+    "pymc.*",
+    "arviz",
+    "arviz.*",
+    # Plotly: vendor ships py.typed only for the top-level package;
+    # graph_objects / subplots don't carry the marker.
+    "plotly",
+    "plotly.*",
+    # CFD ingestion helper (optional)
+    "fluidfoam",
+    "fluidfoam.*",
+]
+ignore_missing_imports = true

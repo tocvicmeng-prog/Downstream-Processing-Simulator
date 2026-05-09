@@ -75,7 +75,8 @@ def _check_python_version(version: tuple[int, int] | None = None) -> None:
 
 _check_python_version()
 
-from .lifecycle.orchestrator import (
+# Intentional post-preflight import — see _check_python_version above.
+from .lifecycle.orchestrator import (  # noqa: E402
     DownstreamProcessOrchestrator,
     run_default_lifecycle,
 )

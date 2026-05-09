@@ -10,7 +10,7 @@ boundary.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -42,7 +42,7 @@ class WorkflowStepState:
 
 def build_lifecycle_workflow_state(
     recipe: ProcessRecipe,
-    session_state: Mapping[str, Any] | None = None,
+    session_state: Any | None = None,
 ) -> list[WorkflowStepState]:
     """Return P6 workflow step readiness from recipe and current UI state."""
 
@@ -189,7 +189,7 @@ def update_target_profile(
 
 
 def store_lifecycle_result(
-    session_state: MutableMapping[str, Any],
+    session_state: Any,
     lifecycle_result: Any,
     *,
     run_id: str = "",
@@ -253,7 +253,7 @@ def lifecycle_result_summary_rows(lifecycle_result: Any | None) -> list[dict[str
     return rows
 
 
-def lifecycle_run_history_rows(session_state: Mapping[str, Any]) -> list[dict[str, str]]:
+def lifecycle_run_history_rows(session_state: Any) -> list[dict[str, str]]:
     """Return recent lifecycle runs stored by the Streamlit workflow."""
 
     return [dict(row) for row in session_state.get(RUN_HISTORY_KEY, [])]
@@ -334,7 +334,7 @@ def scientific_diagnostic_rows(lifecycle_result: Any | None) -> list[dict[str, s
 
 
 def calibration_comparison_rows(
-    session_state: Mapping[str, Any],
+    session_state: Any,
     lifecycle_result: Any | None = None,
 ) -> list[dict[str, str]]:
     """Compare loaded calibration entries with simulated lifecycle metrics."""
@@ -519,7 +519,7 @@ def ligand_capacity_chart_rows(lifecycle_result: Any | None) -> list[dict[str, f
 
 
 def calibration_overlay_chart_rows(
-    session_state: Mapping[str, Any],
+    session_state: Any,
     lifecycle_result: Any | None = None,
 ) -> list[dict[str, float | str]]:
     """Return chart-ready measured/simulated pairs for mapped calibration entries."""
@@ -550,7 +550,7 @@ def calibration_overlay_chart_rows(
 def evidence_ladder_rows(
     lifecycle_result: Any | None = None,
     *,
-    session_state: Mapping[str, Any] | None = None,
+    session_state: Any | None = None,
 ) -> list[dict[str, str]]:
     """Build rows describing evidence tier, assumptions, and calibration refs."""
 
@@ -586,7 +586,7 @@ def evidence_ladder_rows(
     return [row for row in rows if row["evidence_tier"] != "not_available"]
 
 
-def calibration_status_rows(session_state: Mapping[str, Any] | None = None) -> list[dict[str, str]]:
+def calibration_status_rows(session_state: Any | None = None) -> list[dict[str, str]]:
     """Return loaded calibration entries as compact UI rows."""
 
     store = session_state or {}
@@ -705,7 +705,7 @@ def process_recipe_protocol_markdown(
 
 def render_target_product_profile_editor(
     recipe: ProcessRecipe,
-    session_state: MutableMapping[str, Any],
+    session_state: Any,
 ) -> None:
     """Render target-product controls and persist them into ``ProcessRecipe``."""
 
@@ -818,7 +818,7 @@ def render_target_product_profile_editor(
 
 def render_lifecycle_run_panel(
     recipe: ProcessRecipe,
-    session_state: MutableMapping[str, Any],
+    session_state: Any,
 ) -> None:
     """Render the full lifecycle run control using ``ProcessRecipe`` directly."""
 
@@ -868,7 +868,6 @@ def render_lifecycle_run_panel(
 
     from dpsim.lifecycle.cancellation import RunCancelledError
     from dpsim.lifecycle.threaded_runner import (
-        BackgroundRun,
         run_in_background,
     )
 
@@ -909,7 +908,7 @@ def render_lifecycle_run_panel(
     # Poll the background run on every rerun. While alive, sleep then
     # rerun so the WebSocket layer can deliver Stop clicks; on
     # completion, capture the result + reset state.
-    bg_run: BackgroundRun | None = session_state.get(BG_RUN_KEY)
+    bg_run = session_state.get(BG_RUN_KEY)  # noqa: F811 — re-bound across button branches
     if bg_run is not None:
         if bg_run.is_running():
             elapsed = bg_run.elapsed_seconds()
@@ -930,8 +929,12 @@ def render_lifecycle_run_panel(
                     set_run_state,
                 )
             except ImportError:  # pragma: no cover
-                clear_cancel = lambda: None  # noqa: E731
-                set_run_state = lambda _s: None  # noqa: E731
+                # Stub fallbacks when run_rail isn't importable. The
+                # ImportError branch is a defensive no-op; the
+                # ``# type: ignore[no-redef,assignment]`` suppresses the
+                # narrower-Literal-vs-str rebinding.
+                clear_cancel = lambda: None  # noqa: E731  # type: ignore[no-redef,assignment]
+                set_run_state = lambda _s, **_kw: None  # noqa: E731  # type: ignore[no-redef,assignment,misc]
 
             if bg_run.cancelled:
                 st.info("Run cancelled by user (mid-solve).")
@@ -965,7 +968,7 @@ def render_lifecycle_run_panel(
 
 def render_lifecycle_results_panel(
     recipe: ProcessRecipe,
-    session_state: Mapping[str, Any],
+    session_state: Any,
 ) -> None:
     """Render permanent P6 validation, evidence, protocol, and calibration views."""
 
@@ -1037,7 +1040,7 @@ def render_lifecycle_results_panel(
             st.info("No lifecycle run history is available yet.")
 
 
-def render_calibration_status_panel(session_state: Mapping[str, Any]) -> None:
+def render_calibration_status_panel(session_state: Any) -> None:
     """Render loaded calibration entries and their workflow role."""
 
     import streamlit as st
@@ -1057,7 +1060,7 @@ def render_calibration_status_panel(session_state: Mapping[str, Any]) -> None:
         st.dataframe(comparison_rows, width="stretch", hide_index=True)
 
 
-def render_scientific_visuals_panel(session_state: Mapping[str, Any]) -> None:
+def render_scientific_visuals_panel(session_state: Any) -> None:
     """Render P6+ visual scientific comparisons from lifecycle result payloads."""
 
     import streamlit as st
@@ -1127,7 +1130,7 @@ def render_scientific_visuals_panel(session_state: Mapping[str, Any]) -> None:
             st.info("No mapped calibration entries are available for visual overlay.")
 
 
-def render_lifecycle_workflow_panel(recipe: ProcessRecipe, session_state: Mapping[str, Any]) -> None:
+def render_lifecycle_workflow_panel(recipe: ProcessRecipe, session_state: Any) -> None:
     """Render the P6 lifecycle workflow scaffold in Streamlit."""
 
     import streamlit as st
@@ -1340,7 +1343,7 @@ def _stage_release_gate(stage: LifecycleStage) -> str:
 
 
 def _append_lifecycle_run_history(
-    session_state: MutableMapping[str, Any],
+    session_state: Any,
     lifecycle_result: Any,
     *,
     run_id: str = "",

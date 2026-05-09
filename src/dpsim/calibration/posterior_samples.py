@@ -157,7 +157,12 @@ class PosteriorSamples:
         if resolved == "lhs":
             sampler = qmc.LatinHypercube(d=self.n_params, seed=seed)
             u = sampler.random(n)
-            return stats.norm.ppf(u, loc=self.means, scale=self.stds)
+            # scipy-stubs types stats.norm.ppf as float | ndarray; with
+            # ndarray inputs (loc + scale arrays) the result is always
+            # ndarray at runtime.
+            return np.asarray(
+                stats.norm.ppf(u, loc=self.means, scale=self.stds)
+            )
 
         if resolved == "multivariate_normal":
             cov = self.covariance

@@ -380,6 +380,11 @@ def render_tab_m2(tab_container, _smgr) -> None:
                 if _profile is None:
                     _reagent_key = list(_reagent_options.values())[0]
                     _profile = _REAGENT_PROFILES[_reagent_key]
+                # mypy: _profile is now non-None for the rest of this
+                # iteration. Make the narrowing explicit so lambdas
+                # capturing _profile (the labeled_widget callbacks below)
+                # don't trip ``Item "None" has no attribute …``.
+                assert _profile is not None
                 st.caption(f"k={_profile.k_forward:.1e} | E_a={_profile.E_a / 1000:.0f} kJ/mol")
                 # v0.3.5 (UI audit fix 4): surface ACSSiteType for the
                 # selected reagent so users see which surface group is
@@ -463,9 +468,9 @@ def render_tab_m2(tab_container, _smgr) -> None:
                         "deviations affect both rate and selectivity."
                     ),
                     unit="°C",
-                    widget=lambda: st.slider(
+                    widget=lambda: st.slider(  # type: ignore[call-overload]
                         "Temperature (C)", 4, 80,
-                        int(_profile.temperature_default - 273.15),
+                        int(_profile.temperature_default - 273.15),  # type: ignore[union-attr]
                         key=f"m2_temp_{i}_{_wk}", label_visibility="collapsed",
                     ),
                 )
@@ -481,9 +486,9 @@ def render_tab_m2(tab_container, _smgr) -> None:
                         "it side-reactions accumulate."
                     ),
                     unit="h",
-                    widget=lambda: st.number_input(
+                    widget=lambda: st.number_input(  # type: ignore[call-overload]
                         "Time (h)", 0.05, 48.0,
-                        float(_profile.time_default / 3600),
+                        float(_profile.time_default / 3600),  # type: ignore[union-attr]
                         key=f"m2_time_{i}_{_wk}", label_visibility="collapsed",
                     ),
                 )
@@ -494,8 +499,9 @@ def render_tab_m2(tab_container, _smgr) -> None:
                         "keep both the activated bead group AND the ligand "
                         "in their reactive ionisation state."
                     ),
-                    widget=lambda: st.slider(
-                        "pH", 3.0, 14.0, float(_profile.ph_optimum),
+                    widget=lambda: st.slider(  # type: ignore[call-overload]
+                        "pH", 3.0, 14.0,
+                        float(_profile.ph_optimum),  # type: ignore[union-attr]
                         step=0.5, key=f"m2_ph_{i}_{_wk}",
                         label_visibility="collapsed",
                     ),

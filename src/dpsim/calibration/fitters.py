@@ -559,11 +559,11 @@ def _m3_dbc_entry_from_measurements(
         else (fit_method if weighted else "dbc_reference_mean")
     )
     confidence = _confidence_from_values(values)
-    metadata_records = [
-        item.get("record")
-        for item in measurements
-        if isinstance(item.get("record"), AssayRecord)
-    ]
+    metadata_records: list[AssayRecord] = []
+    for item in measurements:
+        record = item.get("record")
+        if isinstance(record, AssayRecord):
+            metadata_records.append(record)
     metadata = _calibration_metadata_from_records(metadata_records)
     return CalibrationEntry(
         profile_key=profile_key,
@@ -864,7 +864,13 @@ def _m3_langmuir_wls_entries_from_static_records(
     qmax_fit, k_fit = [float(value) for value in result.x]
     if not all(math.isfinite(value) and value > 0.0 for value in (qmax_fit, k_fit)):
         return []
-    qmax_std, k_std = _least_squares_parameter_std(result.jac, result.fun, n_params=2)
+    # scipy-stubs types ``result.jac`` as a Union of ndarray / csr_array /
+    # LinearOperator. Our least_squares call returns a dense Jacobian by
+    # default, but the helper signature wants an ndarray; coerce
+    # explicitly so mypy can narrow.
+    qmax_std, k_std = _least_squares_parameter_std(
+        np.asarray(result.jac), result.fun, n_params=2
+    )
     record_ids = ",".join(str(point["record_id"]) for point in points)
     metadata = _calibration_metadata_from_records([point["record"] for point in points])
     domain = _assay_valid_domain([point["record"] for point in points])
@@ -945,11 +951,11 @@ def _m3_pressure_flow_entries_from_records(
     reduced_chi2 = float(np.sum(np.square(residual)) / dof)
     slope_std = math.sqrt(1.0 / denominator) * max(1.0, math.sqrt(reduced_chi2))
     record_ids = sorted({str(point["record_id"]) for point in points})
-    source_records = [
-        point.get("record")
-        for point in points
-        if isinstance(point.get("record"), AssayRecord)
-    ]
+    source_records: list[AssayRecord] = []
+    for point in points:
+        rec = point.get("record")
+        if isinstance(rec, AssayRecord):
+            source_records.append(rec)
     metadata = _calibration_metadata_from_records(source_records)
     domain = _measurements_valid_domain([
         {
@@ -1018,8 +1024,8 @@ def _pressure_flow_points_from_record(record: AssayRecord) -> list[dict]:
                 })
         return points
 
-    flow_rate = _flow_rate_m3_s(record)
-    if flow_rate is None or flow_rate <= 0.0:
+    flow_rate_scalar = _flow_rate_m3_s(record)
+    if flow_rate_scalar is None or flow_rate_scalar <= 0.0:
         return []
     try:
         values, sigmas = _record_weighted_values_in_target_unit(record, "Pa")
@@ -1028,7 +1034,7 @@ def _pressure_flow_points_from_record(record: AssayRecord) -> list[dict]:
         return []
     return [
         {
-            "flow_rate_m3_s": float(flow_rate),
+            "flow_rate_m3_s": float(flow_rate_scalar),
             "pressure_drop_Pa": float(value),
             "sigma_Pa": float(max(sigma, 0.0)),
             "record_id": record.record_id,

@@ -772,9 +772,11 @@ class DownstreamProcessOrchestrator:
         # per-step buffer composition to drive the envelope through
         # the full recipe program.
         pressure_envelope: PressureEnvelope | None = None
+        # PolymerFamily lives on MaterialProperties (datatypes.py:1001),
+        # not on SimulationParameters. Mirrors the resolution at line 525.
         try:
             pressure_envelope = compute_pressure_envelope(
-                polymer_family=params.polymer_family,
+                polymer_family=props.polymer_family,
                 column=m3_column,
                 mobile_phase=MobilePhase(),
                 Q_set_m3_s=m3_flow_rate,
@@ -1209,7 +1211,7 @@ class DownstreamProcessOrchestrator:
         max_representatives: int,
         run_breakthrough_screen: bool,
         calibration_store,
-        m3_process_state: dict[str, float],
+        m3_process_state: dict[str, Any],
     ) -> tuple[list[DSDMediaVariant], DSDPropagationSummary]:
         """Propagate DSD representatives through M2 and M3 screens."""
         from dpsim.pipeline.batch_variability import (
@@ -1488,7 +1490,12 @@ def _apply_m1_physical_qc_to_contract(
         "measured_pore_size_mean": ("pore_size_mean", "m"),
         "measured_porosity": ("porosity", "1"),
     }
-    updates: dict[str, float] = {}
+    # Typed as dict[str, Any] because the dataclasses.replace() splat
+    # below sees field types of varying signatures across M1ExportContract;
+    # mypy's overload-resolution against **dict[str, float] fails even
+    # though the only fields actually updated here (pore_size_mean,
+    # porosity) are float-typed. Runtime is correct.
+    updates: dict[str, Any] = {}
     overrides: list[str] = []
     diagnostics: dict[str, float | str] = {}
     for entry in getattr(calibration_store, "entries", []):
@@ -1657,8 +1664,15 @@ def _add_m1_physical_qc_shift_validation(
 
 def _m3_process_state_from_calibration_store(
     calibration_store,
-) -> tuple[dict[str, float], list[str]]:
-    """Extract M3 isotherm process-state overrides from calibration entries."""
+) -> tuple[dict[str, Any], list[str]]:
+    """Extract M3 isotherm process-state overrides from calibration entries.
+
+    Returns dict[str, Any] because callers (run() in this orchestrator)
+    later inject string-valued context fields like ``polymer_family``
+    and ``model_mode`` alongside the float-valued calibration entries.
+    The downstream M3 method consumes the dict via ``getattr`` /
+    ``dict.get`` so the heterogeneous typing is benign at runtime.
+    """
 
     if calibration_store is None:
         return {}, []

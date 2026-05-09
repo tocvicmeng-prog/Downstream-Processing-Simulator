@@ -388,7 +388,11 @@ def solve_lrm(
     # it can stall on high-affinity Langmuir and gradient paths on the current
     # Python 3.12/SciPy runtime, blocking full-suite execution.
     method = "BDF"
-    sol = solve_ivp(
+    # scipy-stubs's solve_ivp signature is overloaded by `method`
+    # (str literal) and the events callable signature; our valid
+    # runtime call doesn't fit a single overload because `method`
+    # is typed as `str` (post-assignment) rather than a literal.
+    sol = solve_ivp(  # type: ignore[call-overload]
         rhs,
         t_span=(0.0, total_time),
         y0=y0,

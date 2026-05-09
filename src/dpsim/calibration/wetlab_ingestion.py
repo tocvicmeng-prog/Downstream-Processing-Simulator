@@ -58,7 +58,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from ..datatypes import ModelEvidenceTier
 from ..module2_functionalization.reagent_profiles import (
     REAGENT_PROFILES,
     ReagentProfile,

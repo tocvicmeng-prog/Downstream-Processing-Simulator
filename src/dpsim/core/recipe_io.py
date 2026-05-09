@@ -167,16 +167,18 @@ def process_recipe_to_toml(recipe: ProcessRecipe) -> str:
         step_data = _step_to_dict(step)
         _write_scalar_fields(lines, step_data, exclude={"parameters"})
         primitive_params = {
-            key: value
-            for key, value in step.parameters.items()
-            if not isinstance(value, Quantity)
+            key: param_value
+            for key, param_value in step.parameters.items()
+            if not isinstance(param_value, Quantity)
         }
         if primitive_params:
             lines.extend(["", "[steps.parameters]"])
             _write_scalar_fields(lines, primitive_params)
-        for key, value in step.parameters.items():
-            if isinstance(value, Quantity):
-                _write_quantity_section(lines, ("steps", "parameters", key), value)
+        for key, param_value in step.parameters.items():
+            if isinstance(param_value, Quantity):
+                _write_quantity_section(
+                    lines, ("steps", "parameters", key), param_value
+                )
 
     return "\n".join(lines).rstrip() + "\n"
 

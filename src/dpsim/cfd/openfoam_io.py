@@ -168,7 +168,6 @@ def write_dict(
 def _render_dict(d: dict[str, Any], indent: int) -> str:
     """Render a Python dict as FoamFile dictionary syntax."""
     pad = " " * (4 * indent)
-    pad_inner = " " * (4 * (indent + 1))
     parts: list[str] = []
     for key, value in d.items():
         rendered = _render_value(value, indent + 1)

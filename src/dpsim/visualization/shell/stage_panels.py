@@ -21,7 +21,6 @@ the Direction-A headline that was missing.
 from __future__ import annotations
 
 import html as _html
-from collections.abc import Mapping, MutableMapping
 from typing import Any
 
 import streamlit as st
@@ -142,7 +141,7 @@ def _preflight_row(label: str, *, value: str, badge_html: str = "") -> str:
 
 def render_run_lifecycle_stage(
     recipe: ProcessRecipe,
-    session_state: MutableMapping[str, Any],
+    session_state: Any,
 ) -> None:
     """Stage 05 panel — Direction-A pre-flight headline + existing run UI.
 
@@ -217,7 +216,7 @@ _TIER_SHORT: dict[str, str] = {
 
 def _per_stage_tiers(
     recipe: ProcessRecipe,
-    session_state: Mapping[str, Any],
+    session_state: Any,
 ) -> dict[str, str]:
     """Aggregate per-stage worst evidence tiers from the run report.
 
@@ -293,7 +292,7 @@ def _ladder_row(
 
 def render_validation_stage(
     recipe: ProcessRecipe,
-    session_state: Mapping[str, Any],
+    session_state: Any,
 ) -> None:
     """Stage 06 panel — Direction-A evidence-ladder headline + existing
     8-tab detail stack.
@@ -363,7 +362,7 @@ def render_validation_stage(
 
 def render_calibration_stage(
     recipe: ProcessRecipe,  # noqa: ARG001 — kept for API symmetry
-    session_state: MutableMapping[str, Any],
+    session_state: Any,
 ) -> None:
     """Stage 07 panel — Direction-A "Ingest wet-lab measurements" CTA +
     existing read-only calibration table.
