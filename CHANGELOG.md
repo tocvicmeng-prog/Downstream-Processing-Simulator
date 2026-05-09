@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.8.0 — Pressure-envelope operationalization (2026-05-10)
+
+Closes 3 of 3 work-plan items from `docs/update_workplan_2026-05-10_v0_8.md` — the deferred items from the v0.7.0 §6 "out-of-scope" list. The release operationalizes the pressure envelope end-to-end: pre-flight (v0.7), in-flight (v0.8 streaming UI for offline replay), and back-prop (v0.8 BO feasibility constraint). Calibration tier remains SEMI_QUANTITATIVE INTERVAL until manufacturer pressure-flow curves are loaded into the calibration store.
+
+### Removed — Tier 1 (B-1i) — deprecation cycle hygiene
+
+- **B-1i (W-031) — `ColumnGeometry.max_safe_flow_rate` removed.** The v0.7.0 deprecation grace window expires. The `safety × E_star` bursting-modulus anchor is no longer selectable through the public API; operational ceilings come solely from `compute_pressure_envelope` (W-020 / B-2f) via `PressureEnvelope.Q_max_m3_s`. `validate_flow_rate` now emits only the soft compression-fraction and Re_p WARNINGs (the BLOCKER path was the bursting check). `plots_m3.plot_pressure_flow_curve` requires `Q_max` as an explicit argument; the `tab_m3.py` breakthrough panel now derives Q_max via `compute_pressure_envelope` on the M2 result. The dedicated deprecation test suite is removed.
+
+### Added — Tier 2 (B-2i + B-2j) — UX completion + BO integration
+
+- **B-2i (W-032) — Streaming pressure-monitor UI + CSV-replay helper.** New `module3_performance/pressure_monitor_replay.py` parses pressure traces from CSV (canonical SI columns plus AKTA-style aliases for t/dP/Q with unit-aware scaling), threads them through `evaluate_pressure_trace` (v0.7 / B-3d), and returns a `ReplaySummary` with state-timeline + first-BLOCKER / first-WARNING anchors + max diagnostic ratios. New `visualization/tabs/tab_m3_monitor.py` renders a Streamlit section after the pre-flight envelope panel: file uploader, replay summary metric row, ΔP-vs-time plot with operational + 70 % warning thresholds + per-reading state chips, and a downloadable example CSV. The live AKTA UNICORN bridge is still a v0.9 epic — v0.8 ships only the offline replay path. 28 new tests (22 replay-helper + 6 UI smoke).
+- **B-2j (W-033) — Pressure-feasibility BO constraint.** New `PressureFeasibilityContext` frozen dataclass on `optimization/objectives.py` bundles run-level fixed inputs (column geometry, mobile phase, Q_target, polymer_family, headroom_threshold). New `pressure_feasible(result, ctx)` builds a per-candidate `ColumnGeometry` by overriding the context column's particle_diameter / G_DN / E_star with the candidate's M1+M2 outputs, then runs `compute_pressure_envelope` and checks `headroom_ratio` against the threshold. `check_constraints` gains an optional `pressure_ctx` keyword-only argument; when None the v0.7 behaviour is preserved exactly. KeyError / ValueError from envelope computation declares the candidate infeasible with a clean message rather than escaping to the BO loop. **Bonus:** `dpsim.optimization.__init__` now lazy-loads `OptimizationEngine` via PEP 562 `__getattr__`, so importing `dpsim.optimization.objectives` no longer requires torch. 12 new tests.
+
+### Verification
+
+- 681 tests passing in v0.8-relevant scope (module3_performance + visualization + core + lifecycle + new feasibility tests).
+- ruff: clean across all changed paths.
+- mypy: 0 issues on new source files.
+- AST gate (`tests/test_v9_3_enum_comparison_enforcement.py`): no new `is` / `is not` comparisons against managed enums.
+
+### Validation release-gate status (v0.8 plan §4)
+
+  1–8. Inherited from v0.7.0 — unchanged ✓
+  9. **Deprecation-cycle hygiene** — closed B-1i ✓ (establishes "deprecate one release, remove next release" cadence as a first-class precedent).
+  10. **Pressure-monitor offline replay** — closed B-2i ✓ (operators can validate envelope accuracy against historical AKTA traces without live hardware).
+  11. **BO-side pressure feasibility** — closed B-2j ✓ (optimizer cannot recommend recipes whose post-M2 column step would exceed the operational envelope).
+
+### Public-communication framing
+
+> v0.8.0 ships as **DPSim's pressure envelope is end-to-end** — pre-flight (v0.7), in-flight (v0.8 monitor UI for offline replay), and back-prop (v0.8 BO feasibility). Calibration tier remains SEMI_QUANTITATIVE INTERVAL until manufacturer pressure-flow curves are loaded into the calibration store. The streaming UI is offline-only — live AKTA UNICORN integration is a v0.9 epic.
+
+### Detailed handovers
+
+  - `docs/handover/HANDOVER_v0_8_b1i_deprecation_removal.md`
+  - `docs/handover/HANDOVER_v0_8_b2i_streaming_ui.md`
+  - `docs/handover/HANDOVER_v0_8_b2j_bo_feasibility.md`
+  - `docs/handover/HANDOVER_v0_8_0_release.md`
+
 ## v0.7.0 — M3 interface back-pressure optimization (2026-05-10)
 
 Closes 11 of 11 work-plan items from `docs/update_workplan_2026-05-10_m3_pressure.md` — the v0.7.0 M3 back-pressure work driven by the joint /scientific-advisor + /architect + /dev-orchestrator review on 2026-05-10. The release replaces the v0.6.6 ΔP_max anchor (`safety × E_star`, scientifically wrong by 5–50× factor for soft chromatography media) with a per-family u_crit formulation, makes mobile-phase viscosity a function of (buffer, T), surfaces the Sauter mean d32 across the M2→M3 wire, adds frit/distributor series resistance, and ships a structured pre-flight pressure envelope with an in-flight streaming monitor (function-only; UI deferred to v0.8).
