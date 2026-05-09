@@ -81,13 +81,23 @@ class TestDecideRenderMode:
 
     def test_unsupported_always_suppresses(self):
         # An UNSUPPORTED model never produces decision-grade output.
+        # Outputs with floor at SEMI_QUANTITATIVE → RANK_BAND under UNSUPPORTED
+        # (gap = 2). PRESSURE_HEADROOM has floor QUALITATIVE_TREND → INTERVAL
+        # (gap = 1). Every other output suppresses.
         for out in OutputType:
             mode = decide_render_mode(out, ModelEvidenceTier.UNSUPPORTED)
-            # PRESSURE_DROP is the most lenient (floor SEMI_QUANTITATIVE);
-            # UNSUPPORTED is two steps below SEMI → RANK_BAND. Every other
-            # output should suppress.
-            if out == OutputType.PRESSURE_DROP:
+            if out in {
+                OutputType.PRESSURE_DROP,
+                # B-1h (W-030) — pressure-envelope outputs share the
+                # SEMI_QUANTITATIVE floor with PRESSURE_DROP.
+                OutputType.PRESSURE_LIMIT,
+                OutputType.Q_MAX,
+                OutputType.U_CRIT,
+            }:
                 assert mode == RenderMode.RANK_BAND
+            elif out == OutputType.PRESSURE_HEADROOM:
+                # Tier-independent ratio; floor at QUALITATIVE_TREND.
+                assert mode == RenderMode.INTERVAL
             else:
                 assert mode == RenderMode.SUPPRESS
 

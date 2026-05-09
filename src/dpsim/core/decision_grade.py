@@ -67,6 +67,13 @@ class OutputType(Enum):
     RECOVERY = "recovery"                # elution-pool recovery fraction
     CYCLE_LIFE = "cycle_life"            # capacity loss per CIP / sanitisation cycle
 
+    # M3 — back-pressure envelope (B-1h / W-030, v0.7.0). Consumed by
+    # B-2f's compute_pressure_envelope and B-2h's UI section.
+    PRESSURE_LIMIT = "pressure_limit"    # operational ΔP_max ceiling (u_crit-based)
+    Q_MAX = "q_max"                      # max safe flow rate (inverted u_crit)
+    U_CRIT = "u_crit"                    # critical superficial velocity
+    PRESSURE_HEADROOM = "pressure_headroom"  # ΔP / ΔP_max ratio (0..1)
+
 
 class RenderMode(Enum):
     """How a numeric output should be presented to the user.
@@ -120,6 +127,21 @@ DECISION_GRADE_POLICY: dict[OutputType, ModelEvidenceTier] = {
     OutputType.BREAKTHROUGH: ModelEvidenceTier.CALIBRATED_LOCAL,
     OutputType.RECOVERY: ModelEvidenceTier.VALIDATED_QUANTITATIVE,
     OutputType.CYCLE_LIFE: ModelEvidenceTier.VALIDATED_QUANTITATIVE,
+    # B-1h (W-030) — pressure-envelope outputs. PRESSURE_LIMIT, Q_MAX, U_CRIT
+    # mirror PRESSURE_DROP (Ergun / Blake-Kozeny well-described, K_geom from
+    # literature anchors): SEMI_QUANTITATIVE → INTERVAL render acceptable for
+    # operational decisions; promote to NUMBER at CALIBRATED_LOCAL when
+    # manufacturer pressure-flow curves or wet-lab calibration are supplied.
+    OutputType.PRESSURE_LIMIT: ModelEvidenceTier.SEMI_QUANTITATIVE,
+    OutputType.Q_MAX: ModelEvidenceTier.SEMI_QUANTITATIVE,
+    OutputType.U_CRIT: ModelEvidenceTier.SEMI_QUANTITATIVE,
+    # PRESSURE_HEADROOM is the ΔP / ΔP_max ratio — a dimensionless
+    # number in [0, 1+] that's always meaningful regardless of envelope
+    # tier. Setting the floor at QUALITATIVE_TREND means it renders as
+    # NUMBER for any reasonable envelope tier; the warning/blocker
+    # *thresholds* (0.70, 0.85) belong to pressure_monitor.py (B-3d) and
+    # depend on the envelope's tier separately.
+    OutputType.PRESSURE_HEADROOM: ModelEvidenceTier.QUALITATIVE_TREND,
 }
 
 
