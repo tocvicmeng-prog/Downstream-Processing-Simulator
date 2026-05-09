@@ -37,6 +37,15 @@ from .pressure_envelope import (
     PressureEnvelope,
     compute_pressure_envelope,
 )
+
+# B-3d (W-027): streaming pressure-trace monitor (v0.7.0; UI v0.8).
+from .pressure_monitor import (
+    PressureMonitorOutput,
+    PressureMonitorReading,
+    PressureMonitorRule,
+    PressureMonitorState,
+    evaluate_pressure_trace,
+)
 from .isotherms.langmuir import LangmuirIsotherm
 from .transport.lumped_rate import LRMResult, solve_lrm
 from .detection.uv import compute_uv_signal, apply_detector_broadening
@@ -110,6 +119,12 @@ __all__ = [
     "is_family_registered",
     "lookup_family_kgeom",
     "registered_families",
+    # B-3d streaming monitor (v0.7.0; UI deferred to v0.8)
+    "PressureMonitorOutput",
+    "PressureMonitorReading",
+    "PressureMonitorRule",
+    "PressureMonitorState",
+    "evaluate_pressure_trace",
     "LangmuirIsotherm",
     "LRMResult",
     "solve_lrm",
