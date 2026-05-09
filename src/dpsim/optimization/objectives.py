@@ -6,16 +6,27 @@ All objectives are MINIMIZED (lower is better).
 Supports two fixed target sets (legacy / stirred-vessel) plus — as of
 Node F3-a (v8.0 Phase 1) — a user-supplied ``TargetSpec`` with per-dimension
 tolerances for inverse-design runs.
+
+v0.8.0 (B-2j / W-033) extends ``check_constraints`` with an optional
+``PressureFeasibilityContext`` so the BO Pareto filter can drop
+candidates whose post-M2 column step would exceed the operational
+pressure envelope at a user-specified target flow rate. Existing
+callers that do not supply the context get the v0.7 behaviour
+unchanged.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
-from ..datatypes import FullResult, ModelEvidenceTier
+from ..datatypes import FullResult, ModelEvidenceTier, PolymerFamily
+
+if TYPE_CHECKING:
+    from ..core.mobile_phase import MobilePhase
+    from ..module3_performance.hydrodynamics import ColumnGeometry
 
 
 # ─── Legacy rotor-stator targets ─────────────────────────────────────────
@@ -292,7 +303,125 @@ def compute_inverse_design_objectives(
     return obj
 
 
-def check_constraints(result: FullResult, mode: str | None = None) -> tuple[bool, list[str]]:
+# ═════════════════════════════════════════════════════════════════════════
+# B-2j (W-033, v0.8.0): pressure-feasibility constraint
+# ═════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class PressureFeasibilityContext:
+    """Column-side context for the BO pressure-feasibility constraint.
+
+    The optimization parameter space (RPM, c_span80, agarose_frac, ...)
+    drives M1 + M2 outputs (d32, G_DN, E_star). Whether those outputs
+    yield a column step that fits inside the operational pressure
+    envelope depends on column geometry, buffer composition, and the
+    target volumetric flow rate — none of which are part of the BO
+    parameter space. Those run-level fixed inputs are bundled here.
+
+    A None ``PressureFeasibilityContext`` (the default in
+    ``check_constraints``) leaves v0.7.0 behaviour untouched: no
+    pressure-side feasibility check is run.
+
+    Attributes
+    ----------
+    column :
+        ``ColumnGeometry`` to use for the candidate. Bed porosity,
+        diameter, height, particle_diameter (read at the per-candidate
+        d32) are read from this. Modulus fields (G_DN, E_star) are
+        overridden per-candidate from the result's mechanical block.
+    mobile_phase :
+        ``MobilePhase`` for the operating step (T, c_NaCl, glycerol/
+        ethanol fractions, optional custom μ).
+    Q_target_m3_s :
+        Operating flow rate the candidate is screened against [m³/s].
+    polymer_family :
+        Family used for K_geom lookup. Bound at the BO run level —
+        the BO does not optimise the family.
+    headroom_threshold :
+        Maximum acceptable Q_target / Q_max ratio. Default 1.0 (only
+        outright BLOCKER candidates are dropped). Set to 0.7 to also
+        drop WARNING-band candidates.
+    """
+
+    column: "ColumnGeometry"
+    mobile_phase: "MobilePhase"
+    Q_target_m3_s: float
+    polymer_family: PolymerFamily
+    headroom_threshold: float = 1.0
+
+
+def pressure_feasible(
+    result: FullResult,
+    ctx: PressureFeasibilityContext,
+) -> tuple[bool, list[str]]:
+    """Check whether the candidate's M1+M2 outputs survive the column step.
+
+    Builds a per-candidate ``ColumnGeometry`` by overriding the
+    context column's particle diameter and modulus fields with the
+    candidate's d32 / G_DN / E_star, then computes the pre-flight
+    envelope at ``ctx.Q_target_m3_s`` and reads ``headroom_ratio``.
+    Candidates with ``headroom_ratio > ctx.headroom_threshold`` are
+    declared infeasible.
+
+    Defensive: if the envelope computation fails (e.g. unsupported
+    polymer_family for K_geom lookup) the candidate is declared
+    infeasible with the exception message recorded — so the BO never
+    promotes a candidate the runtime cannot evaluate.
+
+    Returns
+    -------
+    (feasible, violations)
+        ``feasible = True`` and empty violations when the candidate
+        sits inside the headroom threshold; otherwise ``False`` and
+        a one-element list explaining why.
+    """
+    # Local imports to avoid a hard dep cycle: optimization.objectives is
+    # imported at FullResult.objective_vector time, before module3 may
+    # have finished setting up its own subpackage-level imports.
+    from dataclasses import replace as _dc_replace
+
+    from ..module3_performance.pressure_envelope import (
+        compute_pressure_envelope,
+    )
+
+    column = ctx.column
+    overridden = _dc_replace(
+        column,
+        particle_diameter=result.emulsification.d32,
+        G_DN=max(result.mechanical.G_DN, 1.0),
+        E_star=max(result.mechanical.E_star, 1.0),
+    )
+
+    try:
+        envelope = compute_pressure_envelope(
+            polymer_family=ctx.polymer_family,
+            column=overridden,
+            mobile_phase=ctx.mobile_phase,
+            Q_set_m3_s=max(ctx.Q_target_m3_s, 1e-15),
+        )
+    except (ValueError, KeyError) as exc:
+        return False, [
+            f"pressure envelope unavailable for family "
+            f"{ctx.polymer_family.value!r}: {exc}"
+        ]
+
+    if envelope.headroom_ratio > ctx.headroom_threshold:
+        return False, [
+            f"headroom_ratio={envelope.headroom_ratio:.2f} > "
+            f"threshold={ctx.headroom_threshold:.2f} "
+            f"(Q_target={ctx.Q_target_m3_s:.2e} m³/s, "
+            f"Q_max={envelope.Q_max_m3_s:.2e} m³/s)"
+        ]
+    return True, []
+
+
+def check_constraints(
+    result: FullResult,
+    mode: str | None = None,
+    *,
+    pressure_ctx: Optional[PressureFeasibilityContext] = None,
+) -> tuple[bool, list[str]]:
     """Check optimisation constraints. Returns (feasible, violations).
 
     Constraints checked:
@@ -305,6 +434,11 @@ def check_constraints(result: FullResult, mode: str | None = None) -> tuple[bool
       6. Total polymer (c_agarose + c_chitosan) <= 120 kg/m³ (pumpability
          limit, equivalent to 12% w/v)
       7. Pore size >= mesh size xi_final (inaccessible pore structure check)
+      8. (Optional, B-2j / W-033) Pressure-feasibility: the candidate's
+         M1+M2 outputs must yield a column-step headroom ratio at or
+         below ``pressure_ctx.headroom_threshold`` when run at
+         ``pressure_ctx.Q_target_m3_s``. Skipped when ``pressure_ctx``
+         is None (the default — preserves v0.7 behaviour).
     """
     if mode is None:
         mode = getattr(result.parameters.emulsification, 'mode', 'rotor_stator_legacy')
@@ -355,6 +489,12 @@ def check_constraints(result: FullResult, mode: str | None = None) -> tuple[bool
     # 7. Pore-mesh size consistency: pore must be accessible through crosslinked mesh
     if result.gelation.pore_size_mean < result.crosslinking.xi_final:
         violations.append("Pore size smaller than crosslinked mesh size (inaccessible)")
+
+    # 8. (Optional, B-2j) pressure-side feasibility for the column step.
+    if pressure_ctx is not None:
+        ok, p_violations = pressure_feasible(result, pressure_ctx)
+        if not ok:
+            violations.extend(p_violations)
 
     return len(violations) == 0, violations
 
