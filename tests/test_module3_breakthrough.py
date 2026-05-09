@@ -87,38 +87,6 @@ class TestPressureDrop:
         assert default_column.pressure_drop(0.0) == 0.0
 
 
-class TestMaxSafeFlowRate:
-    """Max safe flow rate tests."""
-
-    def test_max_safe_flow_rate_positive(self, default_column: ColumnGeometry):
-        """Q_max is positive and finite."""
-        Q_max = default_column.max_safe_flow_rate()
-        assert Q_max > 0
-        assert np.isfinite(Q_max)
-
-    def test_max_safe_inversely_proportional_to_mu(self):
-        """u_max is inversely proportional to mu."""
-        col = ColumnGeometry()
-        Q1 = col.max_safe_flow_rate(mu=1e-3)
-        Q2 = col.max_safe_flow_rate(mu=2e-3)
-        assert Q1 == pytest.approx(2 * Q2, rel=1e-10)
-
-    def test_max_safe_inversely_proportional_to_L(self):
-        """u_max is inversely proportional to bed height."""
-        col1 = ColumnGeometry(bed_height=0.10)
-        col2 = ColumnGeometry(bed_height=0.20)
-        Q1 = col1.max_safe_flow_rate()
-        Q2 = col2.max_safe_flow_rate()
-        assert Q1 == pytest.approx(2 * Q2, rel=1e-10)
-
-    def test_pressure_at_max_flow_equals_safety_E_star(self, default_column: ColumnGeometry):
-        """At Q_max, dP = safety * E_star."""
-        safety = 0.8
-        Q_max = default_column.max_safe_flow_rate(safety=safety)
-        dP = default_column.pressure_drop(Q_max)
-        assert dP == pytest.approx(safety * default_column.E_star, rel=1e-6)
-
-
 class TestBedCompression:
     """Bed compression tests."""
 

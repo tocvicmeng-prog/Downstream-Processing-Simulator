@@ -603,22 +603,30 @@ def plot_esi_spectrum(
 
 def plot_pressure_flow_curve(
     column: ColumnGeometry,
+    Q_max: float,
     mu: float = 1e-3,
 ) -> go.Figure:
     """Pressure drop vs flow rate with safe/unsafe zone annotations.
 
-    Plots dP = Kozeny-Carman(Q) from zero to 1.5 × the maximum safe flow rate.
-    A vertical dashed line marks Q_max with shaded safe/unsafe regions.
+    Plots dP = Kozeny-Carman(Q) from zero to 1.5 × Q_max. A vertical
+    dashed line marks Q_max with shaded safe/unsafe regions.
+
+    v0.8.0 (B-1i): Q_max is now a required argument — callers should
+    pass ``PressureEnvelope.Q_max_m3_s`` from
+    :func:`dpsim.module3_performance.pressure_envelope.compute_pressure_envelope`.
+    The legacy bursting-modulus self-derived Q_max was removed with
+    ``ColumnGeometry.max_safe_flow_rate``.
 
     Args:
-        column: ColumnGeometry instance (provides particle size, bed height,
-            porosity, and E_star for the safe-flow estimate).
+        column: ColumnGeometry instance (provides particle size, bed
+            height, porosity for the KC pressure-drop curve).
+        Q_max: Operational maximum flow rate [m^3/s] from the v0.7
+            pressure envelope.
         mu: Dynamic viscosity [Pa.s]. Default: water at 20 C (1e-3).
 
     Returns:
         go.Figure with dP [bar] vs Q [mL/min].
     """
-    Q_max = column.max_safe_flow_rate(mu=mu)
     Q_plot_max = max(Q_max * 1.5, 1e-9)
 
     Q_arr = np.linspace(0.0, Q_plot_max, 200)

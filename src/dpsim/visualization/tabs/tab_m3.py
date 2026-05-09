@@ -993,7 +993,11 @@ def render_tab_m3(tab_container) -> None:
                     )
 
                     if "m2_result" in st.session_state:
+                        from dpsim.core.mobile_phase import MobilePhase as _MP_bt
                         from dpsim.module3_performance.hydrodynamics import ColumnGeometry as _CG_bt
+                        from dpsim.module3_performance.pressure_envelope import (
+                            compute_pressure_envelope as _cpe_bt,
+                        )
                         _m2r_bt = st.session_state["m2_result"]
                         _col_bt = _CG_bt(
                             diameter=col_diam_mm / 1000, bed_height=bed_height_cm / 100,
@@ -1002,7 +1006,19 @@ def render_tab_m3(tab_container) -> None:
                             particle_porosity=_m2r_bt.m1_contract.porosity,
                             G_DN=_m2r_bt.G_DN_updated, E_star=_m2r_bt.E_star_updated,
                         )
-                        st.plotly_chart(plot_pressure_flow_curve(_col_bt), width="stretch")
+                        _fam_bt = getattr(_m2r_bt, "polymer_family", None) or (
+                            _m2r_bt.m1_contract.polymer_family
+                        )
+                        _env_bt = _cpe_bt(
+                            polymer_family=_fam_bt,
+                            column=_col_bt,
+                            mobile_phase=_MP_bt(),
+                            Q_set_m3_s=max(flow_rate_mL / 60.0e6, 1e-12),
+                        )
+                        st.plotly_chart(
+                            plot_pressure_flow_curve(_col_bt, Q_max=_env_bt.Q_max_m3_s),
+                            width="stretch",
+                        )
 
                     st.caption(
                         "Mechanistic prediction: Lumped Rate Model (LRM) with Langmuir isotherm. "

@@ -789,7 +789,8 @@ class DownstreamProcessOrchestrator:
                 module="M3",
                 recommendation=(
                     "Check polymer_family registration and column geometry; "
-                    "fall back to legacy validate_flow_rate path."
+                    "soft validate_flow_rate WARNINGs (compression, Re_p) "
+                    "are still emitted as a backstop."
                 ),
             )
 
