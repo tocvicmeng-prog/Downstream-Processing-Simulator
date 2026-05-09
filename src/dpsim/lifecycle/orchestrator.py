@@ -52,7 +52,12 @@ from dpsim.module2_functionalization.orchestrator import (
     ModificationOrchestrator,
     build_functional_media_contract,
 )
+from dpsim.core.mobile_phase import MobilePhase
 from dpsim.module3_performance.hydrodynamics import ColumnGeometry
+from dpsim.module3_performance.pressure_envelope import (
+    PressureEnvelope,
+    compute_pressure_envelope,
+)
 from dpsim.module3_performance.method import (
     ChromatographyMethodResult,
     run_chromatography_method,
@@ -92,6 +97,14 @@ class DownstreamLifecycleResult:
     # Built from the M1 FullResult + calibration store + recipe target profile.
     # ``None`` only when M1 itself failed to produce a result.
     process_dossier: Any = None
+    # v0.7.0 (B-2h / W-025): pre-flight pressure envelope. Computed
+    # post-M2 with the M2-updated mechanical state and a default
+    # MobilePhase (water-like equilibration buffer at 20 °C). Surfaces
+    # u_crit, Q_max, dP_max_operational + decision tier rolled-up
+    # against the family's valid_domain. ``None`` only when M2 failed
+    # or the polymer family is unregistered (the fallback path still
+    # produces an envelope at QUALITATIVE_TREND tier).
+    pressure_envelope: Any = None
     resolved_parameters: dict[str, ResolvedParameter] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
@@ -752,6 +765,82 @@ class DownstreamProcessOrchestrator:
                 ),
             )
 
+        # B-2h (W-025): pre-flight pressure envelope using the v0.7
+        # u_crit-based operational ceiling (replaces the legacy
+        # E_star-based safety×0.8 anchor). Default MobilePhase is the
+        # water-like equilibration buffer at 20 °C; future scope adds
+        # per-step buffer composition to drive the envelope through
+        # the full recipe program.
+        pressure_envelope: PressureEnvelope | None = None
+        try:
+            pressure_envelope = compute_pressure_envelope(
+                polymer_family=params.polymer_family,
+                column=m3_column,
+                mobile_phase=MobilePhase(),
+                Q_set_m3_s=m3_flow_rate,
+            )
+        except Exception as exc:  # pragma: no cover — defensive
+            validation.add(
+                ValidationSeverity.WARNING,
+                "M3_PRESSURE_ENVELOPE_UNAVAILABLE",
+                f"Pre-flight pressure envelope failed: {exc!r}.",
+                module="M3",
+                recommendation=(
+                    "Check polymer_family registration and column geometry; "
+                    "fall back to legacy validate_flow_rate path."
+                ),
+            )
+
+        if pressure_envelope is not None:
+            if pressure_envelope.is_blocker:
+                validation.add(
+                    ValidationSeverity.BLOCKER,
+                    "M3_PRESSURE_ENVELOPE_EXCEEDED",
+                    (
+                        f"Flow rate {m3_flow_rate:.2e} m³/s exceeds the u_crit-"
+                        f"based operational ceiling Q_max="
+                        f"{pressure_envelope.Q_max_m3_s:.2e} m³/s "
+                        f"(headroom_ratio={pressure_envelope.headroom_ratio:.2f}). "
+                        "Bed-compression runaway is likely; beads will be crushed."
+                    ),
+                    module="M3",
+                    recommendation=(
+                        f"Reduce flow rate to ≤ Q_recommended="
+                        f"{pressure_envelope.Q_recommended_m3_s:.2e} m³/s "
+                        "or increase column ID / shorten bed / use a stiffer "
+                        "polymer family."
+                    ),
+                )
+            elif pressure_envelope.is_warning:
+                validation.add(
+                    ValidationSeverity.WARNING,
+                    "M3_PRESSURE_ENVELOPE_WARNING",
+                    (
+                        f"Flow rate {m3_flow_rate:.2e} m³/s is in the "
+                        f"warning band of the u_crit-based operational ceiling "
+                        f"(headroom_ratio={pressure_envelope.headroom_ratio:.2f}, "
+                        f"target ≤ 0.70)."
+                    ),
+                    module="M3",
+                    recommendation=(
+                        f"Reduce flow rate to Q_recommended="
+                        f"{pressure_envelope.Q_recommended_m3_s:.2e} m³/s "
+                        "for headroom against fouling rise during load."
+                    ),
+                )
+            for violation in pressure_envelope.valid_domain_violations:
+                validation.add(
+                    ValidationSeverity.WARNING,
+                    "M3_PRESSURE_ENVELOPE_DOMAIN",
+                    f"Operating point outside calibrated envelope: {violation}",
+                    module="M3",
+                    recommendation=(
+                        "Tier-downgraded prediction; supply manufacturer "
+                        "pressure-flow curve or local calibration to restore "
+                        "CALIBRATED_LOCAL render."
+                    ),
+                )
+
         check_cancel(stage="pre-M3")
         m3_method = run_chromatography_method(
             column=m3_column,
@@ -1095,6 +1184,7 @@ class DownstreamProcessOrchestrator:
             dsd_summary=dsd_summary,
             performance_recipe=performance_recipe,
             process_dossier=process_dossier,
+            pressure_envelope=pressure_envelope,
             resolved_parameters=resolved_inputs.resolved_parameters,
             notes=notes,
         )

@@ -89,6 +89,7 @@ def validate_recipe_first_principles(
     _g5_surface_area_inheritance(fmc, report)
     _g6_acs_converter_sequence(recipe, report)
     _g7_ph_window_check(recipe, report)
+    _g8_pressure_envelope_check(recipe, fmc, report)
     return report
 
 
@@ -866,6 +867,79 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+# ─── G8 — pressure envelope check (B-2h / W-028, v0.7.0) ────────────────────
+
+
+def _g8_pressure_envelope_check(
+    recipe: ProcessRecipe,
+    fmc: Any | None,
+    report: ValidationReport,
+) -> None:
+    """Recipe-side pre-flight pressure-envelope sanity gate.
+
+    B-2h / W-028 (v0.7.0): a recipe-time validation that surfaces
+    obviously-unsafe flow rates BEFORE the lifecycle orchestrator
+    starts the long-running M1+M2+M3 chain. Mirrors the G7 pH-window
+    shape from B-1a.
+
+    Scope limit: this gate runs at recipe-validation time, before M2
+    has produced a FunctionalMicrosphere. It cannot compute the full
+    `compute_pressure_envelope` output because G_DN_updated and
+    bead_d32 are not yet known. Instead, it checks the recipe's
+    declared M3 flow-rate parameters for sanity bounds (positive,
+    finite, within typical chromatography envelopes). The
+    lifecycle-side check (W-025) does the full envelope computation
+    once M2 completes.
+
+    Future scope (post-v0.7): when ``fmc`` is supplied with M2-derived
+    G_DN_updated and bead_d32, this gate could short-circuit the
+    lifecycle check by computing a recipe-time PressureEnvelope
+    directly. v0.7 keeps the recipe-validation layer fast by deferring
+    that to the lifecycle stage.
+    """
+    # Sanity check: scan M3-related steps for declared flow rates that
+    # are negative, zero, or absurdly large for chromatography
+    # (> 100 mL/s ≈ 6 L/min on a typical column — not impossible but
+    # warrants a hard look).
+    for step in recipe.steps:
+        flow = step.parameters.get("flow_rate")
+        if flow is None:
+            continue
+        try:
+            flow_value = float(flow.value if isinstance(flow, Quantity) else flow)
+        except (TypeError, ValueError):
+            continue
+        # Treat unitless / SI as m³/s; if a unit-tagged Quantity is
+        # supplied, trust the explicit unit.
+        if flow_value < 0.0:
+            report.add(
+                ValidationSeverity.BLOCKER,
+                "FP_G8_FLOW_RATE_NEGATIVE",
+                (
+                    f"Step {step.name!r}: declared flow_rate={flow_value!r} "
+                    "is negative."
+                ),
+                module="M3",
+                recommendation="Set a positive flow rate.",
+            )
+        elif flow_value > 1e-4:  # > 100 mL/s = 6 L/min
+            report.add(
+                ValidationSeverity.WARNING,
+                "FP_G8_FLOW_RATE_EXTREME",
+                (
+                    f"Step {step.name!r}: declared flow_rate={flow_value:.2e} "
+                    "m³/s is unusually high for chromatography. The lifecycle-"
+                    "side pressure envelope check will likely BLOCKER this."
+                ),
+                module="M3",
+                recommendation=(
+                    "Verify the unit tag (m³/s vs mL/min); typical analytical-"
+                    "scale chromatography runs at 1–10 mL/min ≈ 1.7×10⁻⁸ to "
+                    "1.7×10⁻⁷ m³/s."
+                ),
+            )
 
 
 __all__ = ["validate_recipe_first_principles"]

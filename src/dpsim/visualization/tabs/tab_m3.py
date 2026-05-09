@@ -768,6 +768,144 @@ def render_tab_m3(tab_container) -> None:
             st.divider()
             st.header("M3 Results")
 
+            # B-2h (W-029) — pre-flight pressure envelope.
+            #
+            # Surface the u_crit-based operational ceiling that B-2f
+            # introduced. Renders before the chromatography-result
+            # sub-tabs because the user's first question after seeing
+            # the run completed should be "did this run inside the
+            # bed-compression envelope or not?".
+            _lifecycle_result = st.session_state.get("lifecycle_result")
+            _envelope = (
+                getattr(_lifecycle_result, "pressure_envelope", None)
+                if _lifecycle_result is not None
+                else None
+            )
+            if _envelope is not None:
+                from dpsim.core.decision_grade import OutputType
+                from dpsim.visualization.decision_grade_render import (
+                    render_metric as _rm_pe,
+                )
+
+                st.subheader("Pressure envelope (pre-flight)")
+                st.caption(
+                    f"Family `{_envelope.polymer_family.value}`. "
+                    f"K_geom source: `{_envelope.K_geom_source}`. "
+                    f"Tier: `{_envelope.decision_tier.value}`."
+                )
+
+                _cols = st.columns(4)
+                _rm_pe(
+                    "u_crit",
+                    value=_envelope.u_crit_m_s,
+                    output_type=OutputType.U_CRIT,
+                    tier=_envelope.decision_tier,
+                    unit="cm/h",
+                    scale=100.0 * 3600.0,  # m/s → cm/h
+                    container=_cols[0],
+                    help="Critical superficial velocity at the bed-compression knee.",
+                )
+                _rm_pe(
+                    "Q_max",
+                    value=_envelope.Q_max_m3_s,
+                    output_type=OutputType.Q_MAX,
+                    tier=_envelope.decision_tier,
+                    unit="mL/min",
+                    scale=1e6 * 60.0,  # m³/s → mL/min
+                    container=_cols[1],
+                    help="Operational ceiling — never exceed.",
+                )
+                _rm_pe(
+                    "Q_recommended",
+                    value=_envelope.Q_recommended_m3_s,
+                    output_type=OutputType.Q_MAX,
+                    tier=_envelope.decision_tier,
+                    unit="mL/min",
+                    scale=1e6 * 60.0,
+                    container=_cols[2],
+                    help="50% of Q_max — headroom for fouling rise.",
+                )
+                _rm_pe(
+                    "Headroom",
+                    value=min(_envelope.headroom_ratio, 9.99),
+                    output_type=OutputType.PRESSURE_HEADROOM,
+                    tier=_envelope.decision_tier,
+                    unit="%",
+                    scale=100.0,
+                    container=_cols[3],
+                    help=(
+                        "Q_set / Q_max. > 70% triggers WARNING; > 100% "
+                        "triggers BLOCKER."
+                    ),
+                )
+
+                _cols2 = st.columns(3)
+                _rm_pe(
+                    "ΔP predicted",
+                    value=_envelope.dP_predicted_pa,
+                    output_type=OutputType.PRESSURE_DROP,
+                    tier=_envelope.decision_tier,
+                    unit="kPa",
+                    scale=1e-3,  # Pa → kPa
+                    container=_cols2[0],
+                )
+                _rm_pe(
+                    "ΔP max (operational)",
+                    value=_envelope.dP_max_operational_pa,
+                    output_type=OutputType.PRESSURE_LIMIT,
+                    tier=_envelope.decision_tier,
+                    unit="kPa",
+                    scale=1e-3,
+                    container=_cols2[1],
+                    help="u_crit-based ceiling — the operational limit.",
+                )
+                _rm_pe(
+                    "ΔP burst (structural)",
+                    value=_envelope.dP_max_burst_pa,
+                    output_type=OutputType.PRESSURE_LIMIT,
+                    tier=_envelope.decision_tier,
+                    unit="kPa",
+                    scale=1e-3,
+                    container=_cols2[2],
+                    help=(
+                        "E_star-based bed elastic-limit DIAGNOSTIC, not "
+                        "the operational ceiling."
+                    ),
+                )
+
+                # Status chip + advisory.
+                if _envelope.is_blocker:
+                    st.error(
+                        f"BLOCKER — flow rate exceeds Q_max. "
+                        f"headroom_ratio = {_envelope.headroom_ratio:.2f}. "
+                        f"Reduce Q to ≤ Q_recommended before running."
+                    )
+                elif _envelope.is_warning:
+                    st.warning(
+                        f"WARNING — flow rate is in the 70–100% headroom "
+                        f"band (ratio = {_envelope.headroom_ratio:.2f}). "
+                        f"Consider Q_recommended for fouling headroom."
+                    )
+                else:
+                    st.success(
+                        f"OK — operating at "
+                        f"{_envelope.headroom_ratio*100:.0f}% of Q_max."
+                    )
+
+                if _envelope.valid_domain_violations:
+                    with st.expander(
+                        f"valid_domain violations ({len(_envelope.valid_domain_violations)})"
+                    ):
+                        for _v in _envelope.valid_domain_violations:
+                            st.write(f"• {_v}")
+
+                if _envelope.notes:
+                    with st.expander("Provenance / notes"):
+                        for _n in _envelope.notes:
+                            st.write(f"• {_n}")
+
+                st.divider()
+
             # Build sub-tabs for M3 results
             _m3_sub_labels = []
             if _show_m3_bt:
