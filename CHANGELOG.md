@@ -1,5 +1,61 @@
 # Changelog
 
+## v0.7.0 — M3 interface back-pressure optimization (2026-05-10)
+
+Closes 11 of 11 work-plan items from `docs/update_workplan_2026-05-10_m3_pressure.md` — the v0.7.0 M3 back-pressure work driven by the joint /scientific-advisor + /architect + /dev-orchestrator review on 2026-05-10. The release replaces the v0.6.6 ΔP_max anchor (`safety × E_star`, scientifically wrong by 5–50× factor for soft chromatography media) with a per-family u_crit formulation, makes mobile-phase viscosity a function of (buffer, T), surfaces the Sauter mean d32 across the M2→M3 wire, adds frit/distributor series resistance, and ships a structured pre-flight pressure envelope with an in-flight streaming monitor (function-only; UI deferred to v0.8).
+
+### Added — Tier 1 (B-1f … B-1h) — quick wins
+
+- **B-1f (W-023) — Buffer + viscosity foundation:** new `core/mobile_phase.py` (`MobilePhase` frozen dataclass) and `core/viscosity.py` (`ViscosityResult` + `water_viscosity_pa_s` + `resolve_mobile_phase_viscosity`). Literature-anchored additive model: μ = μ_water(T)·(1 + α_salt·c_NaCl + α_gly·φ_gly + α_etoh·φ_etoh) with Crittenden 2012 / Out & Los 1980 / Cheng 2008 / Khattab 2017 anchors. `custom_mu_pa_s` override path → `CALIBRATED_LOCAL` tier. 69 new tests.
+- **B-1g (W-021 + W-024) — Sauter d32 surfacing + frit resistance:** `_column_with_microsphere` and `_column_for_quantile` in `module3_performance/method_simulation.py` now read `m1.bead_d32` (Sauter, surface-area-equivalent) instead of `m1.bead_d50` (median). Existing `M1ExportContract.bead_d32` is consumed; no new field needed. ΔP correction factor (d50/d32)² ≈ 1.56× at typical σ_ln. `ColumnGeometry` adds `Optional` `frit_permeability_m2` and `frit_thickness_m` fields plus a `frit_pressure_drop` method. 23 new tests.
+- **B-1h (W-030) — Decision-grade enum extension:** `core/decision_grade.py::OutputType` adds `PRESSURE_LIMIT`, `Q_MAX`, `U_CRIT`, `PRESSURE_HEADROOM`. PRESSURE_LIMIT/Q_MAX/U_CRIT mirror PRESSURE_DROP at SEMI_QUANTITATIVE floor; PRESSURE_HEADROOM is tier-independent (floor QUALITATIVE_TREND). 26 new tests.
+
+### Added — Tier 2 (B-2f … B-2h) — keystone science fix + UX wiring
+
+- **B-2f (W-020 + W-026) — Pressure envelope science fix [KEYSTONE]:** new `module3_performance/family_kgeom.py` with `FAMILY_KGEOM_REGISTRY` keyed by `PolymerFamily.value` (5 families: agarose, agarose_chitosan, cellulose, plga, alginate; literature-anchored K_geom defaults at SEMI_QUANTITATIVE; conservative fallback at QUALITATIVE_TREND for unregistered). New `module3_performance/pressure_envelope.py` with `PressureEnvelope` frozen dataclass + `compute_pressure_envelope` orchestrator. Two distinct pressure ceilings: `dP_max_operational_pa` (u_crit-based, THE operational limit) and `dP_max_burst_pa` (E_star-based bed elastic-limit DIAGNOSTIC, NOT the operational ceiling). Tier rollup walks `valid_domain` + viscosity.extrapolated; demotes one step per dimension; floors at QUALITATIVE_TREND. `calibration_store` injection point for manufacturer pressure-flow curves promotes K_geom_source to `CALIBRATED_LOCAL`. `ColumnGeometry.max_safe_flow_rate` deprecated with `DeprecationWarning`; removal in v0.8. ADR-004 documents the full decision rationale. 79 new tests.
+- **B-2g (W-022) — ε_b iteration refinement:** `iterate_kc_compression` adds Picard-with-under-relaxation (α=0.5) feedback for the (ε_b, ΔP) fixed point. Per-iteration compression cap at 3% keeps the linear-elastic small-strain formula in its valid regime. Cap-hit budget triggers `converged=False` for tier downgrade. ε_b floor at 0.10 + immediate-runaway detection at compression > 90 %. Consumed by `compute_pressure_envelope` without API change. 19 new tests.
+- **B-2h (W-025 + W-028 + W-029) — Pre-flight UX wiring:** `lifecycle/orchestrator.py` adds a `pressure_envelope` field on `DownstreamLifecycleResult` and computes one per run post-M2 with the M2-updated G_DN/E_star and a default `MobilePhase()`. Emits BLOCKER on `headroom_ratio > 1.0`, WARNING on > 0.7, WARNING per `valid_domain_violations`. New `_g8_pressure_envelope_check` in `core/recipe_validation.py` mirrors G7 (B-1a precedent) with recipe-side sanity bounds (negative / absurdly-large flow rates flagged before the long M1+M2+M3 chain runs). New "Pressure envelope (pre-flight)" section in `visualization/tabs/tab_m3.py` using `render_metric` (B-1b precedent) for tier-aware display. 8 new tests.
+
+### Added — Tier 3 (B-3d) — streaming monitor
+
+- **B-3d (W-027) — Streaming pressure monitor function:** new `module3_performance/pressure_monitor.py` with `PressureMonitorRule` + `PressureMonitorState` enums, `PressureMonitorReading` + `PressureMonitorOutput` frozen dataclasses, and `evaluate_pressure_trace` pure function. Seven rules: SPIKE / HEADROOM_BLOCKER / DPDT_BLOCKER / MODEL_DEVIATION_LOW (channeling) / MODEL_DEVIATION_HIGH (fouling) / HEADROOM_WARNING / DPDT_WARNING with thresholds at 0.85 / 0.70 / 20 %·min⁻¹ / 5 %·min⁻¹ / 1.50 / 0.60 / 100 %·min⁻¹ sustained 5 s. History append-and-prune (default 5-min window). Function-only ship; live UI widget + AKTA UNICORN integration deferred to v0.8. 20 new tests.
+
+### Verification
+
+- 694 tests passing in 93 s wide-regression (B-1f through B-3d + Tier 0 baseline + lifecycle + recipe_validation + v60 integration).
+- 23 expected `DeprecationWarning` calls from existing internal callers of `ColumnGeometry.max_safe_flow_rate` (legacy callers retained for the v0.7.x deprecation window).
+- ruff: clean across all changed paths.
+- mypy: 0 issues on new source files. Pre-existing scipy-stubs baseline noise unchanged.
+- AST gate (`tests/test_v9_3_enum_comparison_enforcement.py`): 3/3 passing — no new `is`/`is not` comparisons against PolymerFamily / ACSSiteType / ModelEvidenceTier / ModelMode.
+
+### Validation release-gate status (work plan §4)
+
+  1. Environment (W-001) — closed in v0.6.6 ✓
+  2. Calibrated wet-lab dataset — wet-lab side, OPEN
+  3. Independent wet-lab holdout validation — wet-lab side, OPEN
+  4. Decision-grade automatic downgrade (W-003) — closed v0.6.6 ✓
+  5. Process dossier export (W-011) — closed v0.6.6 ✓
+  6. **u_crit-anchored ΔP_max prediction** (W-020 + W-026) — closed B-2f ✓
+  7. **Per-family K_geom calibration vs manufacturer curves** — wet-lab side, OPEN. Code path lands with B-2f via `calibration_store`; the store itself is empty until users supply data.
+  8. **Pre-flight pressure envelope renders before "Start flow"** (W-025 + W-028 + W-029) — closed B-2h ✓
+
+3/3 new gates introduced by v0.7 are code-side closeable. Gates 6 + 8 are now closed; gate 7 is wet-lab-gated and remains the binding promotion path from SEMI_QUANTITATIVE INTERVAL → CALIBRATED_LOCAL NUMBER render.
+
+### Public-communication framing
+
+> v0.7.0 ships as a **research-grade screening simulator with first-principles back-pressure envelopes** rendered at SEMI_QUANTITATIVE INTERVAL precision. Promotion to CALIBRATED_LOCAL NUMBER precision requires user-supplied manufacturer pressure-flow curves or local wet-lab pressure-flow data via the `calibration_store` argument. DPSim v0.7 must NEVER, in any communication, be described as "validated for back-pressure-safe column operation" — that requires gates 2, 3, and 7 all closed (work plan §4.3).
+
+### Detailed handovers
+
+  - `docs/handover/HANDOVER_b0d_residual_hygiene_close.md`
+  - `docs/handover/HANDOVER_b1f_viscosity_close.md`
+  - `docs/handover/HANDOVER_b1g_d32_frit_close.md`
+  - `docs/handover/HANDOVER_b1h_decision_grade_ext.md`
+  - `docs/handover/HANDOVER_v0_7_b2f_pressure_envelope_KEYSTONE.md`
+  - `docs/handover/HANDOVER_b2g_iteration_close.md`
+  - `docs/handover/HANDOVER_v0_7_b2h_ux_close.md`
+  - `docs/handover/HANDOVER_v0_7_b3d_streaming_function_close.md`
+
 ## v0.6.6 — Tier 1 + Tier 2 + post-Tier-2 work plan close (2026-05-04)
 
 Closes 14 of 19 work-plan items from the 2026-05-04 joint audit
