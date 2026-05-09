@@ -23,6 +23,20 @@ Phase E adds multi-component and gradient capabilities:
 
 # Phase C exports
 from .hydrodynamics import ColumnGeometry
+
+# B-2f (W-020 + W-026): pressure-envelope pre-flight (v0.7.0).
+from .family_kgeom import (
+    FAMILY_KGEOM_REGISTRY,
+    FamilyKGeom,
+    check_valid_domain,
+    is_family_registered,
+    lookup_family_kgeom,
+    registered_families,
+)
+from .pressure_envelope import (
+    PressureEnvelope,
+    compute_pressure_envelope,
+)
 from .isotherms.langmuir import LangmuirIsotherm
 from .transport.lumped_rate import LRMResult, solve_lrm
 from .detection.uv import compute_uv_signal, apply_detector_broadening
@@ -87,6 +101,15 @@ from .method import (
 __all__ = [
     # Phase C
     "ColumnGeometry",
+    # B-2f pressure envelope (v0.7.0)
+    "FAMILY_KGEOM_REGISTRY",
+    "FamilyKGeom",
+    "PressureEnvelope",
+    "check_valid_domain",
+    "compute_pressure_envelope",
+    "is_family_registered",
+    "lookup_family_kgeom",
+    "registered_families",
     "LangmuirIsotherm",
     "LRMResult",
     "solve_lrm",

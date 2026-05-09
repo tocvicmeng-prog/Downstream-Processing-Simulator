@@ -142,21 +142,47 @@ class ColumnGeometry:
         return dP
 
     def max_safe_flow_rate(self, mu: float = 1e-3, safety: float = 0.8) -> float:
-        """Maximum flow rate before exceeding bead crushing pressure [m^3/s].
+        """**DEPRECATED — use pressure_envelope.compute_pressure_envelope.**
 
-        The crushing pressure is taken as the effective Young's modulus
-        (E_star) scaled by the safety factor.  Inverting Kozeny-Carman:
+        B-2f (W-020, v0.7.0): this method anchors ΔP_max to
+        ``safety × E_star`` (the bursting modulus). For soft
+        chromatography media the *operational* limit is set by
+        bed-compression u_crit, not by bead bursting; the two are
+        physically distinct and u_crit is typically 5–50× lower than
+        the bursting limit. Using this method silently underestimates
+        bead-crush risk by that factor.
 
-            Q_max = safety * E_star * dp^2 * eps^3 * A
-                    / (150 * mu * L * (1-eps)^2)
+        Replacement: build a :class:`MobilePhase` for the recipe step
+        and call
+        :func:`dpsim.module3_performance.pressure_envelope.compute_pressure_envelope`,
+        then read ``PressureEnvelope.Q_max_m3_s`` (the u_crit-based
+        operational ceiling, family-aware via the K_geom registry).
+
+        This method is retained for one release with a
+        ``DeprecationWarning`` and will be removed in v0.8. The
+        formula here is preserved as the **structural** (bursting)
+        ceiling, not the operational one — call sites that genuinely
+        need the bursting bound should consume
+        ``PressureEnvelope.dP_max_burst_pa`` instead.
 
         Args:
             mu: Dynamic viscosity [Pa.s].
             safety: Safety factor (0-1, default 0.8).
 
         Returns:
-            Maximum safe volumetric flow rate [m^3/s].
+            Maximum flow rate before bead bursting [m^3/s] — NOT the
+            operational ceiling.
         """
+        import warnings
+        warnings.warn(
+            "ColumnGeometry.max_safe_flow_rate is deprecated as of v0.7.0 "
+            "(B-2f / W-020). The safety×E_star anchor is the bursting "
+            "modulus, not the operational bed-compression ceiling. Use "
+            "pressure_envelope.compute_pressure_envelope and read "
+            "PressureEnvelope.Q_max_m3_s instead. Removed in v0.8.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         eps = self.bed_porosity
         dp = self.particle_diameter
         L = self.bed_height
