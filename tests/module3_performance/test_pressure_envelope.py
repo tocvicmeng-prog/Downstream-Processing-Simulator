@@ -31,10 +31,14 @@ from dpsim.module3_performance.pressure_envelope import (
 
 
 def _agarose_column() -> ColumnGeometry:
-    """Realistic agarose 4-6% column.
+    """Standardized Sepharose 4FF test fixture.
 
-    G_DN ≈ 5 kPa is consistent with literature values for Sepharose 4FF /
-    6FF; E_star ≈ 3·G_DN (incompressible-rubber Poisson ν ≈ 0.5).
+    G_DN = 5 kPa is consistent with literature values for Sepharose 4FF
+    / 6FF (sci-advisor §B); E_star = 50 kPa carries a higher-than-
+    incompressible-rubber ratio (E*/G ~ 10) to keep the linear-elastic
+    compression formula in its valid regime for the B-2g iteration.
+    With K_geom = 5×10⁻³ this fixture yields u_crit ≈ 730 cm/h, in line
+    with the published Sepharose Fast Flow envelope.
     """
     return ColumnGeometry(
         diameter=0.01,
@@ -43,7 +47,7 @@ def _agarose_column() -> ColumnGeometry:
         bed_porosity=0.38,
         particle_porosity=0.70,
         G_DN=5000.0,
-        E_star=15000.0,
+        E_star=50000.0,
     )
 
 

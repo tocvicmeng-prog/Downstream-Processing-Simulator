@@ -52,7 +52,10 @@ from dpsim.module3_performance.family_kgeom import (
     check_valid_domain,
     lookup_family_kgeom,
 )
-from dpsim.module3_performance.hydrodynamics import ColumnGeometry
+from dpsim.module3_performance.hydrodynamics import (
+    ColumnGeometry,
+    iterate_kc_compression,
+)
 
 
 # ─── Tier ladder helpers (mirrors core.decision_grade._tier_index) ───────────
@@ -327,16 +330,24 @@ def compute_pressure_envelope(
     Q_max = u_crit * A
     Q_recommended = 0.5 * Q_max
 
-    # 5. ΔP_predicted at Q_set (one-shot KC; B-2g adds iteration).
-    # Compose a temporary geometry with the resolved d32 so KC sees the
-    # right diameter regardless of whether the caller's column was
-    # constructed with d50 (legacy path) or d32 (post-B-1g).
+    # 5. ΔP_predicted at Q_set, iterated against ε_b feedback (B-2g/W-022).
+    # Compose a temporary geometry with the resolved d32 + E_star so KC
+    # sees the right diameter regardless of whether the caller's column
+    # was constructed with d50 (legacy) or d32 (post-B-1g).
     eps = column.bed_porosity
-    u_set = column.superficial_velocity(Q_set_m3_s)
-    dP_bed = (
-        150.0 * mu * u_set * L * (1.0 - eps) ** 2
-        / (d32_resolved ** 2 * eps ** 3)
+    iter_geom = ColumnGeometry(
+        diameter=column.diameter,
+        bed_height=column.bed_height,
+        particle_diameter=d32_resolved,
+        bed_porosity=eps,
+        particle_porosity=column.particle_porosity,
+        G_DN=G_DN_resolved,
+        E_star=E_star_resolved,
+        frit_permeability_m2=column.frit_permeability_m2,
+        frit_thickness_m=column.frit_thickness_m,
     )
+    iteration = iterate_kc_compression(iter_geom, Q_set_m3_s, mu)
+    dP_bed = iteration.dP_pa
 
     # 6. Frit contribution (zero when not configured).
     dP_frit = column.frit_pressure_drop(Q_set_m3_s, mu=mu)
@@ -364,6 +375,10 @@ def compute_pressure_envelope(
         demote_steps += 1
     if viscosity.extrapolated:
         demote_steps += 1
+    if not iteration.converged:
+        # Runaway / non-convergence near u_crit. Demote one step;
+        # B-2h's G8 gate also flags this as a BLOCKER independently.
+        demote_steps += 1
     if demote_steps > 0:
         decision_tier = _demote_tier(decision_tier, demote_steps)
 
@@ -381,6 +396,9 @@ def compute_pressure_envelope(
     }
     if viscosity.extrapolated:
         provenance["viscosity_flag"] = "extrapolated"
+    provenance["iteration_n_iter"] = str(iteration.n_iter)
+    provenance["iteration_converged"] = str(iteration.converged)
+    provenance["eps_b_compressed"] = f"{iteration.eps_b_final:.4f}"
 
     # Notes — tier-rollup explanations.
     notes: list[str] = []
@@ -391,6 +409,12 @@ def compute_pressure_envelope(
         )
     if viscosity.extrapolated:
         notes.append(f"viscosity extrapolated: {viscosity.notes}")
+    if not iteration.converged:
+        notes.append(
+            f"ε_b iteration did not converge in {iteration.n_iter} steps "
+            f"(final ε_b = {iteration.eps_b_final:.4f}). Operating point is "
+            "at or beyond u_crit — bed-compression runaway. Reduce Q."
+        )
     if K_geom_source == "family_default":
         notes.append(
             "K_geom from family_default literature anchor — "
