@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.8.1 — Salt-aware elution + plotly annotation tier-gating (2026-05-10)
+
+Closes 2/2 work-plan items from `docs/update_workplan_2026-05-10_v0_8_1.md` — the long-deferred "future scientific scope" items from the 2026-05-04 incremental-close handover. Patch bump per the project's versioning policy: minor bumps reserved for matured-status milestones; v0.9 stays available for a meaningful plateau.
+
+### Added — Tier 1 (B-1j + B-1k)
+
+- **B-1j (W-034) — Salt-modulated Langmuir adapter.** New `module3_performance/isotherms/salt_dependent.py` ships the Mollerup-simplified salt modulator (functionally identical to SDM in the dilute single-component limit per ADR-005). `SaltModulatedLangmuir` wraps a base `LangmuirIsotherm` and applies `K_a(c_salt) = K_a_ref · (c_salt_ref / c_salt) ** ν` at every rhs evaluation. The full SMA mass-action solver (`isotherms/sma.py`) remains the documented promotion target for when wet-lab ν / σ data warrants the per-rhs fixed-point cost. `EquilibriumAdapter.equilibrium_loading` gains a branch for the new isotherm class so the existing `run_gradient_elution` → `solve_lrm` → adapter wiring routes the `salt_concentration` state field into the new isotherm without touching the time-domain solver. Tier ladder: `SEMI_QUANTITATIVE` by default; `CALIBRATED_LOCAL` when callers fit ν locally and set `calibrated_locally=True`. Literature defaults: ν = 4.5 (mid-range protein characteristic charge), c_salt_ref = 150 mM (PBS reference). New ADR-005 documents the full SDM-vs-Mollerup-vs-SMA tradeoff. 24 new tests.
+
+- **B-1k (W-035) — Plotly annotation tier-gating.** New `render_decision_grade_annotation` helper in `visualization/decision_grade_render.py` is the plotly-side companion to `render_metric`. Routes a value through `format_decision_graded`, picks an unobtrusive color hint based on the chosen render mode, and appends `[INTERVAL]` / `[RANK]` mode tags when the policy degrades the output below NUMBER. SUPPRESS branches return without drawing — callers can explicitly add a "data not available" badge instead. Wired into `plot_breakthrough_curve` (DBC₅ / DBC₁₀ / DBC₅₀ value annotations) and `plot_pressure_flow_curve` (Q_max badge); both gain an optional `tier` kwarg with `tier=None` preserving legacy formatting. 13 new tests.
+
+### Verification
+
+- 269 tests passing in v0.8.1-relevant scope (visualization + module3_performance).
+- ruff: clean across all changed paths.
+- mypy: 0 issues on new source files.
+- AST gate: no new `is` / `is not` comparisons against managed enums.
+
+### Validation gates closed in this release
+
+- **Gate 12: salt-driven elution dynamics are physics-aware.** The previous v0.8.0 state was: salt gradient envelope was in `gradient_diagnostics` but did not drive the isotherm. After v0.8.1, the gradient elution rhs sees `c_salt(t)` and modulates K_a via the Mollerup factor.
+- **Gate 13: plotly annotations are tier-gated.** Plot overlays no longer assert tier-blind numeric badges; values flow through the same decision-grade ladder that gates `st.metric` widgets.
+
+### Public-communication framing
+
+> v0.8.1 ships salt-aware IEX elution at SEMI_QUANTITATIVE tier with literature-anchored ν defaults. Quantitative protein-specific elution recoveries require local wet-lab calibration of ν against the protein-resin pair. The plotly annotation extension is purely cosmetic — it does not change any numerical computation; it only ensures chart labels carry the same evidence-tier caveats as the metric widgets.
+
+### Detailed handovers
+
+- `docs/handover/HANDOVER_v0_8_1_b1j_salt_modulator.md`
+- `docs/handover/HANDOVER_v0_8_1_b1k_plotly_annotations.md`
+- `docs/handover/HANDOVER_v0_8_1_release.md`
+
 ## v0.8.0 — Pressure-envelope operationalization (2026-05-10)
 
 Closes 3 of 3 work-plan items from `docs/update_workplan_2026-05-10_v0_8.md` — the deferred items from the v0.7.0 §6 "out-of-scope" list. The release operationalizes the pressure envelope end-to-end: pre-flight (v0.7), in-flight (v0.8 streaming UI for offline replay), and back-prop (v0.8 BO feasibility constraint). Calibration tier remains SEMI_QUANTITATIVE INTERVAL until manufacturer pressure-flow curves are loaded into the calibration store.
