@@ -96,11 +96,18 @@ def plot_acs_waterfall(
 
 def plot_surface_area_comparison(
     surface_model,
+    *,
+    tier=None,
 ) -> Optional[object]:
     """Bar chart comparing external, internal geometric, and accessible surface areas.
 
     Args:
         surface_model: AccessibleSurfaceModel instance from FunctionalMicrosphere.
+        tier: Optional ``ModelEvidenceTier`` for the surface-area values.
+            v0.8.4 (B-1q / W-056): when set, the trust badge routes
+            through ``render_decision_grade_annotation`` so the policy
+            decides NUMBER / INTERVAL / RANK_BAND / SUPPRESS rendering.
+            ``tier=None`` preserves the legacy raw "Trust: …" badge.
 
     Returns:
         Plotly Figure, or None if plotly is unavailable or surface_model is None.
@@ -133,7 +140,7 @@ def plot_surface_area_comparison(
     ))
 
     fig.update_layout(
-        title=f"Surface Area Breakdown (tier: {surface_model.tier.value})",
+        title="Surface Area Breakdown",
         xaxis_title="Area Type",
         yaxis_title="Area (um^2/particle)",
         height=380,
@@ -141,14 +148,36 @@ def plot_surface_area_comparison(
         showlegend=False,
     )
 
-    _tier_trust = getattr(surface_model, "trust_level", "CAUTION")
-    fig.add_annotation(
-        text=f"Trust: {_tier_trust}",
-        xref="paper", yref="paper",
-        x=1.0, y=1.05,
-        showarrow=False,
-        font=dict(size=11, color="gray"),
-    )
+    if tier is not None:
+        # B-1q / W-056 (v0.8.4): tier-gated annotation. The "headline"
+        # accessible area (typically the ligand-accessible value) is the
+        # decision-grade output the policy gates; we annotate that one.
+        from dpsim.core.decision_grade import OutputType
+        from dpsim.visualization.decision_grade_render import (
+            render_decision_grade_annotation,
+        )
+
+        render_decision_grade_annotation(
+            fig,
+            label="Accessible area",
+            value=float(surface_model.ligand_accessible_area * 1e12),
+            output_type=OutputType.MODULUS,
+            tier=tier,
+            unit="µm²",
+            xref="paper", yref="paper",
+            x=1.0, y=1.05,
+            xanchor="right", yanchor="bottom",
+            font={"size": 11},
+        )
+    else:
+        _tier_trust = getattr(surface_model, "trust_level", "CAUTION")
+        fig.add_annotation(
+            text=f"Trust: {_tier_trust}",
+            xref="paper", yref="paper",
+            x=1.0, y=1.05,
+            showarrow=False,
+            font=dict(size=11, color="gray"),
+        )
 
     return fig
 
