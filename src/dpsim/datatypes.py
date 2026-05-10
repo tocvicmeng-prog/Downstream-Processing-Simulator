@@ -1833,4 +1833,7 @@ class OptimizationState:
     # JSON-friendly). Empty when no run_report was attached. Length matches
     # pareto_X.shape[0].
     pareto_evidence_tiers: list[str] = field(default_factory=list)
-
+    # Per-Pareto-candidate pressure feasibility. ``None`` means no pressure
+    # context was supplied for the campaign, so feasibility was not evaluated.
+    pareto_pressure_feasible: list[Optional[bool]] = field(default_factory=list)
+    pareto_pressure_violations: list[list[str]] = field(default_factory=list)

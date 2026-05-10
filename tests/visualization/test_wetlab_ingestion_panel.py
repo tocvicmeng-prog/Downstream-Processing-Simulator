@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 import streamlit as st  # noqa: F401  # used implicitly via session_state
 
 from dpsim.visualization.tabs.calibration.wetlab_ingestion import (
@@ -23,8 +21,18 @@ class _StubFile:
 
 
 class _StubColumn:
+    def __init__(self) -> None:
+        self.markdowns: list[str] = []
+        self.captions: list[str] = []
+
     def metric(self, *a: Any, **k: Any) -> None:
         pass
+
+    def markdown(self, text: str) -> None:
+        self.markdowns.append(text)
+
+    def caption(self, text: str) -> None:
+        self.captions.append(text)
 
 
 class _StubExpander:

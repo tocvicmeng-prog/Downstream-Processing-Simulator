@@ -188,6 +188,8 @@ class TestNode6TrustPenalty:
             hypervolume=0.0,
         )
         assert state.pareto_evidence_tiers == []
+        assert state.pareto_pressure_feasible == []
+        assert state.pareto_pressure_violations == []
 
 
 def _make_full_result_with_tier(tier):

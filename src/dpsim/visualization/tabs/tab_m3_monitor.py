@@ -30,6 +30,8 @@ from typing import Any, Optional
 import numpy as np
 import plotly.graph_objects as go
 
+from dpsim.core.decision_grade import OutputType
+from dpsim.visualization.decision_grade_render import render_metric
 from dpsim.module3_performance.pressure_envelope import PressureEnvelope
 from dpsim.module3_performance.pressure_monitor import PressureMonitorState
 from dpsim.module3_performance.pressure_monitor_replay import (
@@ -338,30 +340,30 @@ def render_pressure_monitor_section(
 
     # Summary metrics row.
     cols = container.columns(5)
-    cols[0].metric("Readings", f"{summary.n_readings}")
-    cols[1].metric(
-        "Final state",
-        summary.final_state.value.upper(),
+    cols[0].markdown(f"**Readings**\n\n{summary.n_readings}")
+    cols[1].markdown(f"**Final state**\n\n{summary.final_state.value.upper()}")
+    cols[2].markdown(
+        f"**First BLOCKER**\n\n{_format_seconds(summary.blocker_first_t_s)}"
     )
-    cols[2].metric(
-        "First BLOCKER",
-        _format_seconds(summary.blocker_first_t_s),
-        help=(
-            f"Rule: {summary.blocker_first_rule.value}"
-            if summary.blocker_first_rule is not None
-            else "No BLOCKER tripped during the trace."
-        ),
+    cols[2].caption(
+        f"Rule: {summary.blocker_first_rule.value}"
+        if summary.blocker_first_rule is not None
+        else "No BLOCKER tripped during the trace."
     )
-    cols[3].metric(
+    render_metric(
         "Max headroom",
-        f"{summary.max_headroom_ratio*100:.0f} %",
+        value=summary.max_headroom_ratio,
+        output_type=OutputType.PRESSURE_HEADROOM,
+        tier=envelope.decision_tier,
+        unit="%",
+        scale=100.0,
+        container=cols[3],
         help="Peak ΔP / ΔP_max_operational across the replay.",
     )
-    cols[4].metric(
-        "Max dΔP/dt",
-        f"{summary.max_dpdt_pct_per_min:.1f} %/min",
-        help="Peak rate-of-rise across the replay.",
+    cols[4].markdown(
+        f"**Max dΔP/dt**\n\n{summary.max_dpdt_pct_per_min:.1f} %/min"
     )
+    cols[4].caption("Peak pressure-rise rate across the replay.")
 
     # Final-state advisory chip.
     # B-2ℓ / W-041: structured recovery-action chip alongside the

@@ -435,7 +435,11 @@ def test_evidence_ladder_rows_from_lifecycle_graph():
 
 
 def test_protocol_export_contains_target_and_all_lifecycle_sections():
-    text = process_recipe_protocol_markdown(default_affinity_media_recipe())
+    recipe = default_affinity_media_recipe()
+    recipe.steps[0].execution.sample_id = "SAMPLE-001"
+    recipe.steps[0].execution.instrument_id = "INST-001"
+    recipe.steps[0].execution.acceptance_criteria["d50_um"] = "80-120"
+    text = process_recipe_protocol_markdown(recipe)
 
     assert "# DPSim Wet-Lab Protocol Outline" in text
     assert "## Target Product Profile" in text
@@ -445,6 +449,9 @@ def test_protocol_export_contains_target_and_all_lifecycle_sections():
     assert "## Acceptance Criteria" in text
     assert "Hold/release gate" in text
     assert "Required record" in text
+    assert "Sample ID: SAMPLE-001" in text
+    assert "Instrument ID: INST-001" in text
+    assert "Acceptance d50_um: 80-120" in text
     assert "Protein A coupling" in text
     assert "Pack analytical Protein A affinity column" in text
 

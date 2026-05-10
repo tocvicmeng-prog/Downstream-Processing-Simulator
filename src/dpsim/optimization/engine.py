@@ -27,11 +27,13 @@ from .objectives import (
     PARAM_NAMES,
     LOG_SCALE_INDICES,
     LOG_SCALE_INDICES_SV,
+    PressureFeasibilityContext,
     TargetSpec,
     compute_inverse_design_objectives,
     compute_objectives_trust_aware,
     check_constraints,
     get_param_bounds,
+    pressure_feasible,
 )
 
 logger = logging.getLogger(__name__)
@@ -213,6 +215,7 @@ class OptimizationEngine:
         db: Optional[PropertyDatabase] = None,
         template_params: Optional[SimulationParameters] = None,
         target_spec: Optional[TargetSpec] = None,
+        pressure_ctx: Optional[PressureFeasibilityContext] = None,
         robust_variance_weight: float = 0.0,
         robust_n_samples: int = 0,
         robust_cvar_alpha: float = 0.0,
@@ -243,6 +246,7 @@ class OptimizationEngine:
         self.target_spec = target_spec
         if target_spec is not None:
             target_spec.validate()
+        self.pressure_ctx = pressure_ctx
         self.robust_variance_weight = float(robust_variance_weight)
         self.robust_n_samples = int(robust_n_samples)
         self.robust_cvar_alpha = float(robust_cvar_alpha)
@@ -302,6 +306,14 @@ class OptimizationEngine:
         self.Y_observed: list[np.ndarray] = []
         self.results: list[FullResult] = []
         self.result_indices: list[int | None] = []
+        self.constraint_feasible: list[bool | None] = []
+        self.constraint_violations: list[list[str]] = []
+        self.pressure_feasible: list[bool | None] = []
+        self.pressure_violations: list[list[str]] = []
+        self._last_constraint_feasible: bool | None = None
+        self._last_constraint_violations: list[str] = []
+        self._last_pressure_feasible: bool | None = None
+        self._last_pressure_violations: list[str] = []
         self.hv_history: list[float] = []
 
     def _compute_obj_for_result(self, result: FullResult) -> np.ndarray:
@@ -364,12 +376,43 @@ class OptimizationEngine:
                 logger.warning("Robust BO resampling failed (%s); using nominal objectives", exc)
 
         # Check feasibility constraints and penalise infeasible points
-        feasible, violations = check_constraints(result)
+        if self.pressure_ctx is None:
+            pressure_ok: bool | None = None
+            pressure_violations: list[str] = []
+            feasible, violations = check_constraints(result)
+        else:
+            pressure_ok, pressure_violations = pressure_feasible(
+                result,
+                self.pressure_ctx,
+            )
+            feasible, violations = check_constraints(
+                result,
+                pressure_ctx=self.pressure_ctx,
+            )
+        self._last_constraint_feasible = bool(feasible)
+        self._last_constraint_violations = list(violations)
+        self._last_pressure_feasible = pressure_ok
+        self._last_pressure_violations = list(pressure_violations)
         if not feasible:
             logger.info("Infeasible point: %s", "; ".join(violations))
             objectives = objectives * 10.0 + 5.0
 
         return objectives, result
+
+    def _record_evaluation_metadata(self, result: FullResult | None, error: Exception | None) -> None:
+        """Record feasibility metadata aligned with X/Y observation rows."""
+        if result is None:
+            self.constraint_feasible.append(False)
+            self.constraint_violations.append(
+                [f"evaluation failed: {error}"] if error is not None else []
+            )
+            self.pressure_feasible.append(None)
+            self.pressure_violations.append([])
+            return
+        self.constraint_feasible.append(self._last_constraint_feasible)
+        self.constraint_violations.append(list(self._last_constraint_violations))
+        self.pressure_feasible.append(self._last_pressure_feasible)
+        self.pressure_violations.append(list(self._last_pressure_violations))
 
     def _generate_initial_points(self) -> np.ndarray:
         """Generate Sobol quasi-random initial parameter vectors in search space."""
@@ -415,16 +458,19 @@ class OptimizationEngine:
                          {n: f"{v:.2f}" for n, v in zip(PARAM_NAMES, x_phys)})
 
             t0 = time.perf_counter()
+            eval_error: Exception | None = None
             try:
                 objectives, result = self._evaluate(x_phys)
             except Exception as e:
                 logger.warning("Evaluation failed: %s — using penalty", e)
                 objectives = np.full(self._n_obj, 10.0)
                 result = None
+                eval_error = e
             dt = time.perf_counter() - t0
 
             self.X_observed.append(x_ss)
             self.Y_observed.append(objectives)
+            self._record_evaluation_metadata(result, eval_error)
             if result is not None:
                 self.result_indices.append(len(self.results))
                 self.results.append(result)
@@ -508,16 +554,19 @@ class OptimizationEngine:
                          {n: f"{v:.2f}" for n, v in zip(PARAM_NAMES, x_next_phys)})
 
             t0 = time.perf_counter()
+            eval_error = None
             try:
                 objectives, result = self._evaluate(x_next_phys)
             except Exception as e:
                 logger.warning("Evaluation failed: %s", e)
                 objectives = np.full(self._n_obj, 10.0)
                 result = None
+                eval_error = e
             dt = time.perf_counter() - t0
 
             self.X_observed.append(x_next_ss)
             self.Y_observed.append(objectives)
+            self._record_evaluation_metadata(result, eval_error)
             if result is not None:
                 self.result_indices.append(len(self.results))
                 self.results.append(result)
@@ -558,8 +607,18 @@ class OptimizationEngine:
         # result is missing (failed eval) or has no run_report, label as
         # "unknown" so the field length always matches pareto_X.
         pareto_tier_strings: list[str] = []
+        pareto_pressure_feasible: list[bool | None] = []
+        pareto_pressure_violations: list[list[str]] = []
         survivors = np.where(pareto_idx)[0].tolist()
         for full_idx in survivors:
+            pareto_pressure_feasible.append(
+                self.pressure_feasible[full_idx]
+                if full_idx < len(self.pressure_feasible) else None
+            )
+            pareto_pressure_violations.append(
+                list(self.pressure_violations[full_idx])
+                if full_idx < len(self.pressure_violations) else []
+            )
             result_pos = (
                 self.result_indices[full_idx]
                 if full_idx < len(self.result_indices) else None
@@ -587,6 +646,8 @@ class OptimizationEngine:
                 / max(max(self.hv_history[-5:]), 1e-10) < self.convergence_tol
             ),
             pareto_evidence_tiers=pareto_tier_strings,
+            pareto_pressure_feasible=pareto_pressure_feasible,
+            pareto_pressure_violations=pareto_pressure_violations,
         )
 
         # Save state
@@ -625,6 +686,10 @@ class OptimizationEngine:
                 for x in state.pareto_X
             ],
             "pareto_evidence_tiers": list(state.pareto_evidence_tiers),
+            "pareto_pressure_feasible": list(state.pareto_pressure_feasible),
+            "pareto_pressure_violations": [
+                list(v) for v in state.pareto_pressure_violations
+            ],
             "pareto_decision_claims": pareto_claims,
         }
         with open(self.output_dir / "optimization_results.json", "w") as f:

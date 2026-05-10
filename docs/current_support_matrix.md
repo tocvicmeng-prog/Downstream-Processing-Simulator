@@ -67,7 +67,7 @@ ledger.
 | DBC10 / DBC50 quantitative claims | requires calibration | VALIDATED_QUANTITATIVE | gated by `quantitative_gates.assign_m3_evidence_tier` (B-2e) | 4-of-4 calibration → VALIDATED; the orchestrator now applies the gate when `process_state["calibration_entries"]` is set. |
 | Recovery / cycle-life predictions | requires calibration | VALIDATED_QUANTITATIVE | same | same gating ladder. |
 | Family-conditional Protein A defaults | screening | QUALITATIVE_TREND for non-A+C families | `module3_performance/method.py` | Tier capped at QUALITATIVE_TREND when polymer family is non-A+C. |
-| GradientContext-typed gradient plumbing | scaffolded | n/a | `module3_performance/quantitative_gates.py` (B-2e) | Dataclass + parser delivered; isotherm/transport adapter consumption is a follow-on PR. |
+| GradientContext-typed gradient plumbing | live | n/a | `module3_performance/method.py`, `module3_performance/quantitative_gates.py` (B-2e) | Typed context is consumed by the M3 method path; pH elution profile is active, non-pH gradient fields remain diagnostic until chemistry-specific adapters are promoted. |
 
 ### Cross-cutting (core / lifecycle / calibration)
 
@@ -78,10 +78,13 @@ ledger.
 | Decision-grade gate (render-path policy) | live | n/a | `core/decision_grade.py` (B-1b) | 14 OutputTypes; NUMBER → INTERVAL → RANK_BAND → SUPPRESS ladder. |
 | ResultGraph + ModelManifest evidence tiers | live | n/a | `core/result_graph.py`, `core/evidence.py`, `datatypes.py` | reload-safe enum comparison via `.value`. |
 | Quantity (typed unit-aware scalar) | live | n/a | `core/quantities.py` | + 10 typed SI boundary helpers post-B-2c. |
-| Process dossier export | live | n/a | `core/process_dossier.py` (B-2d) | Hash-locked deterministic JSON; gates the validation release ladder. |
+| Process dossier export | live | n/a | `core/process_dossier.py` (B-2d) | Hash-locked deterministic JSON; includes decision claims, calibration hash, execution records, QC checkpoints, fractions, and trace alignments. |
 | Calibration store + entries | live | n/a | `calibration/calibration_data.py`, `calibration/calibration_store.py` | + `assay_detection_limit` / `assay_quantitation_limit` post-B-2a. |
-| Bayesian fit (PyMC) | scaffolded | n/a | `calibration/bayesian_fit.py` | Optional `[bayesian]` extra; not exercised in default flow. |
-| BoTorch-driven optimization | scaffolded | n/a | `optimization/objectives.py` | Optional `[optimization]` extra; ADR-002 pin. |
+| Calibration quality gates + applicability | live | n/a | `calibration/quality_gates.py` | Replicate count, CV, units, LOD/LOQ warnings, target molecule, pH/salt/temperature/mobile-phase/domain checks. |
+| Assay templates | live | n/a | `data/validation/templates/*.csv` | Templates cover L1 DSD, interfacial tension, dispersed viscosity, pore/porosity, swelling, modulus, ligand density, activity, residual reagent, leaching, pressure-flow, static binding, and DBC breakthrough. |
+| Bayesian fit (PyMC) | live | n/a | `calibration/bayesian_fit.py` | Optional `[bayesian]` extra; lazy import boundary, convergence gates, and synthetic-fit tests are implemented. |
+| BoTorch-driven optimization | screening | SEMI_QUANTITATIVE | `optimization/{engine,analysis,objectives}.py` | Optional `[optimization]` extra; trust-aware objectives and DecisionClaim export include missing calibration, pressure feasibility, and best-predicted vs best-actionable ranking. |
+| Wet-lab execution objects | live | n/a | `core/process_recipe.py`, `core/qc_checkpoint.py`, `core/chromatography_trace.py` | Process steps carry lot/sample/operator/instrument/fraction/QC metadata; detector traces, fraction collections, and trace alignments are JSON-exportable. |
 
 ### UI (Streamlit)
 
@@ -92,7 +95,8 @@ ledger.
 | Hardware Mode (Stirrer A / B / Pitched-blade) | live | n/a (UX) | `visualization/tabs/m1/family_selector.py` + cross-section components | post-W-017 Streamlit migration. |
 | Cross-section animations (impeller, column) | live | n/a (UX) | `visualization/components/{impeller_xsec*,column_xsec}.py` | Migrated to `st.html` via `_html_helper` (W-017). |
 | `width=` / `use_container_width=` migration | live | n/a (UX) | all `visualization/**` callsites swept | post-B-3a. |
-| Decision-grade render-mode formatting | scaffolded | n/a | `visualization/**` consume of `core.decision_grade.render_value` | API delivered (B-1b); per-callsite UI integration is incremental. |
+| Decision-grade render-mode formatting | live | n/a | `visualization/**`, `suggestions/**` consume `visualization/decision_grade_render.py` or non-metric tables | Bare `.metric(` baseline is zero; CI gate blocks new metric call sites outside the decision-grade wrapper. |
+| Wet-lab SOP export | screening | n/a (workflow) | `visualization/panels/sop_export.py`, `visualization/ui_workflow.py` | Exports QC checkpoints, required assays, acceptance criteria, execution metadata, and tier-framed claims; still a process-development SOP, not GMP batch-record software. |
 
 ---
 

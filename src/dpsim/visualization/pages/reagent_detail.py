@@ -125,12 +125,17 @@ for warning in doc.safety_warnings:
 
 # Conditions summary
 st.subheader("Reaction Conditions")
-cc = st.columns(5)
-cc[0].metric("Temperature", f"{T_C} °C")
-cc[1].metric("Time", f"{time_h} h")
-cc[2].metric("Concentration", f"{conc} mM")
-cc[3].metric("pH", f"{ph}")
-cc[4].metric("Bead Volume", f"{bead_vol} mL")
+st.dataframe(
+    [
+        {"condition": "Temperature", "value": f"{T_C} °C"},
+        {"condition": "Time", "value": f"{time_h} h"},
+        {"condition": "Concentration", "value": f"{conc} mM"},
+        {"condition": "pH", "value": f"{ph}"},
+        {"condition": "Bead Volume", "value": f"{bead_vol} mL"},
+    ],
+    width="stretch",
+    hide_index=True,
+)
 
 # Reagent table
 st.subheader("Reagents Required")

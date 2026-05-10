@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — audit-plan code-actionable closeout (2026-05-11)
+
+- Closed the remaining code-actionable S1 metric-routing gap: user-facing `.metric(` call sites now route through `render_metric` or use non-metric tables, and the CI gate baseline is zero across visualization and suggestion UI surfaces.
+- Extended S4 wet-lab execution exports: deterministic dossiers can now carry execution records, QC checkpoints, fraction collections, and trace alignments; lifecycle SOP markdown surfaces step execution metadata when present.
+- Hardened S5 optimization reporting: Pareto exports now include DecisionClaim rows, missing-calibration blockers, pressure-feasibility status, and separate best-predicted vs best-actionable candidate rankings.
+- Updated the support matrix to reflect implemented calibration quality gates, assay templates, optional Bayesian fitting, GradientContext consumption, wet-lab execution objects, SOP export, and trust-aware optimization.
+
 ## v0.8.9 — All deferred W-items closed (2026-05-10)
 
 Closes the remaining 7 W-items deferred at v0.8.8 close. With v0.8.9 all 25 W-items in `docs/update_workplan_2026-05-10_v0_9_0.md` §3 are now closed (the v0.8.8 + v0.8.9 cumulative total). Versioned as v0.8.9 (not v0.9.0) per the project's versioning policy — v0.9 stays reserved for the durable v1.0 deferral plateau.

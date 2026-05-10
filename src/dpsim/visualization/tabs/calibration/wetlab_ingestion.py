@@ -127,16 +127,13 @@ def render_wetlab_ingestion_panel(
 
     # Header line.
     cols = target.columns(3)
-    cols[0].metric("Campaign ID", summary.campaign_id or "—")
-    cols[1].metric("Operator", summary.operator or "—")
-    cols[2].metric(
-        "Data points",
-        f"{summary.n_total}",
-        help=(
-            f"applied={dry_run.points_applied}, "
-            f"skipped={dry_run.points_skipped}, "
-            f"failed={dry_run.points_failed}"
-        ),
+    cols[0].markdown(f"**Campaign ID**\n\n{summary.campaign_id or '—'}")
+    cols[1].markdown(f"**Operator**\n\n{summary.operator or '—'}")
+    cols[2].markdown(f"**Data points**\n\n{summary.n_total}")
+    cols[2].caption(
+        f"applied={dry_run.points_applied}, "
+        f"skipped={dry_run.points_skipped}, "
+        f"failed={dry_run.points_failed}"
     )
 
     # Affected profiles.

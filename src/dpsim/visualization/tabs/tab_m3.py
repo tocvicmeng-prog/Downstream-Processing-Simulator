@@ -1028,19 +1028,19 @@ def render_tab_m3(tab_container) -> None:
                                 output_type=_OT_dbc.DBC, tier=_bt_tier,
                                 unit="mol/m\u00b3", container=_dbc_c1)
                     else:
-                        _dbc_c1.metric("DBC\u2085%", "N/A")
+                        _dbc_c1.caption("DBC\u2085%: N/A")
                     if not np.isnan(_bt.dbc_10pct):
                         _rm_dbc("DBC\u2081\u2080%", value=_bt.dbc_10pct,
                                 output_type=_OT_dbc.DBC, tier=_bt_tier,
                                 unit="mol/m\u00b3", container=_dbc_c2)
                     else:
-                        _dbc_c2.metric("DBC\u2081\u2080%", "N/A")
+                        _dbc_c2.caption("DBC\u2081\u2080%: N/A")
                     if not np.isnan(_bt.dbc_50pct):
                         _rm_dbc("DBC\u2085\u2080%", value=_bt.dbc_50pct,
                                 output_type=_OT_dbc.DBC, tier=_bt_tier,
                                 unit="mol/m\u00b3", container=_dbc_c3)
                     else:
-                        _dbc_c3.metric("DBC\u2085\u2080%", "N/A")
+                        _dbc_c3.caption("DBC\u2085\u2080%: N/A")
                     _rm_dbc("Pressure drop", value=_bt.pressure_drop,
                             output_type=_OT_dbc.PRESSURE_DROP, tier=_bt_tier,
                             unit="kPa", scale=1.0 / 1000.0, container=_dbc_c4)
@@ -1235,30 +1235,21 @@ def render_tab_m3(tab_container) -> None:
                             container=_pm2,
                         )
                     else:
-                        _pm2.metric(
+                        _pm2.caption(
                             "Cycle lifetime",
-                            cycle_lifetime_label(_pa, is_calibrated=False),
-                            help=(
-                                "SEMI_QUANTITATIVE — calibrate with cycle "
-                                "studies to promote tier."
-                            ),
                         )
-                    _pm3.metric(
-                        "Asymmetry",
-                        f"{_eff.asymmetry_factor:.2f}",
-                        help=(
-                            "USP <621> peak-asymmetry factor. SEMI_QUANTITATIVE "
-                            "from the LRM solver."
-                        ),
+                        _pm2.info(cycle_lifetime_label(_pa, is_calibrated=False))
+                    _pm3.markdown(
+                        f"**Asymmetry**\n\n{_eff.asymmetry_factor:.2f}",
                     )
-                    _pm4.metric(
-                        "Impurity risk",
-                        _imp.risk,
-                        help=(
-                            "Qualitative — wash design check. Tier "
-                            "QUALITATIVE_TREND."
-                        ),
+                    _pm3.caption(
+                        "USP <621> peak-asymmetry factor. SEMI_QUANTITATIVE "
+                        "from the LRM solver."
                     )
+                    _pm4.markdown(
+                        f"**Impurity risk**\n\n{_imp.risk}",
+                    )
+                    _pm4.caption("Qualitative wash-design check.")
                     st.caption(
                         f"Pressure={_op.pressure_drop_Pa / 1000:.1f} kPa; "
                         f"N={_eff.theoretical_plates:.0f}; "
@@ -1286,10 +1277,44 @@ def render_tab_m3(tab_container) -> None:
                     st.subheader("Packed-Bed Catalytic Reactor")
 
                     _cat_c1, _cat_c2, _cat_c3, _cat_c4 = st.columns(4)
-                    _cat_c1.metric("Final Conversion", f"{_cat.conversion:.1%}")
-                    _cat_c2.metric("Effectiveness Factor \u03b7", f"{_cat.effectiveness_factor:.3f}")
-                    _cat_c3.metric("Thiele Modulus \u03a6", f"{_cat.thiele_modulus:.2f}")
-                    _cat_c4.metric("Productivity", f"{_cat.productivity:.3e} mol/(m\u00b3\u00b7s)")
+                    from dpsim.core.decision_grade import OutputType as _OT_cat
+                    from dpsim.visualization.decision_grade_render import render_metric as _rm_cat
+                    _cat_tier = (
+                        getattr(getattr(_cat, "model_manifest", None),
+                                "evidence_tier", None)
+                        or ModelEvidenceTier.SEMI_QUANTITATIVE
+                    )
+                    _rm_cat(
+                        "Final Conversion",
+                        value=_cat.conversion,
+                        output_type=_OT_cat.CATALYSIS_CONVERSION,
+                        tier=_cat_tier,
+                        unit="%",
+                        scale=100.0,
+                        container=_cat_c1,
+                    )
+                    _rm_cat(
+                        "Effectiveness Factor \u03b7",
+                        value=_cat.effectiveness_factor,
+                        output_type=_OT_cat.CATALYSIS_EFFECTIVENESS,
+                        tier=_cat_tier,
+                        container=_cat_c2,
+                    )
+                    _rm_cat(
+                        "Thiele Modulus \u03a6",
+                        value=_cat.thiele_modulus,
+                        output_type=_OT_cat.CATALYSIS_THIELE,
+                        tier=_cat_tier,
+                        container=_cat_c3,
+                    )
+                    _rm_cat(
+                        "Productivity",
+                        value=_cat.productivity,
+                        output_type=_OT_cat.CATALYSIS_PRODUCTIVITY,
+                        tier=_cat_tier,
+                        unit="mol/(m\u00b3\u00b7s)",
+                        container=_cat_c4,
+                    )
 
                     _mb_cat_pct = abs(_cat.mass_balance_error) * 100.0
                     if _mb_cat_pct > 5.0:

@@ -124,8 +124,25 @@ def render_derivation(ctx: SuggestionContext, target: TargetRange) -> None:
     )
 
     st.subheader("Step 4 — Target value + band")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Nominal RPM", f"{target.nominal:.0f}")
-    col2.metric("Lower bound", f"{target.min:.0f}", help="Corresponds to d32 + 20%")
-    col3.metric("Upper bound", f"{target.max:.0f}", help="Corresponds to d32 − 20%")
+    st.dataframe(
+        [
+            {
+                "Band point": "Nominal RPM",
+                "Value": f"{target.nominal:.0f}",
+                "Basis": "Inverted target d32",
+            },
+            {
+                "Band point": "Lower bound",
+                "Value": f"{target.min:.0f}",
+                "Basis": "Corresponds to d32 + 20%",
+            },
+            {
+                "Band point": "Upper bound",
+                "Value": f"{target.max:.0f}",
+                "Basis": "Corresponds to d32 - 20%",
+            },
+        ],
+        width="stretch",
+        hide_index=True,
+    )
 

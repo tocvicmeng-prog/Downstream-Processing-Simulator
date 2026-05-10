@@ -6,11 +6,8 @@ that bypass the decision-grade tier ladder. v0.8.8 W-080 fixed the
 high-traffic ones; this gate enforces no NEW bare ``.metric(`` calls
 land outside the documented baseline.
 
-The gate walks ``src/dpsim/visualization/`` for ``.metric(`` call
-sites and asserts the count never exceeds the baseline. To intentionally
-add a bare metric (e.g. for a non-decision-graded operational summary
-where tier annotation would be noisy), bump the baseline below with a
-short justification comment.
+The gate walks user-facing UI modules for ``.metric(`` call sites and
+asserts that none bypass the central decision-grade wrapper.
 
 The companion AST gate `test_widget_mounting.py` (W-073) catches
 *structural* widget orphans; this gate catches *policy-tier* drift.
@@ -25,7 +22,10 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SRC_VIS = REPO_ROOT / "src" / "dpsim" / "visualization"
+SCAN_ROOTS = (
+    REPO_ROOT / "src" / "dpsim" / "visualization",
+    REPO_ROOT / "src" / "dpsim" / "suggestions",
+)
 
 # Pattern: bare `.metric(` call. Captures both `st.metric(...)` and
 # `_pm1.metric(...)` (column object metric calls). The intention is to
@@ -36,51 +36,47 @@ SRC_VIS = REPO_ROOT / "src" / "dpsim" / "visualization"
 # decision_grade_render.py) — that file declares the wrapper.
 _METRIC_PATTERN = re.compile(r"\.metric\s*\(")
 
-# Baseline — number of bare `.metric(` call sites at v0.8.9 close.
-# Bumping requires replacing the call with `render_metric(...)` from
-# decision_grade_render. Most legacy bare metrics are pre-v0.8 paths
-# (M1 fabrication summaries, raw run-rail dataframes) where tier
-# annotation is stylistically out-of-place; v0.9 work narrows the
-# baseline further.
-_BASELINE_BARE_METRICS = 43
+# Baseline — zero bare `.metric(` call sites outside the central wrapper.
+# Any numeric display should route through `render_metric(...)` from
+# decision_grade_render, or use a non-metric presentation when it is metadata
+# rather than a decision-bearing value.
+_BASELINE_BARE_METRICS = 0
 
 
 def _walk_metric_callsites() -> list[tuple[Path, int, str]]:
-    """Walk the visualization tree and return every `.metric(` line.
+    """Walk user-facing UI trees and return every `.metric(` line.
 
     Excludes the test scaffolding directory and the
     decision_grade_render.py module which IS the wrapper.
     """
     findings: list[tuple[Path, int, str]] = []
-    for path in SRC_VIS.rglob("*.py"):
-        if path.name == "decision_grade_render.py":
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        for i, line in enumerate(text.splitlines(), start=1):
-            if _METRIC_PATTERN.search(line):
-                # Skip lines that are clearly the tier-routed wrapper:
-                # the `_rm_*.metric(...)` aliases assigned earlier in
-                # the file from `render_metric`. Heuristic: if `_rm`
-                # prefix appears, it's the wrapper alias.
-                if "_rm" in line and "_rm_" in line:
-                    continue
-                findings.append((path, i, line.strip()))
+    for root in SCAN_ROOTS:
+        for path in root.rglob("*.py"):
+            if path.name == "decision_grade_render.py":
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for i, line in enumerate(text.splitlines(), start=1):
+                if _METRIC_PATTERN.search(line):
+                    # Skip lines that are clearly the tier-routed wrapper:
+                    # the `_rm_*.metric(...)` aliases assigned earlier in
+                    # the file from `render_metric`. Heuristic: if `_rm`
+                    # prefix appears, it's the wrapper alias.
+                    if "_rm" in line and "_rm_" in line:
+                        continue
+                    findings.append((path, i, line.strip()))
     return findings
 
 
 def test_metric_callsite_count_does_not_exceed_baseline():
     """Tier-routing CI gate.
 
-    Asserts the number of bare `.metric(` call sites in the
-    visualization tree does not exceed the documented baseline. To
-    add a new metric, route it through `render_metric` from
-    `decision_grade_render` (carries OutputType + tier).
-
-    To intentionally add an exempt bare metric, bump
-    `_BASELINE_BARE_METRICS` and add a justification comment.
+    Asserts user-facing UI modules have no bare `.metric(` call sites.
+    To add a new metric, route it through `render_metric` from
+    `decision_grade_render` (carries OutputType + tier), or use a
+    non-metric presentation for metadata.
     """
     findings = _walk_metric_callsites()
     n = len(findings)

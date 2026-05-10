@@ -12,6 +12,11 @@ from dpsim.core.process_dossier import (
     compute_recipe_hash,
     get_git_commit_short,
     get_package_versions,
+    wetlab_execution_records_from_recipe,
+)
+from dpsim.core.process_recipe import (
+    StepExecutionMetadata,
+    default_affinity_media_recipe,
 )
 
 
@@ -89,6 +94,26 @@ class TestBuilder:
                     "evidence_tier": "calibrated_local",
                 }
             ],
+            execution_records=[
+                {
+                    "sample_id": "S-001",
+                    "fraction_id": "F-001",
+                    "instrument_id": "UV-01",
+                }
+            ],
+            qc_checkpoints=[
+                {
+                    "checkpoint_id": "qc_pressure",
+                    "status": "passed",
+                    "assay_record_id": "PF-001",
+                }
+            ],
+            fraction_collections=[
+                {"fraction_id": "F-001", "assay_record_ids": ["A-001"]}
+            ],
+            trace_alignments=[
+                {"predicted_trace_id": "pred", "measured_trace_id": "meas", "rmse": 0.1}
+            ],
             validation_blockers=[{"code": "FP_X", "severity": "blocker"}],
             validation_warnings=[{"code": "FP_Y", "severity": "warning"}],
             smoke_status="pass",
@@ -101,6 +126,10 @@ class TestBuilder:
         assert dossier.notes == "hello"
         assert len(dossier.calibration_entries) == 1
         assert dossier.decision_claims[0]["name"] == "DBC10"
+        assert dossier.execution_records[0]["sample_id"] == "S-001"
+        assert dossier.qc_checkpoints[0]["assay_record_id"] == "PF-001"
+        assert dossier.fraction_collections[0]["fraction_id"] == "F-001"
+        assert dossier.trace_alignments[0]["rmse"] == 0.1
         assert len(dossier.validation_blockers) == 1
         assert len(dossier.validation_warnings) == 1
 
@@ -130,6 +159,27 @@ class TestSerialisation:
         assert recovered.calibration_entries == dossier.calibration_entries
         assert recovered.decision_claims == dossier.decision_claims
         assert recovered.dpsim_version == dossier.dpsim_version
+
+    def test_wetlab_execution_records_from_recipe(self):
+        recipe = default_affinity_media_recipe()
+        recipe.steps[0].execution = StepExecutionMetadata(
+            material_lot="LOT-001",
+            sample_id="SAMPLE-001",
+            operator="OP",
+            instrument_id="INST-001",
+            acceptance_criteria={"d50_um": "80-120"},
+            qc_assay_link="DSD-001",
+            fraction_id="F001",
+            hazard_note="Use local chemical hygiene plan.",
+            stop_go_condition="Stop if d90 exceeds target.",
+        )
+
+        records = wetlab_execution_records_from_recipe(recipe)
+
+        assert records[0]["sample_id"] == "SAMPLE-001"
+        assert records[0]["fraction_id"] == "F001"
+        assert records[0]["instrument_id"] == "INST-001"
+        assert records[0]["acceptance_criteria"]["d50_um"] == "80-120"
 
     def test_json_round_trip(self):
         dossier = build_dossier(

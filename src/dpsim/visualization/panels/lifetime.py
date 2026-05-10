@@ -9,7 +9,10 @@ from __future__ import annotations
 import numpy as np
 import streamlit as st
 
+from dpsim.core.decision_grade import OutputType
+from dpsim.datatypes import ModelEvidenceTier
 from dpsim.lifetime import LifetimeProjection, project_lifetime
+from dpsim.visualization.decision_grade_render import render_metric
 
 
 def render_lifetime_panel(*, as_card: bool = False) -> LifetimeProjection | None:
@@ -79,17 +82,41 @@ def render_lifetime_panel(*, as_card: bool = False) -> LifetimeProjection | None
             proj = st.session_state["_lt_result"]
 
             _mc1, _mc2, _mc3 = st.columns(3)
-            _mc1.metric(
+            render_metric(
                 "Cycles to 80%",
-                f"{proj.cycles_to_80pct}" if proj.cycles_to_80pct < 999999 else "\u221e",
+                value=float(proj.cycles_to_80pct),
+                output_type=OutputType.CYCLE_LIFE,
+                tier=ModelEvidenceTier.UNSUPPORTED,
+                unit="cycles",
+                container=_mc1,
+                help=(
+                    "Empirical projection only. Load resin cycle-study "
+                    "calibration before treating this as a decision number."
+                ),
             )
-            _mc2.metric(
+            render_metric(
                 "Cycles to 50%",
-                f"{proj.cycles_to_50pct}" if proj.cycles_to_50pct < 999999 else "\u221e",
+                value=float(proj.cycles_to_50pct),
+                output_type=OutputType.CYCLE_LIFE,
+                tier=ModelEvidenceTier.UNSUPPORTED,
+                unit="cycles",
+                container=_mc2,
+                help=(
+                    "Empirical projection only. Load resin cycle-study "
+                    "calibration before treating this as a decision number."
+                ),
             )
-            _mc3.metric(
+            render_metric(
                 f"Capacity @ cycle {proj.n_cycles_queried}",
-                f"{proj.capacity_at_n:.1f} mol/m\u00b3",
+                value=float(proj.capacity_at_n),
+                output_type=OutputType.DBC,
+                tier=ModelEvidenceTier.UNSUPPORTED,
+                unit="mol/m\u00b3",
+                container=_mc3,
+                help=(
+                    "Capacity projection is not decision-grade without "
+                    "cycle-life calibration."
+                ),
             )
 
             # ── Decay Curve ──
@@ -134,4 +161,3 @@ def render_lifetime_panel(*, as_card: bool = False) -> LifetimeProjection | None
             return proj
 
     return None
-

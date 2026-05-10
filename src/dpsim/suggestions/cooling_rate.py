@@ -132,10 +132,25 @@ def render_derivation(ctx: SuggestionContext, target: TargetRange) -> None:
         )
     else:
         st.latex(r"\left| \dfrac{dT}{dt} \right|_{\mathrm{req}} = \dfrac{2\,\Delta T_{\mathrm{band}}}{\left(\mathrm{pore}/\sqrt{M\kappa}\right)^{2}}")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Nominal |dT/dt|", f"{target.nominal:.3f} K/s")
-        col2.metric("Lower bound", f"{target.min:.3f} K/s",
-                    help="Corresponds to pore + 10% tolerance")
-        col3.metric("Upper bound", f"{target.max:.3f} K/s",
-                    help="Corresponds to pore − 10% tolerance")
+        st.dataframe(
+            [
+                {
+                    "Band point": "Nominal |dT/dt|",
+                    "Value": f"{target.nominal:.3f} K/s",
+                    "Basis": "Inverted target pore size",
+                },
+                {
+                    "Band point": "Lower bound",
+                    "Value": f"{target.min:.3f} K/s",
+                    "Basis": "Corresponds to pore + 10% tolerance",
+                },
+                {
+                    "Band point": "Upper bound",
+                    "Value": f"{target.max:.3f} K/s",
+                    "Basis": "Corresponds to pore - 10% tolerance",
+                },
+            ],
+            width="stretch",
+            hide_index=True,
+        )
 

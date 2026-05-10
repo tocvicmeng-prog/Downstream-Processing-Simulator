@@ -289,9 +289,8 @@ def render_inverse_inference_panel(
             "tighten σ_ΔP."
         ),
     )
-    cols_d[1].metric(
-        "n_samples", f"{posterior.n_samples}",
-    )
+    cols_d[1].markdown(f"**n_samples**\n\n{posterior.n_samples}")
+    cols_d[1].caption("Importance-sampling draws used for the posterior fit.")
     if posterior.ess_warning:
         target.warning(posterior.ess_warning)
 

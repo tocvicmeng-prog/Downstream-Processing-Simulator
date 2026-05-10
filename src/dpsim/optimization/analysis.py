@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..core.decision_claim import DecisionClaim, make_decision_claim
-from ..core.decision_grade import OutputType
+from ..core.decision_grade import OutputType, RenderMode
 from ..datatypes import ModelEvidenceTier
 from ..datatypes import OptimizationState
 from .objectives import LOG_SCALE_INDICES
@@ -107,8 +107,50 @@ def pareto_claims_export(state: OptimizationState) -> list[dict]:
                 state.pareto_evidence_tiers[i]
                 if i < len(state.pareto_evidence_tiers) else "semi_quantitative"
             ),
+            "missing_calibration": _missing_calibration_for_claims(claims),
+            "pressure_feasibility": _pressure_feasibility_for_candidate(state, i),
         })
     return rows
+
+
+def pareto_candidate_rankings(state: OptimizationState) -> dict[str, dict | None]:
+    """Return separate best-predicted and best-actionable Pareto candidates.
+
+    ``best_predicted`` is purely objective-based. ``best_actionable`` requires
+    decision-grade point-number claims and an evaluated, passing pressure
+    feasibility screen.
+    """
+    rows = pareto_claims_export(state)
+    if not rows:
+        return {"best_predicted": None, "best_actionable": None}
+
+    objectives = np.asarray(state.pareto_Y, dtype=float)
+    objective_sums = np.sum(objectives, axis=1)
+    best_predicted_idx = int(np.argmin(objective_sums))
+    best_actionable_idx: int | None = None
+    best_actionable_score = float("inf")
+    for row in rows:
+        idx = int(row["candidate_index"])
+        if _actionability_gaps(row):
+            continue
+        score = float(objective_sums[idx])
+        if score < best_actionable_score:
+            best_actionable_score = score
+            best_actionable_idx = idx
+
+    return {
+        "best_predicted": _ranking_record(
+            rows[best_predicted_idx],
+            objective_sum=float(objective_sums[best_predicted_idx]),
+        ),
+        "best_actionable": (
+            _ranking_record(
+                rows[best_actionable_idx],
+                objective_sum=float(objective_sums[best_actionable_idx]),
+            )
+            if best_actionable_idx is not None else None
+        ),
+    }
 
 
 def wetlab_actionability_score(
@@ -169,4 +211,68 @@ def _assay_required_for_output(output_type: OutputType) -> str:
     if output_type == OutputType.DBC:
         return "DBC breakthrough"
     return "calibration assay"
+
+
+def _missing_calibration_for_claims(claims: list[DecisionClaim]) -> list[dict]:
+    """Return claim-level calibration gaps blocking point-value display."""
+    missing: list[dict] = []
+    for claim in claims:
+        if claim.render_mode == RenderMode.NUMBER:
+            continue
+        missing.append({
+            "output_type": claim.output_type.value,
+            "assay_required": claim.assay_required or "calibration assay",
+            "evidence_tier": claim.evidence_tier.value,
+            "required_tier": claim.required_tier.value,
+            "render_mode": claim.render_mode.value,
+        })
+    return missing
+
+
+def _pressure_feasibility_for_candidate(
+    state: OptimizationState,
+    candidate_index: int,
+) -> dict:
+    """Return JSON-safe pressure feasibility for one Pareto candidate."""
+    feasible_values = list(getattr(state, "pareto_pressure_feasible", []) or [])
+    violation_values = list(getattr(state, "pareto_pressure_violations", []) or [])
+    violations = (
+        list(violation_values[candidate_index])
+        if candidate_index < len(violation_values) else []
+    )
+    if candidate_index >= len(feasible_values) or feasible_values[candidate_index] is None:
+        return {
+            "status": "not_evaluated",
+            "feasible": None,
+            "violations": violations,
+        }
+    feasible = bool(feasible_values[candidate_index])
+    return {
+        "status": "feasible" if feasible else "blocked",
+        "feasible": feasible,
+        "violations": violations,
+    }
+
+
+def _actionability_gaps(row: dict) -> list[str]:
+    gaps: list[str] = []
+    if row.get("missing_calibration"):
+        gaps.append("missing_calibration")
+    pressure_status = row.get("pressure_feasibility", {}).get("status")
+    if pressure_status == "blocked":
+        gaps.append("pressure_blocked")
+    elif pressure_status != "feasible":
+        gaps.append("pressure_feasibility_not_evaluated")
+    return gaps
+
+
+def _ranking_record(row: dict, *, objective_sum: float) -> dict:
+    return {
+        "candidate_index": int(row["candidate_index"]),
+        "objective_sum": objective_sum,
+        "evidence_tier": row["evidence_tier"],
+        "missing_calibration_count": len(row.get("missing_calibration", [])),
+        "pressure_status": row.get("pressure_feasibility", {}).get("status"),
+        "actionability_gaps": _actionability_gaps(row),
+    }
 

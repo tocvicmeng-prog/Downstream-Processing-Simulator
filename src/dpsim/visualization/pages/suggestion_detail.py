@@ -88,10 +88,15 @@ if target.is_qualitative_only:
     st.warning("**Numeric target withheld — qualitative-only suggestion.**")
     st.markdown(target.qualitative_reason)
 else:
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Nominal", f"{target.nominal:.3f} {target.unit}")
-    c2.metric("Lower bound", f"{target.min:.3f} {target.unit}")
-    c3.metric("Upper bound", f"{target.max:.3f} {target.unit}")
+    st.dataframe(
+        [
+            {"bound": "Nominal", "value": f"{target.nominal:.3f} {target.unit}"},
+            {"bound": "Lower", "value": f"{target.min:.3f} {target.unit}"},
+            {"bound": "Upper", "value": f"{target.max:.3f} {target.unit}"},
+        ],
+        width="stretch",
+        hide_index=True,
+    )
     st.caption(
         f"Feasibility constraint: **{target.limited_by}**. "
         f"The band widens or narrows based on the tolerance allowed on the "

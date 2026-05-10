@@ -51,9 +51,11 @@ class OutputType(Enum):
     DSD = "dsd"                          # bead size distribution (N(d) curve)
     D32 = "d32"                          # Sauter mean diameter
     PORE_SIZE = "pore_size"              # mean pore size / SEC inverse-size
+    POROSITY = "porosity"                # bead / gel porosity fraction
     MODULUS = "modulus"                  # bulk / single-bead modulus
     RESIDUAL_OIL = "residual_oil"        # oil carryover after wash
     RESIDUAL_SURFACTANT = "residual_surfactant"  # Span-80 carryover
+    CROSSLINK_CONVERSION = "crosslink_conversion"  # reacted crosslink fraction
 
     # M2 — functionalization
     LIGAND_DENSITY = "ligand_density"    # mol/m^3 of immobilised ligand
@@ -79,6 +81,13 @@ class OutputType(Enum):
     MC_PROBABILITY = "mc_probability"    # P[blocker] / P[warning] tail probabilities
     POSTERIOR_PARAMETER = "posterior_parameter"  # K_geom / μ / G_DN posterior quantiles
     ESS = "ess"                          # effective sample size (importance-sampling diagnostic)
+
+    # M3 — packed-bed catalysis diagnostics/performance. These are mechanistic
+    # screen outputs until calibrated enzyme kinetics and transport data exist.
+    CATALYSIS_CONVERSION = "catalysis_conversion"
+    CATALYSIS_EFFECTIVENESS = "catalysis_effectiveness"
+    CATALYSIS_THIELE = "catalysis_thiele"
+    CATALYSIS_PRODUCTIVITY = "catalysis_productivity"
 
 
 class RenderMode(Enum):
@@ -122,9 +131,11 @@ DECISION_GRADE_POLICY: dict[OutputType, ModelEvidenceTier] = {
     OutputType.DSD: ModelEvidenceTier.CALIBRATED_LOCAL,
     OutputType.D32: ModelEvidenceTier.CALIBRATED_LOCAL,
     OutputType.PORE_SIZE: ModelEvidenceTier.CALIBRATED_LOCAL,
+    OutputType.POROSITY: ModelEvidenceTier.CALIBRATED_LOCAL,
     OutputType.MODULUS: ModelEvidenceTier.CALIBRATED_LOCAL,
     OutputType.RESIDUAL_OIL: ModelEvidenceTier.CALIBRATED_LOCAL,
     OutputType.RESIDUAL_SURFACTANT: ModelEvidenceTier.CALIBRATED_LOCAL,
+    OutputType.CROSSLINK_CONVERSION: ModelEvidenceTier.CALIBRATED_LOCAL,
     OutputType.LIGAND_DENSITY: ModelEvidenceTier.VALIDATED_QUANTITATIVE,
     OutputType.COUPLING_YIELD: ModelEvidenceTier.VALIDATED_QUANTITATIVE,
     OutputType.REAGENT_RESIDUAL: ModelEvidenceTier.VALIDATED_QUANTITATIVE,
@@ -163,6 +174,13 @@ DECISION_GRADE_POLICY: dict[OutputType, ModelEvidenceTier] = {
     # diagnostic, not a prediction; QUALITATIVE_TREND floor → renders
     # NUMBER for any tier, including QUALITATIVE_TREND results.
     OutputType.ESS: ModelEvidenceTier.QUALITATIVE_TREND,
+    # Packed-bed catalysis: these outputs are useful for screening, but all
+    # user-facing point numbers require calibrated enzyme kinetics / transport
+    # evidence. Default SEMI_QUANTITATIVE results degrade to INTERVAL.
+    OutputType.CATALYSIS_CONVERSION: ModelEvidenceTier.CALIBRATED_LOCAL,
+    OutputType.CATALYSIS_EFFECTIVENESS: ModelEvidenceTier.CALIBRATED_LOCAL,
+    OutputType.CATALYSIS_THIELE: ModelEvidenceTier.CALIBRATED_LOCAL,
+    OutputType.CATALYSIS_PRODUCTIVITY: ModelEvidenceTier.CALIBRATED_LOCAL,
 }
 
 

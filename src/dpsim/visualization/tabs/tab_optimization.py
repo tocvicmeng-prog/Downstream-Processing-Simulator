@@ -24,7 +24,9 @@ from typing import Any, Optional
 
 import streamlit as st
 
+from dpsim.core.decision_grade import OutputType
 from dpsim.datatypes import ModelEvidenceTier
+from dpsim.visualization.decision_grade_render import render_metric
 
 
 def _check_optimization_extra_available() -> tuple[bool, Optional[str]]:
@@ -128,34 +130,100 @@ def _render_target_spec_inputs() -> Any:
 def _render_optimization_results(state: Any) -> None:
     """Show the campaign's best-recipe summary."""
     import numpy as np
+    from dpsim.optimization.analysis import pareto_candidate_rankings
 
-    st.markdown("### Recommended recipe")
+    st.markdown("### Recommended recipes")
     st.caption(
-        "BO Pareto-front member with the smallest weighted distance to the "
-        "target. SEMI_QUANTITATIVE per ADR-007 — wet-lab calibration "
-        "required for promotion to CALIBRATED_LOCAL."
+        "Best predicted is objective-only. Best actionable also requires "
+        "decision-grade point claims and a passing pressure-feasibility screen."
     )
 
-    Y = np.asarray(state.Y_observed, dtype=float)
+    Y = np.asarray(state.pareto_Y if len(state.pareto_Y) else state.Y_observed, dtype=float)
     if Y.size == 0:
         st.warning("Optimisation produced no observations.")
         return
-    best_idx = int(np.argmin(np.sum(Y, axis=1)))
-    X_ss = np.asarray(state.X_observed[best_idx], dtype=float)
+    rankings = pareto_candidate_rankings(state) if len(state.pareto_Y) else {
+        "best_predicted": {
+            "candidate_index": int(np.argmin(np.sum(Y, axis=1))),
+            "objective_sum": float(np.min(np.sum(Y, axis=1))),
+            "evidence_tier": ModelEvidenceTier.SEMI_QUANTITATIVE.value,
+            "missing_calibration_count": 0,
+            "pressure_status": "not_evaluated",
+            "actionability_gaps": ["pressure_feasibility_not_evaluated"],
+        },
+        "best_actionable": None,
+    }
+    best_predicted = rankings["best_predicted"]
+    if best_predicted is None:
+        st.warning("No Pareto candidates were available for ranking.")
+        return
+    best_idx = int(best_predicted["candidate_index"])
+    X_source = state.pareto_X if len(state.pareto_X) else state.X_observed
+    X_ss = np.asarray(X_source[best_idx], dtype=float)
     obj = Y[best_idx]
 
+    ranking_rows = [
+        {
+            "Ranking": "Best predicted",
+            "Candidate": best_idx,
+            "Objective sum": f"{float(best_predicted['objective_sum']):.3f}",
+            "Evidence tier": best_predicted["evidence_tier"],
+            "Pressure": best_predicted["pressure_status"],
+            "Actionability gaps": ", ".join(best_predicted["actionability_gaps"]) or "none",
+        }
+    ]
+    best_actionable = rankings["best_actionable"]
+    if best_actionable is not None:
+        ranking_rows.append({
+            "Ranking": "Best actionable",
+            "Candidate": int(best_actionable["candidate_index"]),
+            "Objective sum": f"{float(best_actionable['objective_sum']):.3f}",
+            "Evidence tier": best_actionable["evidence_tier"],
+            "Pressure": best_actionable["pressure_status"],
+            "Actionability gaps": ", ".join(best_actionable["actionability_gaps"]) or "none",
+        })
+    else:
+        ranking_rows.append({
+            "Ranking": "Best actionable",
+            "Candidate": "none",
+            "Objective sum": "n/a",
+            "Evidence tier": "n/a",
+            "Pressure": "n/a",
+            "Actionability gaps": "calibration and pressure gates not closed",
+        })
+    st.dataframe(ranking_rows, width="stretch", hide_index=True)
+
+    objective_outputs = (
+        OutputType.D32,
+        OutputType.PORE_SIZE,
+        OutputType.MODULUS,
+    )
     cols = st.columns(min(3, len(obj)))
     for i, val in enumerate(obj):
-        cols[i % len(cols)].metric(f"obj {i+1}", f"{val:.3f}")
+        output_type = objective_outputs[min(i, len(objective_outputs) - 1)]
+        render_metric(
+            f"obj {i+1}",
+            value=float(val),
+            output_type=output_type,
+            tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+            unit="objective",
+            container=cols[i % len(cols)],
+            help="Tolerance-normalised objective score used for BO reporting.",
+        )
 
-    st.markdown("**Search-space coordinates (best of campaign)**")
+    st.markdown("**Search-space coordinates (best predicted Pareto candidate)**")
     st.caption(
         "7-D normalised process space; 0–1 per dim. Map back to physical "
         "via the engine's _from_search_space helper for use at the bench."
     )
-    cols = st.columns(min(7, len(X_ss)))
-    for i, v in enumerate(X_ss):
-        cols[i % len(cols)].metric(f"x[{i}]", f"{v:.3f}")
+    st.dataframe(
+        [
+            {"coordinate": f"x[{i}]", "normalized_value": f"{float(v):.3f}"}
+            for i, v in enumerate(X_ss)
+        ],
+        width="stretch",
+        hide_index=True,
+    )
 
     st.caption(
         f"n_observations = {len(state.Y_observed)} (n_initial + BO iterations)"

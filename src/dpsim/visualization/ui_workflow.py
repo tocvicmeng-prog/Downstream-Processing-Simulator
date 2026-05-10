@@ -692,6 +692,39 @@ def process_recipe_protocol_markdown(
                     lines.append(f"  - {item}")
             if step.notes:
                 lines.append(f"- Notes: {step.notes}")
+            execution = getattr(step, "execution", None)
+            if execution is not None and any(
+                (
+                    execution.material_lot,
+                    execution.sample_id,
+                    execution.operator,
+                    execution.instrument_id,
+                    execution.qc_assay_link,
+                    execution.fraction_id,
+                    execution.hazard_note,
+                    execution.stop_go_condition,
+                    execution.acceptance_criteria,
+                )
+            ):
+                lines.append("- Execution metadata:")
+                if execution.material_lot:
+                    lines.append(f"  - Material lot: {execution.material_lot}")
+                if execution.sample_id:
+                    lines.append(f"  - Sample ID: {execution.sample_id}")
+                if execution.operator:
+                    lines.append(f"  - Operator: {execution.operator}")
+                if execution.instrument_id:
+                    lines.append(f"  - Instrument ID: {execution.instrument_id}")
+                if execution.qc_assay_link:
+                    lines.append(f"  - QC assay link: {execution.qc_assay_link}")
+                if execution.fraction_id:
+                    lines.append(f"  - Fraction ID: {execution.fraction_id}")
+                if execution.hazard_note:
+                    lines.append(f"  - Hazard note: {execution.hazard_note}")
+                if execution.stop_go_condition:
+                    lines.append(f"  - Stop/go condition: {execution.stop_go_condition}")
+                for criterion, value in execution.acceptance_criteria.items():
+                    lines.append(f"  - Acceptance {criterion}: {value}")
             lines.append("- Required record: actual setpoint, observed value, time, operator initials, and deviation note.")
             lines.append("")
     if lifecycle_result is not None and getattr(lifecycle_result, "graph", None) is not None:

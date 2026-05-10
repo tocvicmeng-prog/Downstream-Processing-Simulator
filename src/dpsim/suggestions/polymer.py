@@ -84,10 +84,27 @@ def render_derivation(ctx: SuggestionContext, target: TargetRange) -> None:
     )
 
     st.subheader("Step 4 — Scaling-factor band (±15 % G tolerance)")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Nominal α", f"{target.nominal:.3f}")
-    col2.metric("Lower bound α", f"{target.min:.3f}")
-    col3.metric("Upper bound α", f"{target.max:.3f}")
+    st.dataframe(
+        [
+            {
+                "Band point": "Nominal alpha",
+                "Value": f"{target.nominal:.3f}",
+                "Basis": "Inverted target modulus",
+            },
+            {
+                "Band point": "Lower bound alpha",
+                "Value": f"{target.min:.3f}",
+                "Basis": "-15 % G tolerance",
+            },
+            {
+                "Band point": "Upper bound alpha",
+                "Value": f"{target.max:.3f}",
+                "Basis": "+15 % G tolerance",
+            },
+        ],
+        width="stretch",
+        hide_index=True,
+    )
 
     if full.limited_by != "ok":
         st.warning(f"Feasibility constraint: **{full.limited_by}**")

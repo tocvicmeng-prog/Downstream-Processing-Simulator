@@ -106,8 +106,25 @@ def render_derivation(ctx: SuggestionContext, target: TargetRange) -> None:
     )
 
     st.subheader("Step 4 — Target concentration + band")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Nominal", f"{target.nominal:.1f} {target.unit}")
-    col2.metric("Lower bound", f"{target.min:.1f}", help="-15 % G tolerance")
-    col3.metric("Upper bound", f"{target.max:.1f}", help="+15 % G tolerance")
+    st.dataframe(
+        [
+            {
+                "Band point": "Nominal",
+                "Value": f"{target.nominal:.1f} {target.unit}",
+                "Basis": "Inverted target modulus",
+            },
+            {
+                "Band point": "Lower bound",
+                "Value": f"{target.min:.1f} {target.unit}",
+                "Basis": "-15 % G tolerance",
+            },
+            {
+                "Band point": "Upper bound",
+                "Value": f"{target.max:.1f} {target.unit}",
+                "Basis": "+15 % G tolerance",
+            },
+        ],
+        width="stretch",
+        hide_index=True,
+    )
 

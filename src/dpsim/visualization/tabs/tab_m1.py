@@ -418,7 +418,8 @@ def _render_non_ac_family(*, tab_container, family, is_stirred_default, model_mo
                unit="µm", scale=1e6, container=c1)
     _rm_m1("Pore size", value=g.pore_size_mean, output_type=_OT_m1.PORE_SIZE,
            tier=_g_tier, unit="nm", scale=1e9, container=c2)
-    c3.metric("Porosity", f"{g.porosity:.2f}")  # not in OutputType taxonomy yet
+    _rm_m1("Porosity", value=g.porosity, output_type=_OT_m1.POROSITY,
+           tier=_g_tier, container=c3)
     _rm_m1("G (modulus)", value=m.G_DN, output_type=_OT_m1.MODULUS, tier=_m_tier,
            unit="kPa", scale=1e-3, container=c4)
 
@@ -1284,13 +1285,26 @@ def render_tab_m1(
                          tier=_m_dash_tier, unit="kPa", scale=1e-3,
                          delta=f"{G_dev:.0f}% from target",
                          delta_color="inverse", container=col3)
-            col4.metric("Pipeline Time", f"{elapsed:.1f}s")
+            col4.markdown(f"**Pipeline Time**\n\n{elapsed:.1f}s")
 
             col5, col6, col7, col8 = st.columns(4)
-            col5.metric("Span", f"{e.span:.2f}")
-            col6.metric("Porosity", f"{g.porosity:.1%}")
-            col7.metric("Crosslink %", f"{x.p_final:.1%}")
-            col8.metric("E*", f"{m.E_star/1000:.1f} kPa")
+            _rm_dash("Span", value=e.span, output_type=_OT_dash.DSD,
+                     tier=_e_dash_tier, container=col5)
+            _rm_dash("Porosity", value=g.porosity,
+                     output_type=_OT_dash.POROSITY, tier=_g_dash_tier,
+                     unit="%", scale=100.0, container=col6)
+            _x_dash_tier = (
+                getattr(getattr(x, "model_manifest", None),
+                        "evidence_tier", None)
+                or ModelEvidenceTier.SEMI_QUANTITATIVE
+            )
+            _rm_dash("Crosslink %", value=x.p_final,
+                     output_type=_OT_dash.CROSSLINK_CONVERSION,
+                     tier=_x_dash_tier, unit="%", scale=100.0,
+                     container=col7)
+            _rm_dash("E*", value=m.E_star, output_type=_OT_dash.MODULUS,
+                     tier=_m_dash_tier, unit="kPa", scale=1e-3,
+                     container=col8)
 
             st.divider()
 
@@ -1439,11 +1453,33 @@ def render_tab_m1(
 
             st.write("**Objective Values** (lower = closer to target):")
             oc1, oc2, oc3 = st.columns(3)
-            oc1.metric(d_obj_label, f"{obj[0]:.3f}", help=d_obj_help)
-            oc2.metric("f_2 (pore deviation)", f"{obj[1]:.3f}",
-                       help=f"|pore - {target_pore} nm| / {target_pore} nm")
-            oc3.metric("f_3 (modulus deviation)", f"{obj[2]:.3f}",
-                       help=f"|log10(G_DN) - log10({target_G*1000})|")
+            _rm_dash(
+                d_obj_label,
+                value=obj[0],
+                output_type=_OT_dash.D32,
+                tier=_e_dash_tier,
+                unit="objective",
+                container=oc1,
+                help=d_obj_help,
+            )
+            _rm_dash(
+                "f_2 (pore deviation)",
+                value=obj[1],
+                output_type=_OT_dash.PORE_SIZE,
+                tier=_g_dash_tier,
+                unit="objective",
+                container=oc2,
+                help=f"|pore - {target_pore} nm| / {target_pore} nm",
+            )
+            _rm_dash(
+                "f_3 (modulus deviation)",
+                value=obj[2],
+                output_type=_OT_dash.MODULUS,
+                tier=_m_dash_tier,
+                unit="objective",
+                container=oc3,
+                help=f"|log10(G_DN) - log10({target_G*1000})|",
+            )
 
             overall = np.mean(obj)
             if overall < 0.3:

@@ -17,6 +17,7 @@ The dossier captures:
   * every ModelManifest from the run
   * every CalibrationEntry consumed by the run
   * validation report (BLOCKERs + WARNINGs)
+  * wet-lab execution records, QC checkpoints, fractions, and trace alignments
   * git commit short SHA
   * resolved Python package versions
   * smoke-test status
@@ -184,6 +185,12 @@ class ProcessDossier:
     calibration_entries: list[dict] = field(default_factory=list)
     decision_claims: list[dict] = field(default_factory=list)
 
+    # Wet-lab execution provenance
+    execution_records: list[dict] = field(default_factory=list)
+    qc_checkpoints: list[dict] = field(default_factory=list)
+    fraction_collections: list[dict] = field(default_factory=list)
+    trace_alignments: list[dict] = field(default_factory=list)
+
     # Validation outcomes
     validation_blockers: list[dict] = field(default_factory=list)
     validation_warnings: list[dict] = field(default_factory=list)
@@ -253,6 +260,10 @@ class ProcessDossier:
             manifests=list(d.get("manifests", [])),
             calibration_entries=list(d.get("calibration_entries", [])),
             decision_claims=list(d.get("decision_claims", [])),
+            execution_records=list(d.get("execution_records", [])),
+            qc_checkpoints=list(d.get("qc_checkpoints", [])),
+            fraction_collections=list(d.get("fraction_collections", [])),
+            trace_alignments=list(d.get("trace_alignments", [])),
             validation_blockers=list(d.get("validation_blockers", [])),
             validation_warnings=list(d.get("validation_warnings", [])),
             git_commit=str(d.get("git_commit", "")),
@@ -285,6 +296,10 @@ def build_dossier(
     manifests: Optional[list[dict]] = None,
     calibration_entries: Optional[list[dict]] = None,
     decision_claims: Optional[list[dict]] = None,
+    execution_records: Optional[list[dict]] = None,
+    qc_checkpoints: Optional[list[dict]] = None,
+    fraction_collections: Optional[list[dict]] = None,
+    trace_alignments: Optional[list[dict]] = None,
     validation_blockers: Optional[list[dict]] = None,
     validation_warnings: Optional[list[dict]] = None,
     smoke_status: str = "not_run",
@@ -312,6 +327,10 @@ def build_dossier(
         manifests=list(manifests or []),
         calibration_entries=cal,
         decision_claims=list(decision_claims or []),
+        execution_records=list(execution_records or []),
+        qc_checkpoints=list(qc_checkpoints or []),
+        fraction_collections=list(fraction_collections or []),
+        trace_alignments=list(trace_alignments or []),
         validation_blockers=list(validation_blockers or []),
         validation_warnings=list(validation_warnings or []),
         git_commit=get_git_commit_short(repo_root),
@@ -326,6 +345,36 @@ def build_dossier(
     )
 
 
+def wetlab_execution_records_from_recipe(recipe: Any) -> list[dict]:
+    """Return dossier-ready execution records from a ProcessRecipe-like object."""
+    records: list[dict] = []
+    for index, step in enumerate(getattr(recipe, "steps", []) or [], start=1):
+        execution = getattr(step, "execution", None)
+        if execution is None:
+            continue
+        acceptance = dict(getattr(execution, "acceptance_criteria", {}) or {})
+        records.append({
+            "step_index": index,
+            "step_name": str(getattr(step, "name", "")),
+            "stage": _enum_value(getattr(step, "stage", "")),
+            "operation": _enum_value(getattr(step, "kind", "")),
+            "material_lot": str(getattr(execution, "material_lot", "")),
+            "sample_id": str(getattr(execution, "sample_id", "")),
+            "operator": str(getattr(execution, "operator", "")),
+            "instrument_id": str(getattr(execution, "instrument_id", "")),
+            "acceptance_criteria": acceptance,
+            "qc_assay_link": str(getattr(execution, "qc_assay_link", "")),
+            "fraction_id": str(getattr(execution, "fraction_id", "")),
+            "hazard_note": str(getattr(execution, "hazard_note", "")),
+            "stop_go_condition": str(getattr(execution, "stop_go_condition", "")),
+        })
+    return records
+
+
+def _enum_value(value: Any) -> str:
+    return str(getattr(value, "value", value))
+
+
 __all__ = [
     "ProcessDossier",
     "build_dossier",
@@ -335,4 +384,5 @@ __all__ = [
     "get_git_commit_short",
     "get_git_dirty",
     "get_package_versions",
+    "wetlab_execution_records_from_recipe",
 ]

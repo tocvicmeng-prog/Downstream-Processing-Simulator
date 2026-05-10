@@ -740,7 +740,9 @@ def render_tab_m2(tab_container, _smgr) -> None:
                     )
                 )
                 _mc1, _mc2, _mc3 = st.columns(3)
-                _mc1.metric("Steps Executed", len(_m2.modification_history))
+                _mc1.markdown(
+                    f"**Steps Executed**\n\n{len(_m2.modification_history)}"
+                )
                 # B-1o / W-046 (v0.8.3): tier-gate G_DN / E* moduli through
                 # render_metric. Tier comes from the FunctionalMicrosphere's
                 # model_manifest; falls through to SEMI_QUANTITATIVE when
@@ -822,4 +824,3 @@ def render_tab_m2(tab_container, _smgr) -> None:
                     "[!] semi_quantitative — ACS inventory uses simplified site-density model. "
                     "Default rate constants are illustrative — user calibration required."
                 )
-

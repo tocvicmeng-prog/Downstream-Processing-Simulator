@@ -332,9 +332,14 @@ def render_forward_mc_panel(
         )
         step_cols = target.columns(len(multi_step_result.step_names))
         for i, name in enumerate(multi_step_result.step_names):
-            step_cols[i].metric(
+            render_metric(
                 name,
-                f"{multi_step_result.per_step_bands[i].p_blocker * 100:.1f} %",
+                value=multi_step_result.per_step_bands[i].p_blocker,
+                output_type=OutputType.MC_PROBABILITY,
+                tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+                unit="%",
+                scale=100.0,
+                container=step_cols[i],
                 help=(
                     f"headroom P50 = "
                     f"{multi_step_result.per_step_bands[i].headroom_ratio_p50*100:.0f} %"
