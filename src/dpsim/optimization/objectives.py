@@ -309,6 +309,31 @@ def compute_inverse_design_objectives(
 
 
 @dataclass(frozen=True)
+class PressureStep:
+    """One process step in a multi-step pressure-feasibility program.
+
+    B-2k / W-040 (v0.8.2). Bundles the per-step fields that vary across
+    a recipe — the operating flow rate and mobile-phase composition.
+    The column geometry and polymer family are constant across steps
+    and live on the parent ``PressureFeasibilityContext``.
+
+    Attributes
+    ----------
+    name :
+        Human-readable label (e.g. ``"load"``, ``"wash"``, ``"elute"``,
+        ``"CIP"``). Surfaced in violation messages.
+    Q_m3_s :
+        Step flow rate [m³/s].
+    mobile_phase :
+        Step buffer specification.
+    """
+
+    name: str
+    Q_m3_s: float
+    mobile_phase: "MobilePhase"
+
+
+@dataclass(frozen=True)
 class PressureFeasibilityContext:
     """Column-side context for the BO pressure-feasibility constraint.
 
@@ -323,6 +348,18 @@ class PressureFeasibilityContext:
     ``check_constraints``) leaves v0.7.0 behaviour untouched: no
     pressure-side feasibility check is run.
 
+    Two screening modes are supported:
+
+    * **Single-step (legacy, v0.8.0):** supply ``Q_target_m3_s`` +
+      ``mobile_phase`` and leave ``step_program=None``. The candidate
+      is screened against one envelope at the supplied flow rate.
+    * **Multi-step (v0.8.2 / B-2k / W-040):** supply ``step_program`` —
+      a sequence of ``PressureStep`` instances, one per recipe step.
+      The candidate is screened against each step's envelope and
+      declared infeasible if ANY step exceeds the headroom threshold.
+      ``Q_target_m3_s`` and ``mobile_phase`` are ignored when
+      ``step_program`` is provided.
+
     Attributes
     ----------
     column :
@@ -331,17 +368,21 @@ class PressureFeasibilityContext:
         d32) are read from this. Modulus fields (G_DN, E_star) are
         overridden per-candidate from the result's mechanical block.
     mobile_phase :
-        ``MobilePhase`` for the operating step (T, c_NaCl, glycerol/
-        ethanol fractions, optional custom μ).
+        Single-step ``MobilePhase``. Only consulted when
+        ``step_program is None``.
     Q_target_m3_s :
-        Operating flow rate the candidate is screened against [m³/s].
+        Single-step flow rate [m³/s]. Only consulted when
+        ``step_program is None``.
     polymer_family :
         Family used for K_geom lookup. Bound at the BO run level —
         the BO does not optimise the family.
     headroom_threshold :
-        Maximum acceptable Q_target / Q_max ratio. Default 1.0 (only
-        outright BLOCKER candidates are dropped). Set to 0.7 to also
-        drop WARNING-band candidates.
+        Maximum acceptable Q / Q_max ratio. Default 1.0 (only outright
+        BLOCKER candidates are dropped). Set to 0.7 to also drop
+        WARNING-band candidates.
+    step_program :
+        Optional multi-step program. When set, screens the candidate
+        across every step; the worst-case step drives the verdict.
     """
 
     column: "ColumnGeometry"
@@ -349,6 +390,7 @@ class PressureFeasibilityContext:
     Q_target_m3_s: float
     polymer_family: PolymerFamily
     headroom_threshold: float = 1.0
+    step_program: Optional[tuple["PressureStep", ...]] = None
 
 
 def pressure_feasible(
@@ -393,6 +435,37 @@ def pressure_feasible(
         E_star=max(result.mechanical.E_star, 1.0),
     )
 
+    # B-2k / W-040: multi-step path. When step_program is supplied,
+    # screen against every step and report ALL violations (not just
+    # the first) so users can see whether the bottleneck is a single
+    # step or systemic across the recipe.
+    if ctx.step_program is not None:
+        violations: list[str] = []
+        for step in ctx.step_program:
+            try:
+                envelope = compute_pressure_envelope(
+                    polymer_family=ctx.polymer_family,
+                    column=overridden,
+                    mobile_phase=step.mobile_phase,
+                    Q_set_m3_s=max(step.Q_m3_s, 1e-15),
+                )
+            except (ValueError, KeyError) as exc:
+                violations.append(
+                    f"step {step.name!r}: pressure envelope unavailable "
+                    f"for family {ctx.polymer_family.value!r}: {exc}"
+                )
+                continue
+            if envelope.headroom_ratio > ctx.headroom_threshold:
+                violations.append(
+                    f"step {step.name!r}: headroom_ratio="
+                    f"{envelope.headroom_ratio:.2f} > "
+                    f"threshold={ctx.headroom_threshold:.2f} "
+                    f"(Q={step.Q_m3_s:.2e} m³/s, "
+                    f"Q_max={envelope.Q_max_m3_s:.2e} m³/s)"
+                )
+        return len(violations) == 0, violations
+
+    # Single-step path (legacy v0.8.0 behaviour).
     try:
         envelope = compute_pressure_envelope(
             polymer_family=ctx.polymer_family,
