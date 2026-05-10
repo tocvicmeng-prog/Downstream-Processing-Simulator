@@ -415,8 +415,85 @@ def render_isotherm_widget(
     )
 
 
+def to_isotherm(spec: IsothermSpec) -> Any:
+    """Instantiate a backend isotherm from an :class:`IsothermSpec`.
+
+    B-4d / W-072 (v0.8.6). Bridges the UI's user-facing IsothermSpec
+    into the backend isotherm class hierarchy so the lifecycle can
+    consume the user's choice. Without this helper the spec would
+    remain UI-side only — the v0.8.4 wiring break flagged in
+    AUDIT_v0_8_5_e2e_phase3_architecture.md §A-2 / §A-4.
+
+    Returns
+    -------
+    Backend isotherm instance: LangmuirIsotherm | SaltModulatedLangmuir |
+    ImidazoleModulatedLangmuir | SaltModulatedSMA |
+    SaltModulatedCompetitiveLangmuir.
+    """
+    import numpy as _np
+    from dpsim.module3_performance.isotherms.langmuir import LangmuirIsotherm
+    p = dict(spec.params)
+    if spec.choice.value == IsothermChoice.LANGMUIR.value:
+        return LangmuirIsotherm(
+            q_max=float(p.get("q_max_mol_m3", 100.0)),
+            K_L=float(p.get("K_L_m3_mol", 1.0e3)),
+        )
+    if spec.choice.value == IsothermChoice.SALT_MODULATED_LANGMUIR.value:
+        from dpsim.module3_performance.isotherms.salt_dependent import (
+            SaltModulatedLangmuir,
+        )
+        return SaltModulatedLangmuir(
+            base=LangmuirIsotherm(
+                q_max=float(p.get("q_max_mol_m3", 100.0)),
+                K_L=float(p.get("K_L_m3_mol", 1.0e3)),
+            ),
+            nu=float(p.get("nu", 4.5)),
+            c_salt_ref_mol_m3=float(p.get("c_salt_ref_mol_m3", 150.0)),
+        )
+    if spec.choice.value == IsothermChoice.IMIDAZOLE_MODULATED_LANGMUIR.value:
+        from dpsim.module3_performance.isotherms.imidazole_dependent import (
+            ImidazoleModulatedLangmuir,
+        )
+        return ImidazoleModulatedLangmuir(
+            base=LangmuirIsotherm(
+                q_max=float(p.get("q_max_mol_m3", 80.0)),
+                K_L=float(p.get("K_L_m3_mol", 1.0e4)),
+            ),
+            n=float(p.get("n", 1.5)),
+            c_imidazole_ref_mol_m3=float(p.get("c_imidazole_ref_mol_m3", 50.0)),
+        )
+    if spec.choice.value == IsothermChoice.SALT_MODULATED_SMA.value:
+        from dpsim.module3_performance.isotherms.sma_modulated import (
+            SaltModulatedSMA,
+        )
+        return SaltModulatedSMA(
+            z=float(p.get("z", 4.5)),
+            sigma=float(p.get("sigma", 50.0)),
+            K_eq=float(p.get("K_eq", 1.0e-3)),
+            Lambda=float(p.get("Lambda", 1000.0)),
+            c_salt_ref_mol_m3=float(p.get("c_salt_ref_mol_m3", 150.0)),
+        )
+    if spec.choice.value == IsothermChoice.SALT_MODULATED_COMPETITIVE_LANGMUIR.value:
+        from dpsim.module3_performance.isotherms.competitive_langmuir import (
+            CompetitiveLangmuirIsotherm,
+        )
+        from dpsim.module3_performance.isotherms.competitive_salt_dependent import (
+            SaltModulatedCompetitiveLangmuir,
+        )
+        q_arr = _np.asarray(p.get("q_max_mol_m3", [100.0, 80.0]), dtype=float)
+        K_arr = _np.asarray(p.get("K_L_m3_mol", [1.0e3, 5.0e2]), dtype=float)
+        nu_arr = _np.asarray(p.get("nu", [6.0, 3.0]), dtype=float)
+        return SaltModulatedCompetitiveLangmuir(
+            base=CompetitiveLangmuirIsotherm(q_max=q_arr, K_L=K_arr),
+            nu=nu_arr,
+            c_salt_ref_mol_m3=float(p.get("c_salt_ref_mol_m3", 150.0)),
+        )
+    raise ValueError(f"Unknown IsothermChoice: {spec.choice!r}")
+
+
 __all__ = [
     "IsothermChoice",
     "IsothermSpec",
     "render_isotherm_widget",
+    "to_isotherm",
 ]

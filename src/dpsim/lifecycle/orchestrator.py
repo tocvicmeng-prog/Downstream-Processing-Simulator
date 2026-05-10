@@ -265,6 +265,7 @@ class DownstreamProcessOrchestrator:
         dsd_run_breakthrough: bool = False,
         dsd_quantiles: tuple[float, ...] = (0.10, 0.50, 0.90),
         mobile_phase: MobilePhase | None = None,
+        isotherm: Any | None = None,
     ) -> DownstreamLifecycleResult:
         """Run M1 fabrication, M2 Protein A functionalization, and M3 breakthrough.
 
@@ -936,9 +937,41 @@ class DownstreamProcessOrchestrator:
                 feed_duration=resolved_inputs.m3_feed_duration,
                 total_time=resolved_inputs.m3_total_time,
                 n_z=resolved_inputs.m3_n_z,
+                isotherm=isotherm,
                 fmc=fmc,
                 process_state=m3_process_state,
                 log_flow_warnings=False,
+            )
+
+        # B-4d (W-072, v0.8.6): when the caller (UI) supplies an isotherm
+        # override (e.g. SaltModulatedSMA via the v0.8.4 W-055 widget),
+        # re-run the load breakthrough with that isotherm so the user's
+        # selection actually drives the breakthrough curve. Without this,
+        # the auto-routed FMC isotherm wins and the UI selection is
+        # silently ignored — the v0.8.4 wiring break flagged in
+        # AUDIT_v0_8_5_e2e_phase3_architecture.md §A-2 / §A-4.
+        if isotherm is not None and m3_method.load_breakthrough is not None:
+            m3_result = run_breakthrough(
+                column=m3_column,
+                C_feed=resolved_inputs.m3_feed_concentration,
+                flow_rate=m3_flow_rate,
+                feed_duration=resolved_inputs.m3_feed_duration,
+                total_time=resolved_inputs.m3_total_time,
+                n_z=resolved_inputs.m3_n_z,
+                isotherm=isotherm,
+                process_state=m3_process_state,
+                log_flow_warnings=False,
+            )
+            validation.add(
+                ValidationSeverity.WARNING,
+                "M3_USER_ISOTHERM_OVERRIDE",
+                f"User-supplied isotherm {type(isotherm).__name__} overrides "
+                f"the method-driven FMC routing for the load breakthrough.",
+                module="M3",
+                recommendation=(
+                    "Confirm the chosen class matches your binding regime; "
+                    "calibrate locally to promote tier above SEMI_QUANTITATIVE."
+                ),
             )
         m3_pressure_diagnostics = _m3_pressure_flow_diagnostics(
             calibration_store,

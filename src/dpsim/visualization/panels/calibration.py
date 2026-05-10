@@ -19,6 +19,11 @@ from dpsim.runtime_paths import runtime_temp_dir
 
 
 def render_calibration_panel() -> CalibrationStore | None:
+    # pragma: no-mount — legacy JSON uploader from v6.0-rc.
+    # Superseded by tabs/calibration/wetlab_ingestion.py (v0.8.4 W-057),
+    # which is the production calibration ingestion path. Kept available
+    # as a library helper for ad-hoc JSON-format imports; not mounted in
+    # any tab to avoid surfacing two calibration uploaders to end users.
     """Render the calibration import/inspect panel.
 
     Placed in the sidebar or as an expander in the main area.

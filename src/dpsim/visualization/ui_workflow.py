@@ -885,6 +885,24 @@ def render_lifecycle_run_panel(
         orchestrator = DownstreamProcessOrchestrator(
             output_dir=default_output_dir("streamlit_lifecycle"),
         )
+        # B-4d (W-072, v0.8.6): thread user-supplied mobile phase +
+        # isotherm spec from the M3 method-conditions widget through
+        # to the orchestrator. Closes the v0.8.4 wiring break flagged
+        # in AUDIT_v0_8_5_e2e_phase3_architecture.md §A-1, §A-2, §A-4.
+        # Both keys are absent on first load — the orchestrator falls
+        # back to its v0.8.5 defaults (MobilePhase() + auto-FMC
+        # isotherm routing) preserving backwards compatibility.
+        _user_mobile_phase = session_state.get("m3_mobile_phase")
+        _user_isotherm_spec = session_state.get("m3_isotherm_spec")
+        _user_isotherm = None
+        if _user_isotherm_spec is not None:
+            try:
+                from dpsim.visualization.panels.isotherm_selector import (
+                    to_isotherm,
+                )
+                _user_isotherm = to_isotherm(_user_isotherm_spec)
+            except Exception:  # noqa: BLE001 — never let UI side break run
+                _user_isotherm = None
         bg_run = run_in_background(
             orchestrator.run,
             kwargs=dict(
@@ -893,6 +911,8 @@ def render_lifecycle_run_panel(
                 propagate_dsd=propagate_dsd,
                 dsd_mode=dsd_mode,
                 dsd_run_breakthrough=dsd_run_breakthrough,
+                mobile_phase=_user_mobile_phase,
+                isotherm=_user_isotherm,
             ),
         )
         session_state[BG_RUN_KEY] = bg_run

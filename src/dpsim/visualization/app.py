@@ -604,6 +604,43 @@ _status_map = derive_stage_status(current_recipe=_workflow_recipe)
 # always visible, focused column expands.
 _direction = get_direction()
 
+# B-4c (W-071, v0.8.6): mount the SEMI_QUANTITATIVE tier banner at the
+# top of every stage. The widget was defined in v0.8.4 (W-058) but never
+# mounted in production — see AUDIT_v0_8_5_e2e_phase3_architecture.md
+# §A-3. Mounting here surfaces the worst tier across the lifecycle
+# result + whether calibration data is loaded, on every page.
+from dpsim.visualization.shell.tier_banner import render_tier_banner as _render_tier_banner
+_lifecycle_result_for_banner = st.session_state.get("lifecycle_result")
+_weakest_tier_for_banner = None
+if _lifecycle_result_for_banner is not None:
+    try:
+        from dpsim.datatypes import ModelEvidenceTier as _MET_b
+        _tier_rank = {
+            _MET_b.VALIDATED_QUANTITATIVE.value: 0,
+            _MET_b.CALIBRATED_LOCAL.value: 1,
+            _MET_b.SEMI_QUANTITATIVE.value: 2,
+            _MET_b.QUALITATIVE_TREND.value: 3,
+            _MET_b.UNSUPPORTED.value: 4,
+        }
+        # Walk the result graph for the worst tier across stages.
+        _candidates = []
+        for _stage_attr in ("m1_result", "m2_result", "m3_result"):
+            _stage_obj = getattr(_lifecycle_result_for_banner, _stage_attr, None)
+            _manifest = getattr(_stage_obj, "model_manifest", None)
+            _t = getattr(_manifest, "evidence_tier", None)
+            if _t is not None:
+                _candidates.append(_t)
+        if _candidates:
+            _weakest_tier_for_banner = max(
+                _candidates, key=lambda t: _tier_rank.get(t.value, 4)
+            )
+    except Exception:  # noqa: BLE001 — never let banner break the page
+        _weakest_tier_for_banner = None
+_render_tier_banner(
+    weakest_tier=_weakest_tier_for_banner,
+    has_calibration=bool(st.session_state.get("_cal_store")),
+)
+
 if _direction == "a":
     render_shell(
         version=_DPSIM_VERSION,

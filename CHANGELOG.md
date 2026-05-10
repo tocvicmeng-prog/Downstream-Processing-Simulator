@@ -1,5 +1,52 @@
 # Changelog
 
+## v0.8.6 — Critical wiring fixes (2026-05-10)
+
+Closes the four CRITICAL wiring breaks identified in the v0.8.5 end-to-end audit (`docs/handover/AUDIT_v0_8_5_e2e_phase{1,2,3}_*.md`). The v0.8.4 release shipped three widgets — mobile-phase composition editor, isotherm selector, SEMI_QUANTITATIVE tier banner — that were defined and unit-tested but **never mounted in production**. Defects C1, C2, and W-1 from the v0.8.4 CHANGELOG were therefore *theatrically* closed: tests passed, but a user pressing *Run* received a simulation in which their actual mobile phase + isotherm choice were silently substituted by `MobilePhase()` water-at-20°C + bare Langmuir defaults. v0.8.6 turns the v0.8.4 closure into an *operationally true* closure.
+
+### Closed (B-4a → B-4e) — five wiring W-items
+
+- **B-4a (W-069)** — Mounted `render_mobile_phase_widget` (defined v0.8.4 W-053) inside the M3 tab's new Method-conditions section (`tabs/tab_m3.py:291-339`). User-supplied `MobilePhase` is persisted to `st.session_state["m3_mobile_phase"]`.
+- **B-4b (W-070)** — Mounted `render_isotherm_widget` (defined v0.8.4 W-055) in the same section. User-supplied `IsothermSpec` is persisted to `st.session_state["m3_isotherm_spec"]`. Family-aware default routing falls back to AGAROSE before M2 has run; once M2 produces a `polymer_family`, the widget routes to the family-appropriate default.
+- **B-4c (W-071)** — Mounted `render_tier_banner` (defined v0.8.4 W-058) at the top of `app.py`'s render loop, surfacing the worst tier across `lifecycle_result.{m1,m2,m3}_result.model_manifest.evidence_tier` and the calibration store's loaded state. The banner now appears on every stage as the v0.8.4 release notes had claimed.
+- **B-4d KEYSTONE (W-072)** — Threaded the user's session_state inputs end-to-end:
+  * `to_isotherm(spec)` converter added to `panels/isotherm_selector.py` covering all 5 IsothermChoice members (Langmuir, SaltModulatedLangmuir, ImidazoleModulatedLangmuir, SaltModulatedSMA, SaltModulatedCompetitiveLangmuir).
+  * `lifecycle/orchestrator.py::DownstreamProcessOrchestrator.run()` gains an `isotherm: Any | None = None` kwarg. When supplied, the lifecycle re-runs the load breakthrough with the user's isotherm class, overriding the auto-routed FMC isotherm. A WARNING-tier `M3_USER_ISOTHERM_OVERRIDE` validation entry is recorded so the override is auditable.
+  * `ui_workflow.render_lifecycle_run_panel` reads `m3_mobile_phase` and `m3_isotherm_spec` from session_state, converts the spec to a backend isotherm via `to_isotherm`, and passes both to the orchestrator's threaded run.
+  * `tabs/tab_m3.py:1054` — the in-page pre-flight envelope now reads `m3_mobile_phase` from session_state instead of using `MobilePhase()` defaults.
+- **B-4e (W-073)** — New `tests/visualization/test_widget_mounting.py` AST gate that walks `panels/` + `shell/`, finds every `def render_*`, and asserts at least one production caller exists in `tabs/`, `app.py`, or `shell/`. Caught the v0.8.4 wiring break would-have-been retroactively; the legacy `panels/calibration.py::render_calibration_panel` (v6.0-rc JSON uploader, superseded by v0.8.4 W-057) is documented with a `# pragma: no-mount` exemption.
+
+### Verification
+
+- **3 new tests** in `test_widget_mounting.py`; **134/134 visualization tests pass** (131 prior + 3 new).
+- **518 tests pass** across the M3 + lifecycle + AST-gate scope (up from 515 at v0.8.5; +3 widget-mounting gates).
+- ruff: 0 violations across all edited paths.
+- mypy: 0 issues on `tab_m3.py`, `app.py`, `panels/isotherm_selector.py`, `lifecycle/orchestrator.py`, `ui_workflow.py`.
+- AST gate (`test_v9_3_enum_comparison_enforcement.py`): 0 violations.
+- Smoke-tested `to_isotherm` end-to-end against all 5 IsothermChoice members.
+
+### New validation gates closed (42 → 47)
+
+- **42** Mobile-phase widget renders in M3 input section; user value persists to `st.session_state["m3_mobile_phase"]`.
+- **43** Isotherm widget renders in M3 input section; user value persists to `st.session_state["m3_isotherm_spec"]`.
+- **44** Tier banner renders at app top-of-page on every stage.
+- **45** User-selected mobile phase changes the pre-flight pressure envelope (`tab_m3.py:1054` reads from session_state).
+- **46** User-selected isotherm class changes the breakthrough curve (lifecycle's load breakthrough re-runs with the user's class via `to_isotherm` + W-072 KEYSTONE).
+- **47** New AST gate prevents `render_*` definitions from being defined-but-not-mounted; the v0.8.4 wiring-break regression cannot recur.
+
+### Public-communication framing
+
+> v0.8.6 ships as **"the dashboard becomes honest"**. Where v0.8.4 added widgets and v0.8.5 added the live-cruise indicator, v0.8.6 closes the chain that turns visible inputs into actual simulation behaviour. The v0.8.4 CHANGELOG entries for defects C1, C2, and W-1 are now structurally accurate — the widgets they describe are operational. The v0.9 maturity plateau (live AKTA UNICORN socket, cyclic SMB, MCMC inverse) is unchanged from v0.8.5; the v0.8.7 next step exposes the orphan backends (HIC + ProteinA, OptimizationEngine UI, MonitorSource Protocol UI, multi-step coupled MC, detector traces).
+
+### Detailed handover
+
+- `docs/handover/HANDOVER_v0_8_6_release.md` — combined release-level handover for B-4a → B-4e.
+- `docs/update_workplan_2026-05-10_v0_9_0.md` — joint three-role plan that scoped v0.8.6 / v0.8.7 / v0.9.0.
+
+### Architecture decisions
+
+No new ADRs introduced. The five batches collectively respect ADR-001 → ADR-011; v0.8.6 closes the *enforcement gap* between the ADRs (which were sound) and the user-facing UI (which had bypassed them). The new `to_isotherm` converter formalises the IsothermSpec ↔ backend-class bridge that ADR-005 / ADR-006 implicitly require.
+
 ## v0.8.5 — M3 real-time back-pressure indicator (2026-05-10)
 
 Closes the 5-item work plan in `docs/update_workplan_2026-05-10_v0_8_5.md` — a single-feature UI patch driven by the joint `/scientific-advisor` + `/architect` + `/dev-orchestrator` engagement. Adds a digital-style real-time back-pressure indicator pinned to the right of the M3 *Live phase view* column diagram. **No backend changes** — the `PressureEnvelope` dataclass at `src/dpsim/module3_performance/pressure_envelope.py:97` already exposes every quantity the indicator reads.
