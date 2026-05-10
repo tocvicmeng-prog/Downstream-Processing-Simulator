@@ -27,7 +27,11 @@ import streamlit as st
 
 from dpsim.core.process_recipe import ProcessRecipe
 from dpsim.datatypes import ModelEvidenceTier
+from dpsim.visualization.components.mode_preflight import (
+    render_scientific_mode_preflight,
+)
 from dpsim.visualization.design import chrome
+from dpsim.visualization.shell.tier_banner import derive_weakest_tier_for_banner
 from dpsim.visualization.ui_workflow import (
     evidence_ladder_rows,
     render_calibration_status_panel,
@@ -180,6 +184,15 @@ def render_run_lifecycle_stage(
             value=f"~{memory_mb} MB",
         )
         + "</div>"
+    )
+
+    render_scientific_mode_preflight(
+        container=st,
+        mode_key=str(session_state.get("dpsim_scientific_mode", "hybrid")),
+        weakest_tier=derive_weakest_tier_for_banner(
+            session_state.get("lifecycle_result")
+        ),
+        has_calibration=bool(session_state.get("_cal_store")),
     )
 
     # W-082 (v0.8.8): pre-flight pressure envelope SUMMARY surfaced

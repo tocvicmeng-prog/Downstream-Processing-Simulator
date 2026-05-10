@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import copy
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from dpsim.core.process_recipe import (
@@ -156,6 +156,66 @@ def sync_m2_steps_to_recipe(
     ]
     retained.extend(_process_step_from_m2_step(step, index) for index, step in enumerate(steps))
     recipe.steps = retained
+    return recipe
+
+
+def apply_optimizer_m1_candidate_to_recipe(
+    recipe: ProcessRecipe,
+    candidate: Mapping[str, Any],
+) -> ProcessRecipe:
+    """Apply a staged optimizer M1 candidate to the live recipe.
+
+    The optimizer reports the seven M1 process dimensions in physical
+    units. This helper writes those settings into the recipe without
+    touching M2 or M3 method conditions.
+    """
+
+    values = candidate.get("values", candidate)
+    if not isinstance(values, Mapping):
+        raise ValueError("optimizer candidate must provide a values mapping")
+
+    recipe.material_batch.polymer_family = "agarose_chitosan"
+    recipe.equipment.emulsifier = str(
+        candidate.get("emulsifier", recipe.equipment.emulsifier or "rotor_stator_legacy")
+    )
+    source = "optimizer_candidate_ui"
+
+    prepare = _step_for(recipe, LifecycleStage.M1_FABRICATION, ProcessStepKind.PREPARE_PHASE)
+    current_total_polymer = _m1_total_polymer_kg_m3(prepare)
+    agarose_fraction = float(values["agarose_fraction"])
+    span80_pct = float(
+        values.get("span80_vol_pct", float(values["span80_kg_m3"]) / 986.0 * 100.0)
+    )
+    prepare.parameters.update(
+        {
+            "oil_temperature": Quantity(float(values["oil_temperature_C"]), "degC", source=source),
+            "span80": Quantity(
+                span80_pct,
+                "%",
+                source=source,
+                note=(
+                    "Applied from optimizer kg/m3 concentration using "
+                    "rho_span80=986 kg/m3."
+                ),
+            ),
+            "c_agarose": Quantity(current_total_polymer * agarose_fraction, "kg/m3", source=source),
+            "c_chitosan": Quantity(current_total_polymer * (1.0 - agarose_fraction), "kg/m3", source=source),
+            "c_genipin": Quantity(float(values["genipin_mol_m3"]), "mol/m3", source=source),
+            "t_crosslink": Quantity(float(values["crosslink_time_s"]), "s", source=source),
+        }
+    )
+
+    emulsify = _step_for(recipe, LifecycleStage.M1_FABRICATION, ProcessStepKind.EMULSIFY)
+    emulsify.parameters["rpm"] = Quantity(float(values["rpm"]), "rpm", source=source)
+
+    cool = _step_for(recipe, LifecycleStage.M1_FABRICATION, ProcessStepKind.COOL_OR_GEL)
+    cool.parameters["cooling_rate"] = Quantity(float(values["cooling_rate_K_s"]), "K/s", source=source)
+
+    recipe.notes = _append_note_once(
+        recipe.notes,
+        "M1 settings include a staged inverse-design optimizer candidate; "
+        "confirm by wet-lab DSD, pore, modulus, and pressure-flow assays before decision use.",
+    )
     return recipe
 
 
@@ -310,6 +370,27 @@ def _step_for(
 def _default_step_name(stage: LifecycleStage, kind: ProcessStepKind) -> str:
     stage_label = stage.value.split("_", 1)[0]
     return f"{stage_label} {kind.value.replace('_', ' ')}"
+
+
+def _m1_total_polymer_kg_m3(prepare_step: ProcessStep) -> float:
+    agarose = _quantity_float(prepare_step.parameters.get("c_agarose"), 42.0)
+    chitosan = _quantity_float(prepare_step.parameters.get("c_chitosan"), 18.0)
+    total = agarose + chitosan
+    return total if total > 0.0 else 60.0
+
+
+def _quantity_float(value: Any, default: float) -> float:
+    raw = getattr(value, "value", value)
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _append_note_once(existing: str, note: str) -> str:
+    if note in existing:
+        return existing
+    return f"{existing}\n{note}".strip()
 
 
 def _process_step_from_m2_step(step: ModificationStep, index: int) -> ProcessStep:

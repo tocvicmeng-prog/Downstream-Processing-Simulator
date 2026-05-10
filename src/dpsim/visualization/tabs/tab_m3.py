@@ -21,6 +21,11 @@ from dpsim.visualization.ui_recipe import (
     save_process_recipe_state,
     sync_m3_ui_to_recipe,
 )
+from dpsim.visualization.tabs.m3.result_provenance import (
+    render_m3_result_provenance,
+    store_direct_m3_provenance,
+)
+from dpsim.visualization.tabs.m3.operator_flow import render_m3_operator_flow
 
 
 _M3_TIER_COLORS = {
@@ -62,6 +67,16 @@ def render_tab_m3(tab_container) -> None:
         from dpsim.visualization.design import chrome as _chrome_top
         st.html(_chrome_top.eyebrow("Stage 04 · M3", accent=True))
         st.html('<h1 style="margin:0 0 12px 0;">Column method</h1>')
+        render_m3_operator_flow(st.session_state)
+        _opt_candidate_rows = st.session_state.get("optimizer_candidate_recipe_rows")
+        if _opt_candidate_rows:
+            with st.expander("Staged optimizer candidate", expanded=False):
+                st.caption(
+                    "Physical settings staged from Inverse Design. Review "
+                    "against the current column method before copying into "
+                    "method controls or SOP notes."
+                )
+                st.dataframe(_opt_candidate_rows, hide_index=True, width="stretch")
 
         # ── Upstream M2 Status Banner ────────────────────────────────────
         if "m2_result" not in st.session_state:
@@ -731,6 +746,9 @@ def render_tab_m3(tab_container) -> None:
                                     extinction_coeff=ext_coeff,
                                 )
                                 st.session_state["m3_result_bt"] = bt
+                                store_direct_m3_provenance(
+                                    _recipe, "m3_result_bt", bt,
+                                )
                                 _res_val = validate_m3_result(
                                     mass_balance_error=bt.mass_balance_error,
                                     pressure_drop=bt.pressure_drop,
@@ -750,8 +768,16 @@ def render_tab_m3(tab_container) -> None:
                                     fmc=_fmc_ui,
                                 )
                                 st.session_state["m3_result_method"] = method
+                                store_direct_m3_provenance(
+                                    _recipe, "m3_result_method", method,
+                                )
                                 if method.load_breakthrough is not None:
                                     st.session_state["m3_result_bt"] = method.load_breakthrough
+                                    store_direct_m3_provenance(
+                                        _recipe,
+                                        "m3_result_bt",
+                                        method.load_breakthrough,
+                                    )
                             else:
                                 gradient = make_linear_gradient(
                                     grad_start / 1000.0, grad_end / 1000.0, 0, grad_dur_min * 60
@@ -775,6 +801,9 @@ def render_tab_m3(tab_container) -> None:
                                     fmc=_fmc_ui,
                                 )
                                 st.session_state["m3_result_ge"] = ge
+                                store_direct_m3_provenance(
+                                    _recipe, "m3_result_ge", ge,
+                                )
                         except Exception as _m3_ex:
                             st.error(f"Module 3 chromatography failed: {_m3_ex}")
 
@@ -795,6 +824,9 @@ def render_tab_m3(tab_container) -> None:
                             total_time=cat_time_h * 3600,
                         )
                         st.session_state["m3_result_cat"] = cat
+                        store_direct_m3_provenance(
+                            _recipe, "m3_result_cat", cat,
+                        )
                     except Exception as _m3_ex:
                         st.error(f"Module 3 catalysis failed: {_m3_ex}")
             st.rerun()
@@ -814,6 +846,7 @@ def render_tab_m3(tab_container) -> None:
         if _show_m3_bt or _show_m3_ge or _show_m3_method or _show_m3_cat:
             st.divider()
             st.header("M3 Results")
+            _result_recipe = ensure_process_recipe_state(st.session_state)
 
             # B-2h (W-029) — pre-flight pressure envelope.
             #
@@ -994,6 +1027,7 @@ def render_tab_m3(tab_container) -> None:
                     from dpsim.visualization.ui_validators import validate_m3_result as _val_m3_res
                     _bt = st.session_state["m3_result_bt"]
                     st.subheader("Breakthrough Chromatography")
+                    render_m3_result_provenance(_result_recipe, "m3_result_bt")
                     _bt_badge = _m3_evidence_tier_badge(_bt)
                     if _bt_badge:
                         st.caption(_bt_badge)
@@ -1158,6 +1192,7 @@ def render_tab_m3(tab_container) -> None:
                 with _m3_subs[_m3_idx]:
                     _ge = st.session_state["m3_result_ge"]
                     st.subheader("Gradient Elution Chromatography")
+                    render_m3_result_provenance(_result_recipe, "m3_result_ge")
                     _ge_badge = _m3_evidence_tier_badge(_ge)
                     if _ge_badge:
                         st.caption(_ge_badge)
@@ -1193,6 +1228,7 @@ def render_tab_m3(tab_container) -> None:
                 with _m3_subs[_m3_idx]:
                     _method = st.session_state["m3_result_method"]
                     st.subheader("Protein A Method Operation")
+                    render_m3_result_provenance(_result_recipe, "m3_result_method")
                     _method_badge = _m3_evidence_tier_badge(_method)
                     if _method_badge:
                         st.caption(_method_badge)
@@ -1275,6 +1311,7 @@ def render_tab_m3(tab_container) -> None:
                 with _m3_subs[_m3_idx]:
                     _cat = st.session_state["m3_result_cat"]
                     st.subheader("Packed-Bed Catalytic Reactor")
+                    render_m3_result_provenance(_result_recipe, "m3_result_cat")
 
                     _cat_c1, _cat_c2, _cat_c3, _cat_c4 = st.columns(4)
                     from dpsim.core.decision_grade import OutputType as _OT_cat

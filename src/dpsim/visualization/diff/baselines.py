@@ -180,7 +180,11 @@ def render_baseline_picker(*, current_recipe: Any) -> str:
                         '</div>'
                     )
                 with cols[1]:
-                    if st.button("✕", key=f"_dpsim_baseline_del_{b.name}"):
+                    if st.button(
+                        "✕",
+                        key=f"_dpsim_baseline_del_{b.name}",
+                        help=f"Delete baseline {b.name}",
+                    ):
                         delete_baseline(b.name)
                         st.rerun()
 

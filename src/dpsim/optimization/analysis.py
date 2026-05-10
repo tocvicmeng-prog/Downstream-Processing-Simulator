@@ -8,7 +8,7 @@ from ..core.decision_claim import DecisionClaim, make_decision_claim
 from ..core.decision_grade import OutputType, RenderMode
 from ..datatypes import ModelEvidenceTier
 from ..datatypes import OptimizationState
-from .objectives import LOG_SCALE_INDICES
+from .objectives import LOG_SCALE_INDICES, PARAM_NAMES
 
 
 _DEFAULT_OBJECTIVE_OUTPUTS: tuple[OutputType, ...] = (
@@ -150,6 +150,66 @@ def pareto_candidate_rankings(state: OptimizationState) -> dict[str, dict | None
             )
             if best_actionable_idx is not None else None
         ),
+    }
+
+
+def physical_recipe_rows_from_search_space(
+    x_ss: np.ndarray,
+    *,
+    evidence_tier: str = "semi_quantitative",
+    pressure_status: str = "not_evaluated",
+    actionability_gaps: list[str] | tuple[str, ...] = (),
+) -> list[dict[str, str]]:
+    """Map a 7-D optimizer candidate to bench-readable recipe rows.
+
+    Optimizer internals store log-scaled dimensions in search space.
+    This helper reverses that representation and reports physical
+    process settings first, reserving normalized coordinates for
+    advanced/debug views.
+    """
+
+    x = np.asarray(x_ss, dtype=float).copy()
+    if x.shape[0] != len(PARAM_NAMES):
+        raise ValueError(f"expected {len(PARAM_NAMES)} optimizer coordinates")
+    values = physical_recipe_values_from_search_space(x)
+    gaps = [str(g) for g in actionability_gaps if str(g)]
+    actionability = "actionable" if not gaps and pressure_status == "feasible" else "advisory"
+    return [
+        {"setting": "Actionability", "value": actionability, "unit": "", "note": ", ".join(gaps) or "none"},
+        {"setting": "Evidence tier", "value": str(evidence_tier), "unit": "", "note": "decision-grade reporting tier"},
+        {"setting": "Pressure screen", "value": str(pressure_status), "unit": "", "note": "must be feasible before SOP handoff"},
+        {"setting": "Emulsification speed", "value": f"{values['rpm']:.0f}", "unit": "rpm", "note": "M1 droplet-size control"},
+        {"setting": "Span-80 concentration", "value": f"{values['span80_kg_m3']:.2f}", "unit": "kg/m3", "note": "continuous-phase surfactant"},
+        {"setting": "Agarose fraction", "value": f"{values['agarose_fraction']:.3f}", "unit": "fraction", "note": "chitosan fraction = 1 - agarose"},
+        {"setting": "Chitosan fraction", "value": f"{values['chitosan_fraction']:.3f}", "unit": "fraction", "note": "derived from agarose fraction"},
+        {"setting": "Oil temperature", "value": f"{values['oil_temperature_C']:.1f}", "unit": "degC", "note": "M1 fabrication temperature"},
+        {"setting": "Cooling rate", "value": f"{values['cooling_rate_C_min']:.2f}", "unit": "degC/min", "note": "gelation/cooling ramp"},
+        {"setting": "Genipin concentration", "value": f"{values['genipin_mol_m3']:.2f}", "unit": "mol/m3", "note": "secondary crosslinking level"},
+        {"setting": "Crosslink time", "value": f"{values['crosslink_time_h']:.1f}", "unit": "h", "note": "secondary crosslinking duration"},
+    ]
+
+
+def physical_recipe_values_from_search_space(x_ss: np.ndarray) -> dict[str, float]:
+    """Return physical optimizer settings as a structured numeric dict."""
+
+    x = np.asarray(x_ss, dtype=float).copy()
+    if x.shape[0] != len(PARAM_NAMES):
+        raise ValueError(f"expected {len(PARAM_NAMES)} optimizer coordinates")
+    for idx in LOG_SCALE_INDICES:
+        x[idx] = 10.0 ** x[idx]
+    agarose_fraction = float(x[2])
+    return {
+        "rpm": float(x[0]),
+        "span80_kg_m3": float(x[1]),
+        "span80_vol_pct": float(x[1]) / 986.0 * 100.0,
+        "agarose_fraction": agarose_fraction,
+        "chitosan_fraction": 1.0 - agarose_fraction,
+        "oil_temperature_C": float(x[3]) - 273.15,
+        "cooling_rate_K_s": float(x[4]),
+        "cooling_rate_C_min": float(x[4]) * 60.0,
+        "genipin_mol_m3": float(x[5]),
+        "crosslink_time_s": float(x[6]),
+        "crosslink_time_h": float(x[6]) / 3600.0,
     }
 
 

@@ -456,6 +456,23 @@ def test_protocol_export_contains_target_and_all_lifecycle_sections():
     assert "Pack analytical Protein A affinity column" in text
 
 
+def test_protocol_export_preserves_result_provenance_and_disclaimer():
+    recipe = default_affinity_media_recipe()
+    result = DownstreamLifecycleResult(
+        recipe=recipe,
+        graph=ResultGraph(),
+        validation=ValidationReport(),
+    )
+
+    text = process_recipe_protocol_markdown(recipe, result)
+
+    assert "bench execution requires wet-lab confirmation" in text
+    assert "## Result Provenance" in text
+    assert "Result source: lifecycle simulation" in text
+    assert "Recipe fingerprint:" in text
+    assert "Weakest evidence tier:" in text
+
+
 def test_calibration_status_rows_from_session_store():
     store = {
         "_cal_store": _FakeCalibrationStore(

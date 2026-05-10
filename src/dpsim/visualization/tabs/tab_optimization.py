@@ -130,7 +130,11 @@ def _render_target_spec_inputs() -> Any:
 def _render_optimization_results(state: Any) -> None:
     """Show the campaign's best-recipe summary."""
     import numpy as np
-    from dpsim.optimization.analysis import pareto_candidate_rankings
+    from dpsim.optimization.analysis import (
+        pareto_candidate_rankings,
+        physical_recipe_rows_from_search_space,
+        physical_recipe_values_from_search_space,
+    )
 
     st.markdown("### Recommended recipes")
     st.caption(
@@ -192,6 +196,135 @@ def _render_optimization_results(state: Any) -> None:
             "Actionability gaps": "calibration and pressure gates not closed",
         })
     st.dataframe(ranking_rows, width="stretch", hide_index=True)
+    show_actionable_only = st.checkbox(
+        "Show actionable candidates only",
+        value=False,
+        key="opt_actionable_only",
+        help=(
+            "Filters recommendation cards to candidates with point-claim "
+            "decision support and a passing pressure-feasibility screen."
+        ),
+    )
+
+    def _render_recipe_card(title: str, ranking: dict[str, Any]) -> None:
+        idx = int(ranking["candidate_index"])
+        x_candidate = np.asarray(X_source[idx], dtype=float)
+        values = physical_recipe_values_from_search_space(x_candidate)
+        rows = physical_recipe_rows_from_search_space(
+            x_candidate,
+            evidence_tier=str(ranking.get("evidence_tier", "semi_quantitative")),
+            pressure_status=str(ranking.get("pressure_status", "not_evaluated")),
+            actionability_gaps=tuple(ranking.get("actionability_gaps", ()) or ()),
+        )
+        with st.container(border=True):
+            st.markdown(f"**{title} physical recipe card**")
+            st.caption(
+                "Bench-readable candidate settings. Values remain "
+                "decision-grade SEMI_QUANTITATIVE until wet-lab calibration "
+                "confirms the operating point."
+            )
+            st.dataframe(rows, width="stretch", hide_index=True)
+            candidate_md = "\n".join(
+                [
+                    f"# DPSim optimizer candidate - {title}",
+                    "",
+                    "Simulation-derived inverse-design candidate. Treat as a "
+                    "process-development proposal until wet-lab calibration "
+                    "confirms the operating point.",
+                    "",
+                    "| Setting | Value | Unit | Note |",
+                    "|---|---:|---|---|",
+                ]
+                + [
+                    f"| {row['setting']} | {row['value']} | {row['unit']} | {row['note']} |"
+                    for row in rows
+                ]
+            )
+            st.download_button(
+                "Download candidate note",
+                data=candidate_md,
+                file_name=f"dpsim_optimizer_candidate_{title.lower().replace(' ', '_')}.md",
+                mime="text/markdown",
+                key=f"opt_candidate_note_{title.lower().replace(' ', '_')}",
+            )
+            candidate_payload = {
+                "values": values,
+                "source": title,
+                "evidence_tier": ranking.get("evidence_tier", "semi_quantitative"),
+                "pressure_status": ranking.get("pressure_status", "not_evaluated"),
+            }
+            if st.button(
+                "Stage candidate for method review",
+                key=f"opt_stage_candidate_{title.lower().replace(' ', '_')}",
+            ):
+                st.session_state["optimizer_candidate_recipe_rows"] = rows
+                st.session_state["optimizer_candidate_values"] = values
+                st.session_state["optimizer_candidate_source"] = title
+                st.success(
+                    "Candidate staged. Review the physical settings before "
+                    "copying them into M1/M3 method controls."
+                )
+            if st.button(
+                "Open M3 method review",
+                key=f"opt_open_m3_candidate_{title.lower().replace(' ', '_')}",
+                help=(
+                    "Stages this candidate, then opens the M3 column-method "
+                    "stage for feasibility and SOP/export review."
+                ),
+            ):
+                from dpsim.visualization.shell.shell import set_active_stage
+
+                st.session_state["optimizer_candidate_recipe_rows"] = rows
+                st.session_state["optimizer_candidate_values"] = values
+                st.session_state["optimizer_candidate_source"] = title
+                set_active_stage("m3")
+                st.rerun()
+            if st.button(
+                "Apply candidate to M1 recipe",
+                key=f"opt_apply_candidate_{title.lower().replace(' ', '_')}",
+                help=(
+                    "Writes optimizer M1 settings into the current ProcessRecipe. "
+                    "M2 chemistry and M3 column-method settings are not changed."
+                ),
+            ):
+                from dpsim.visualization.ui_recipe import (
+                    apply_optimizer_m1_candidate_to_recipe,
+                    ensure_process_recipe_state,
+                    save_process_recipe_state,
+                )
+
+                recipe = ensure_process_recipe_state(st.session_state)
+                apply_optimizer_m1_candidate_to_recipe(
+                    recipe,
+                    candidate_payload,
+                )
+                save_process_recipe_state(st.session_state, recipe)
+                st.session_state["optimizer_candidate_recipe_rows"] = rows
+                st.session_state["optimizer_candidate_values"] = values
+                st.session_state["optimizer_candidate_source"] = title
+                st.success(
+                    "Applied to the current M1 recipe. Re-run M1 or the full "
+                    "lifecycle before using downstream results."
+                )
+
+    cards_to_render: list[tuple[str, dict[str, Any]]] = []
+    if show_actionable_only:
+        if best_actionable is not None:
+            cards_to_render.append(("Best actionable", best_actionable))
+        else:
+            st.warning(
+                "No optimizer candidate currently passes all actionability gates. "
+                "Review pressure feasibility and calibration gaps before SOP handoff."
+            )
+    else:
+        cards_to_render.append(("Best predicted", best_predicted))
+        if best_actionable is not None and (
+            int(best_actionable["candidate_index"]) != int(best_predicted["candidate_index"])
+        ):
+            cards_to_render.append(("Best actionable", best_actionable))
+
+    for title, ranking in cards_to_render:
+        _render_recipe_card(title, ranking)
 
     objective_outputs = (
         OutputType.D32,
@@ -211,19 +344,19 @@ def _render_optimization_results(state: Any) -> None:
             help="Tolerance-normalised objective score used for BO reporting.",
         )
 
-    st.markdown("**Search-space coordinates (best predicted Pareto candidate)**")
-    st.caption(
-        "7-D normalised process space; 0–1 per dim. Map back to physical "
-        "via the engine's _from_search_space helper for use at the bench."
-    )
-    st.dataframe(
-        [
-            {"coordinate": f"x[{i}]", "normalized_value": f"{float(v):.3f}"}
-            for i, v in enumerate(X_ss)
-        ],
-        width="stretch",
-        hide_index=True,
-    )
+    with st.expander("Advanced: search-space coordinates", expanded=False):
+        st.caption(
+            "7-D process search space used by the optimizer. Physical recipe "
+            "cards above are the bench-facing representation."
+        )
+        st.dataframe(
+            [
+                {"coordinate": f"x[{i}]", "search_space_value": f"{float(v):.3f}"}
+                for i, v in enumerate(X_ss)
+            ],
+            width="stretch",
+            hide_index=True,
+        )
 
     st.caption(
         f"n_observations = {len(state.Y_observed)} (n_initial + BO iterations)"

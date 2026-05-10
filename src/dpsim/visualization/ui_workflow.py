@@ -19,6 +19,11 @@ from dpsim.core.process_recipe import LifecycleStage, ProcessRecipe, ProcessStep
 from dpsim.core.quantities import Quantity
 from dpsim.core.validation import ValidationReport
 from dpsim.datatypes import ModelManifest
+from dpsim.visualization.provenance import (
+    build_result_provenance,
+    recipe_fingerprint,
+    store_result_provenance,
+)
 
 
 UI_SOURCE = "streamlit_ui"
@@ -197,6 +202,24 @@ def store_lifecycle_result(
     """Store a lifecycle run plus legacy aliases consumed by existing panels."""
 
     session_state["lifecycle_result"] = lifecycle_result
+    result_recipe = getattr(lifecycle_result, "recipe", None)
+    if result_recipe is not None:
+        lifecycle_provenance = build_result_provenance(
+            source="lifecycle",
+            recipe=result_recipe,
+            result=lifecycle_result,
+            result_id=run_id,
+            evidence_tier=getattr(
+                getattr(lifecycle_result, "weakest_evidence_tier", None),
+                "value",
+                getattr(lifecycle_result, "weakest_evidence_tier", None),
+            ),
+        )
+        store_result_provenance(
+            session_state,
+            "lifecycle_result",
+            lifecycle_provenance,
+        )
     validation = getattr(lifecycle_result, "validation", None)
     if validation is not None:
         session_state["validation_report"] = validation
@@ -209,12 +232,30 @@ def store_lifecycle_result(
     m3_method = getattr(lifecycle_result, "m3_method", None)
     if m3_method is not None:
         session_state["m3_result_method"] = m3_method
+        if result_recipe is not None:
+            store_result_provenance(
+                session_state,
+                "m3_result_method",
+                lifecycle_provenance,
+            )
         load_breakthrough = getattr(m3_method, "load_breakthrough", None)
         if load_breakthrough is not None:
             session_state["m3_result_bt"] = load_breakthrough
+            if result_recipe is not None:
+                store_result_provenance(
+                    session_state,
+                    "m3_result_bt",
+                    lifecycle_provenance,
+                )
     m3_breakthrough = getattr(lifecycle_result, "m3_breakthrough", None)
     if m3_breakthrough is not None:
         session_state["m3_result_bt"] = m3_breakthrough
+        if result_recipe is not None:
+            store_result_provenance(
+                session_state,
+                "m3_result_bt",
+                lifecycle_provenance,
+            )
     _append_lifecycle_run_history(session_state, lifecycle_result, run_id=run_id)
 
 
@@ -621,6 +662,9 @@ def process_recipe_protocol_markdown(
         "",
         "> SOP draft generated from ProcessRecipe. This is a process-development "
         "protocol scaffold, not a GMP batch record or release specification.",
+        "> Simulated predictions remain decision-grade outputs; bench execution "
+        "requires wet-lab confirmation of pressure-flow, breakthrough, recovery, "
+        "and calibration-domain coverage.",
         "",
         "## Target Product Profile",
         f"- Product: {recipe.target.name}",
@@ -657,6 +701,14 @@ def process_recipe_protocol_markdown(
         "",
     ]
     if lifecycle_result is not None:
+        lines.append("## Result Provenance")
+        lines.append(f"- Result source: lifecycle simulation")
+        lines.append(f"- Run ID: {getattr(lifecycle_result, 'run_id', 'not recorded')}")
+        lines.append(f"- Recipe fingerprint: {recipe_fingerprint(recipe)}")
+        lines.append(f"- Scientific mode: {getattr(recipe, 'run_mode', 'unspecified')}")
+        weakest = getattr(lifecycle_result, "weakest_evidence_tier", None)
+        lines.append(f"- Weakest evidence tier: {getattr(weakest, 'value', weakest) or 'unsupported'}")
+        lines.append("")
         rows = lifecycle_result_summary_rows(lifecycle_result)
         if rows:
             lines.append("## Simulated Run Summary")

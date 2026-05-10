@@ -17,6 +17,7 @@ from dpsim.module2_functionalization.modification_steps import (
 )
 from dpsim.visualization.ui_recipe import (
     PROCESS_RECIPE_STATE_KEY,
+    apply_optimizer_m1_candidate_to_recipe,
     ensure_process_recipe_state,
     save_process_recipe_state,
     sync_m1_ui_to_recipe,
@@ -67,6 +68,46 @@ def test_m1_ui_controls_update_resolved_recipe_parameters():
     assert resolved.parameters.formulation.T_oil == pytest.approx(355.15)
     assert resolved.parameters.formulation.cooling_rate == pytest.approx(0.8 / 60.0)
     assert recipe.target.bead_d50.value == pytest.approx(125.0)
+
+
+def test_optimizer_candidate_applies_to_m1_recipe_without_touching_m3():
+    recipe = default_affinity_media_recipe()
+    original_column = recipe.equipment.column_id
+
+    apply_optimizer_m1_candidate_to_recipe(
+        recipe,
+        {
+            "values": {
+                "rpm": 8000.0,
+                "span80_kg_m3": 19.72,
+                "span80_vol_pct": 2.0,
+                "agarose_fraction": 0.7,
+                "chitosan_fraction": 0.3,
+                "oil_temperature_C": 80.0,
+                "cooling_rate_K_s": 0.1,
+                "cooling_rate_C_min": 6.0,
+                "genipin_mol_m3": 2.5,
+                "crosslink_time_s": 7200.0,
+                "crosslink_time_h": 2.0,
+            }
+        },
+    )
+
+    resolved = resolve_lifecycle_inputs(recipe)
+    prepare = [
+        step
+        for step in recipe.steps_for_stage(LifecycleStage.M1_FABRICATION)
+        if step.kind == ProcessStepKind.PREPARE_PHASE
+    ][0]
+
+    assert resolved.parameters.emulsification.rpm == pytest.approx(8000.0)
+    assert resolved.parameters.formulation.c_span80_vol_pct == pytest.approx(2.0)
+    assert resolved.parameters.formulation.c_agarose == pytest.approx(42.0)
+    assert resolved.parameters.formulation.c_chitosan == pytest.approx(18.0)
+    assert resolved.parameters.formulation.c_genipin == pytest.approx(2.5)
+    assert resolved.parameters.formulation.cooling_rate == pytest.approx(0.1)
+    assert prepare.parameters["t_crosslink"].value == pytest.approx(7200.0)
+    assert recipe.equipment.column_id == original_column
 
 
 def test_m2_ui_steps_replace_recipe_and_resolve_backend_steps():

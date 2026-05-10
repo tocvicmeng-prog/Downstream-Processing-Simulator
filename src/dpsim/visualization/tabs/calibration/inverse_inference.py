@@ -48,10 +48,16 @@ class InverseRunInputs:
     Q_for_envelope: float
 
 
+_MIN_MEASUREMENTS = 8
 _DEFAULT_MEASUREMENTS = [
     {"Q_m3_s": 1.0e-9, "dP_pa": 2_500.0, "sigma_dP_pa": 125.0},
+    {"Q_m3_s": 2.0e-9, "dP_pa": 4_950.0, "sigma_dP_pa": 248.0},
     {"Q_m3_s": 3.0e-9, "dP_pa": 7_400.0, "sigma_dP_pa": 370.0},
+    {"Q_m3_s": 4.0e-9, "dP_pa": 9_850.0, "sigma_dP_pa": 492.0},
     {"Q_m3_s": 5.0e-9, "dP_pa": 12_300.0, "sigma_dP_pa": 620.0},
+    {"Q_m3_s": 6.0e-9, "dP_pa": 14_800.0, "sigma_dP_pa": 740.0},
+    {"Q_m3_s": 7.0e-9, "dP_pa": 17_250.0, "sigma_dP_pa": 862.0},
+    {"Q_m3_s": 8.0e-9, "dP_pa": 19_700.0, "sigma_dP_pa": 985.0},
 ]
 
 
@@ -167,6 +173,22 @@ def render_inverse_inference_panel(
     st.session_state[f"{key_prefix}_measurements_df"] = (
         edited_df.to_dict(orient="records")
     )
+    parsed_preview, parse_preview_errors = _parse_measurements(edited_df)
+    if len(parsed_preview) >= _MIN_MEASUREMENTS:
+        target.success(
+            f"{len(parsed_preview)}/{_MIN_MEASUREMENTS} valid measurements: "
+            "ready for posterior fit."
+        )
+    else:
+        target.warning(
+            f"{len(parsed_preview)}/{_MIN_MEASUREMENTS} valid measurements: "
+            "add more pressure-flow rows before fitting."
+        )
+    if parse_preview_errors:
+        target.caption(
+            f"{len(parse_preview_errors)} malformed row(s) will be skipped; "
+            "expand parse errors after Fit for details."
+        )
 
     # ── Run controls ──────────────────────────────────────────────────
     cols = target.columns(2)
@@ -213,7 +235,6 @@ def render_inverse_inference_panel(
         # is ill-posed — ESS will be near 1 and the result misleads. The
         # ADR-010 §"Tier mapping" guidance recommends MCMC for low-N data;
         # for the importance-sampling path we block at the input.
-        _MIN_MEASUREMENTS = 8
         if len(measurements) < _MIN_MEASUREMENTS:
             target.error(
                 f":material/block: **{len(measurements)} measurement(s) is "

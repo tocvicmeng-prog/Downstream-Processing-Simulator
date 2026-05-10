@@ -26,6 +26,7 @@ from dpsim.visualization.ui_recipe import (
     save_process_recipe_state,
     sync_m2_steps_to_recipe,
 )
+from dpsim.visualization.tabs.m2.operator_flow import render_m2_operator_flow
 
 
 _M2_TIER_COLORS = {
@@ -223,6 +224,7 @@ def render_tab_m2(tab_container, _smgr) -> None:
         from dpsim.visualization.design import chrome as _chrome
         st.html(_chrome.eyebrow("Stage 03 · M2", accent=True))
         st.html('<h1 style="margin:0 0 12px 0;">Functionalisation</h1>')
+        render_m2_operator_flow(st.session_state)
 
         # ── Upstream M1 Status Banner ────────────────────────────────────
         if "result" not in st.session_state:

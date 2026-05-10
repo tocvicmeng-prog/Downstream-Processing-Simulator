@@ -461,6 +461,7 @@ def render_tab_m1(
     """
     from dpsim.visualization.tabs.m1.hardware_section import render_hardware_mode_radio
     from dpsim.visualization.tabs.m1.family_selector import render_family_selector
+    from dpsim.visualization.tabs.m1.operator_flow import render_m1_operator_flow
     from dpsim.visualization.panels.family_support import render_family_support_panel
     from dpsim.datatypes import PolymerFamily as _PF
 
@@ -473,6 +474,7 @@ def render_tab_m1(
         from dpsim.visualization.design import chrome as _chrome
         st.html(_chrome.eyebrow("Stage 02 · M1", accent=True))
         st.html('<h1 style="margin:0 0 12px 0;">Microsphere fabrication</h1>')
+        render_m1_operator_flow(st.session_state)
 
         # ── Polymer family (v9.0) — drives L2 dispatch and downstream rendering ──
         with st.container(border=True):

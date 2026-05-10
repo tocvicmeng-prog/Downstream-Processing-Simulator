@@ -9,10 +9,15 @@ from typing import Any, Final
 import streamlit as st
 
 from dpsim.visualization.design import chrome
-from dpsim.visualization.diff.render import render_diff_panel
+from dpsim.visualization.diff.render import diff_entries, render_diff_panel
 from dpsim.visualization.evidence.rollup import (
     StageEvidence,
     render_evidence_summary,
+)
+from dpsim.visualization.provenance import (
+    get_result_provenance,
+    provenance_summary_html,
+    with_current_recipe_staleness,
 )
 from dpsim.visualization.run_rail.history import latest
 from dpsim.visualization.run_rail.progress import (
@@ -223,6 +228,45 @@ def _render_kpi_grid() -> None:
     )
 
 
+def _render_pending_edit_summary(current_recipe: Any) -> None:
+    """Render grouped pending-edit counts before the detailed diff."""
+
+    try:
+        entries = list(diff_entries(current_recipe))
+    except Exception:  # pragma: no cover - diff is non-critical
+        entries = []
+    if not entries:
+        return
+    groups: dict[str, int] = {}
+    for entry in entries:
+        group = _diff_group_for_path(entry.path)
+        groups[group] = groups.get(group, 0) + 1
+    chips = "".join(
+        chrome.chip(f"{label}: {count}", color="var(--dps-amber-500)")
+        for label, count in sorted(groups.items())
+    )
+    st.html(
+        '<div style="display:flex;flex-wrap:wrap;gap:5px;'
+        'margin:6px 0 4px 0;">'
+        f"{chips}</div>"
+    )
+
+
+def _diff_group_for_path(path: str) -> str:
+    normalized = path.lower()
+    if normalized.startswith("target"):
+        return "Target"
+    if "m1" in normalized or "fabrication" in normalized or "emulsif" in normalized:
+        return "M1"
+    if "m2" in normalized or "functional" in normalized or "ligand" in normalized:
+        return "M2"
+    if "m3" in normalized or "column" in normalized or "flow" in normalized:
+        return "M3"
+    if "calibration" in normalized or "evidence" in normalized:
+        return "Calibration"
+    return "Recipe"
+
+
 def render_run_rail(
     *,
     current_recipe: Any | None = None,
@@ -292,6 +336,12 @@ def render_run_rail(
             )
         )
         _render_kpi_grid()
+        if current_recipe is not None:
+            provenance = with_current_recipe_staleness(
+                get_result_provenance(st.session_state, "lifecycle_result"),
+                current_recipe,
+            )
+            st.html(provenance_summary_html(provenance))
 
     # ── Card 2: Breakthrough preview ─────────────────────────────────
     with st.container(border=True):
@@ -356,6 +406,7 @@ def render_run_rail(
                     eyebrow_text="Pending edits",
                 )
             )
+            _render_pending_edit_summary(current_recipe)
             render_diff_panel(
                 current_recipe=current_recipe,
                 baseline_name=baseline_name,

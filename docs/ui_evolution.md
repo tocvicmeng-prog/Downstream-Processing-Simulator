@@ -59,6 +59,32 @@ after the first rerun. **Always compare `PolymerFamily`,
 has a dedicated regression test
 (`tests/test_evidence_tier.py::test_min_tier_survives_reloaded_enum_class`).
 
+## Streamlit Support And Upgrade Checklist
+
+The optional UI dependency currently declares `streamlit>=1.30` in
+`pyproject.toml`. The optimization pass on 2026-05-11 was verified locally
+against Streamlit 1.57.0.
+
+Treat Streamlit minor-version upgrades as visual-risk changes because the UI
+uses `st.html`, custom CSS, Streamlit query parameters, custom component
+iframes, and responsive column behavior. Before accepting an upgrade:
+
+1. Run the full UI regression suite:
+   `python -m pytest -q tests/visualization tests/test_ui_workflow.py tests/test_ui_contract.py tests/test_ui_chrome_smoke.py tests/test_ui_recipe.py tests/test_v0_3_2_g5_ui_dossier.py`.
+2. Run browser viewport coverage with `DPSIM_RUN_BROWSER_TESTS=1` and confirm
+   the Target, M3, Run, Validation, and Calibration routes render in Chromium.
+3. Start the app manually and verify the top bar at 1440, 1280, 1024, and
+   mobile-like narrow widths.
+4. Verify the run rail: last-run provenance, evidence roll-up, pending-edit
+   summary, and history controls.
+5. Verify the M3 stage: operator flow, column setup, pressure preview, run
+   controls, result provenance, SOP/export panels, and staged optimizer
+   candidate display.
+6. Verify the Calibration stage: uncertainty MC, inverse calibration,
+   series design, and wet-lab calibration labels remain distinct.
+7. Export a protocol or SOP artifact and confirm it preserves evidence tier,
+   result provenance, and simulator-use constraints.
+
 ## Design direction
 
 `DESIGN.md` at the repo root captures the Scientific Instrument

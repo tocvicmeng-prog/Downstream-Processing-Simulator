@@ -18,6 +18,8 @@ from dpsim.visualization.tabs.calibration.forward_mc import (
 )
 from dpsim.visualization.tabs.calibration.inverse_inference import (
     InverseRunInputs,
+    _DEFAULT_MEASUREMENTS,
+    _MIN_MEASUREMENTS,
     _parse_measurements,
 )
 
@@ -108,6 +110,13 @@ class TestForwardMCNoInputs:
 
 
 class TestParseMeasurements:
+    def test_default_measurement_template_is_fit_ready(self):
+        import pandas as pd
+        df = pd.DataFrame(_DEFAULT_MEASUREMENTS)
+        points, errors = _parse_measurements(df)
+        assert len(points) >= _MIN_MEASUREMENTS
+        assert errors == []
+
     def test_clean_dataframe_parses(self):
         import pandas as pd
         df = pd.DataFrame([

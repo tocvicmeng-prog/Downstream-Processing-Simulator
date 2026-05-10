@@ -9,6 +9,7 @@ HTML containing the expected DESIGN.md tokens, and that the
 
 from __future__ import annotations
 
+from pathlib import Path
 import re
 
 import pytest
@@ -46,6 +47,26 @@ def test_tokens_css_file_exists_and_loads() -> None:
     assert "--dps-bg:" in css
     assert ".dps-light" in css
     assert "@import url('https://fonts.googleapis.com/css2?family=Geist" in css
+    assert "Consolas" in css
+
+
+def test_tokens_css_has_responsive_run_rail_contract() -> None:
+    css = CSS_PATH.read_text(encoding="utf-8")
+    assert "--dps-rail-width" in css
+    assert "@media (max-width: 1180px)" in css
+    assert "@media (max-width: 960px)" in css
+    assert "@media (max-width: 720px)" in css
+    assert "flex-wrap: wrap" in css
+    assert ".dps-m3-flow" in css
+    assert "letter-spacing: -" not in css
+
+
+def test_ui_evolution_documents_streamlit_upgrade_gate() -> None:
+    doc = Path("docs/ui_evolution.md").read_text(encoding="utf-8")
+    assert "Streamlit Support And Upgrade Checklist" in doc
+    assert "Streamlit 1.57.0" in doc
+    assert "DPSIM_RUN_BROWSER_TESTS=1" in doc
+    assert "Target, M3, Run, Validation, and Calibration" in doc
 
 
 def test_every_chrome_dps_var_exists_in_tokens_css() -> None:

@@ -36,6 +36,7 @@ ui = ["streamlit>=1.30", "plotly>=5.18"]
 dev = [
     "pytest>=7.4",
     "pytest-timeout>=2.3",
+    "playwright>=1.45",
     "hypothesis>=6.90",
     "rich>=13.0",
     "numba>=0.59",

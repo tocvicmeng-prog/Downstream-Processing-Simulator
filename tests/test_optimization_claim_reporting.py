@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from dpsim.datatypes import OptimizationState
 from dpsim.optimization.analysis import (
@@ -6,6 +7,8 @@ from dpsim.optimization.analysis import (
     pareto_candidate_rankings,
     pareto_claims_export,
     pareto_decision_claims,
+    physical_recipe_rows_from_search_space,
+    physical_recipe_values_from_search_space,
     wetlab_actionability_score,
 )
 
@@ -87,3 +90,47 @@ def test_inverse_design_quality_label_blocks_weak_posteriors():
     assert inverse_design_quality_label(n_measurements=3, ess=200.0).startswith("advisory")
     assert inverse_design_quality_label(n_measurements=10, ess=20.0) == "advisory_low_ess"
     assert inverse_design_quality_label(n_measurements=10, ess=200.0) == "calibration_supported"
+
+
+def test_physical_recipe_rows_convert_search_space_to_bench_settings():
+    x_ss = np.array([
+        np.log10(8000.0),
+        np.log10(20.0),
+        0.7,
+        353.15,
+        np.log10(0.1),
+        np.log10(2.5),
+        np.log10(7200.0),
+    ])
+
+    rows = physical_recipe_rows_from_search_space(
+        x_ss,
+        evidence_tier="calibrated_local",
+        pressure_status="feasible",
+        actionability_gaps=(),
+    )
+    by_setting = {row["setting"]: row for row in rows}
+
+    assert by_setting["Actionability"]["value"] == "actionable"
+    assert by_setting["Emulsification speed"]["value"] == "8000"
+    assert by_setting["Oil temperature"]["value"] == "80.0"
+    assert by_setting["Cooling rate"]["value"] == "6.00"
+    assert by_setting["Crosslink time"]["value"] == "2.0"
+
+
+def test_physical_recipe_values_include_recipe_apply_units():
+    x_ss = np.array([
+        np.log10(8000.0),
+        np.log10(19.72),
+        0.7,
+        353.15,
+        np.log10(0.1),
+        np.log10(2.5),
+        np.log10(7200.0),
+    ])
+
+    values = physical_recipe_values_from_search_space(x_ss)
+
+    assert values["span80_vol_pct"] == pytest.approx(2.0)
+    assert values["cooling_rate_K_s"] == pytest.approx(0.1)
+    assert values["crosslink_time_s"] == pytest.approx(7200.0)

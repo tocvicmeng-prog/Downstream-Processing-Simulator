@@ -28,10 +28,10 @@ from dpsim.core.mobile_phase import MobilePhase
 
 
 _SECTION_NAMES: tuple[str, ...] = (
-    "Forward MC",
-    "Inverse posterior",
-    "Multi-column series",
-    "Wet-lab ingestion",
+    "Uncertainty MC",
+    "Inverse calibration",
+    "Series design",
+    "Wet-lab calibration",
 )
 _SECTION_KEYS: tuple[str, ...] = (
     "forward_mc",
@@ -100,10 +100,11 @@ def render_tab_calibration() -> None:
     """
     st.header("Calibration & Uncertainty")
     st.caption(
-        "Forward Monte Carlo, inverse Bayesian inference, multi-column "
-        "series, and wet-lab calibration ingestion. The bands in this "
-        "tab respect ADR-010 §Tier mapping — they stay SEMI_QUANTITATIVE "
-        "until the wet-lab YAML handshake promotes them."
+        "Calibration data, uncertainty propagation, inverse posterior "
+        "fitting, and design-time series checks. The bands in this tab "
+        "respect ADR-010 §Tier mapping — they stay SEMI_QUANTITATIVE "
+        "until the wet-lab YAML handshake promotes them. Series design "
+        "is labelled separately because it is not itself a calibration task."
     )
 
     # Honour the M3 next-step jump flag (one-shot).
