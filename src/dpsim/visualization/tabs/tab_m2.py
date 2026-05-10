@@ -741,8 +741,40 @@ def render_tab_m2(tab_container, _smgr) -> None:
                 )
                 _mc1, _mc2, _mc3 = st.columns(3)
                 _mc1.metric("Steps Executed", len(_m2.modification_history))
-                _mc2.metric("G_DN Updated", f"{_m2.G_DN_updated / 1000:.1f} kPa")
-                _mc3.metric("E* Updated", f"{_m2.E_star_updated / 1000:.1f} kPa")
+                # B-1o / W-046 (v0.8.3): tier-gate G_DN / E* moduli through
+                # render_metric. Tier comes from the FunctionalMicrosphere's
+                # model_manifest; falls through to SEMI_QUANTITATIVE when
+                # the manifest is absent (defensive — no wire-up for the
+                # legacy "no-manifest" path).
+                from dpsim.core.decision_grade import OutputType as _OT_m2
+                from dpsim.datatypes import ModelEvidenceTier as _MET_m2
+                from dpsim.visualization.decision_grade_render import (
+                    render_metric as _rm_m2,
+                )
+
+                _m2_manifest = getattr(_m2, "model_manifest", None)
+                _m2_tier = (
+                    getattr(_m2_manifest, "evidence_tier", None)
+                    or _MET_m2.SEMI_QUANTITATIVE
+                )
+                _rm_m2(
+                    "G_DN Updated",
+                    value=_m2.G_DN_updated,
+                    output_type=_OT_m2.MODULUS,
+                    tier=_m2_tier,
+                    unit="kPa",
+                    scale=1.0 / 1000.0,
+                    container=_mc2,
+                )
+                _rm_m2(
+                    "E* Updated",
+                    value=_m2.E_star_updated,
+                    output_type=_OT_m2.MODULUS,
+                    tier=_m2_tier,
+                    unit="kPa",
+                    scale=1.0 / 1000.0,
+                    container=_mc3,
+                )
 
                 st.divider()
 
