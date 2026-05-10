@@ -1,5 +1,61 @@
 # Changelog
 
+## v0.8.4 — UI completeness against the v0.8.3 backend (2026-05-10)
+
+Closes 13/13 work-plan items from `docs/update_workplan_2026-05-10_v0_8_4.md` — the UI-completeness pass that closes the gap between the v0.7 → v0.8.3 backend and the Streamlit dashboard. Driven by the joint `/scientific-advisor` + `/architect` + `/dev-orchestrator` engagement (audit + decomposition + work plan in `docs/handover/`). Patch bump per the project versioning policy.
+
+### Closed — Tier 0 (B-0i)
+
+- **B-0i (W-051, W-052) — Decision-grade extension + AST gate.** Three new `OutputType` members: `MC_PROBABILITY` (SEMI_QUANTITATIVE floor — for `p_blocker` / `p_warning`), `POSTERIOR_PARAMETER` (SEMI_QUANTITATIVE per ADR-010 §"Tier mapping"), `ESS` (QUALITATIVE_TREND floor; always renders NUMBER as a diagnostic). AST scanner (`tests/test_v9_3_enum_comparison_enforcement.py`) extended to enforce `.value` comparisons on `IsothermChoice` and `OutputType`.
+
+### Closed — Tier 1 (B-1p, B-1q, B-1r)
+
+- **B-1p (W-053, W-054) — Mobile-phase widget + lifecycle override.** New `panels/mobile_phase.py` with 5-field T_C / c_NaCl / glycerol / ethanol / μ-override editor whose slider domains mirror `core/viscosity.py::resolve_mobile_phase_viscosity` `valid_domain`. `lifecycle/orchestrator.py:781` now accepts an optional `MobilePhase` override; default `MobilePhase()` preserves v0.7 backwards compatibility. Resolves audit defect **C1** (the headline UX defect — pre-flight envelope was silently using PBS defaults).
+- **B-1q (W-055, W-056) — Isotherm selector + `plots_m2.py` tier-gating.** New `panels/isotherm_selector.py` ships an `IsothermChoice` enum with 5 members and family-aware default routing — Protein A workflows default to bare Langmuir; IEX-flagged hints default to `SaltModulatedLangmuir`; IMAC hints default to `ImidazoleModulatedLangmuir`. Five conditional sub-forms expose the parameter set per choice. `plots_m2.plot_surface_area_comparison` gains a `tier=` kwarg that routes the trust badge through `render_decision_grade_annotation`. Resolves **C2** + **C8**.
+- **B-1r (W-057, W-058) — Calibration ingestion panel + tier banner.** New `tabs/calibration/wetlab_ingestion.py` provides a clearly-labelled "Upload wet-lab calibration campaign (YAML)" uploader with parse + tier-promotion preview before any commit. New `shell/tier_banner.py` renders a persistent banner at the top of every stage with three semantic states (GREEN at calibrated_local+ AND calibration loaded; AMBER at semi_quantitative; RED at qualitative_trend or below). Resolves **C6** + **W-1**.
+
+### Closed — Tier 2 (B-2s KEYSTONE, B-2t, B-2u)
+
+- **B-2s (W-059, W-060) — KEYSTONE: `tab_calibration` + forward MC + inverse Bayesian.** New `tabs/tab_calibration.py` hosts a Calibration & Uncertainty stage with four sub-tabs. **Forward MC panel** (`tabs/calibration/forward_mc.py`) exposes `monte_carlo_pressure_envelope` with n_samples / seed / prior-mode controls and a 3-band `p_blocker` advisory chip (GREEN < 0.01, AMBER 0.01–0.05, RED ≥ 0.05) honouring the README's pre-flight risk guardrail. **Inverse panel** (`tabs/calibration/inverse_inference.py`) provides a `MeasuredPressureFlowPoint` table editor, runs `infer_posterior_envelope`, surfaces ESS + `ess_warning` diagnostics, displays posterior parameter quantiles, and exposes a "Round-trip posterior log_cov into forward MC" button that closes the Bayesian loop. Resolves **C3** + **C4**.
+- **B-2t (W-061) — Multi-column series builder.** New `tabs/calibration/multi_column.py` provides a per-column `st.data_editor` (name, polymer_family, ColumnGeometry fields) plus default capture-and-polish rows. Runs `compute_multi_column_envelope`; result panel surfaces series Q_max / headroom / decision_tier with the bottleneck column highlighted in the per-column table. Resolves **C5**.
+- **B-2u (W-062, W-063) — RecoveryAction timeline + next-step affordance.** `tab_m3_monitor.py` extended with a per-rule `RecoveryAction` timeline ribbon under the existing trace plot — chips coloured by state, hover-text shows triggered rule + recovery action, with a rule-frequency expander listing each rule's count. New `components/next_step_affordance.py` renders a 3-button "Run forward MC / Fit posterior / Build series geometry" strip after the lifecycle completes; each button writes `st.session_state["_jump_to_calibration_section"]` honoured by the calibration tab's dispatcher (one-shot read-and-clear). Resolves **C9** + **W-2**.
+
+### Verification
+
+- **130+ new tests** across the seven batches; **104/104 visualization tests pass** in the v0.8.4-relevant scope plus the existing AST gate.
+- ruff: clean across all changed paths.
+- mypy: 0 issues on new source files.
+- AST gate: extended to cover `IsothermChoice` + `OutputType`; **0 violations**.
+
+### Validation gates closed in this release
+
+10 new gates (28–37) close the v0.8.4 audit defects:
+
+- **28** Mobile-phase composition reachable from UI (B-1p).
+- **29** Isotherm selector covers all 5 v0.8.x adapters (B-1q).
+- **30** Forward MC `p_blocker` advisory chip surfaces (B-2s).
+- **31** Inverse Bayesian inference reachable with log_cov round-trip (B-2s).
+- **32** Multi-column series envelope reachable (B-2t).
+- **33** Calibration-store ingestion has clearly-labelled UI path (B-1r).
+- **34** SEMI_QUANTITATIVE banner surfaces tier state at every stage (B-1r).
+- **35** RecoveryAction timeline surfaces per-rule history (B-2u).
+- **36** `plots_m2.py` surface-area chart routes through tier policy (B-1q).
+- **37** Post-lifecycle "what's next" affordance surfaces 3 buttons (B-2u).
+
+### Public-communication framing
+
+> v0.8.4 ships as **"UI-completeness-closed against the v0.8.3 backend"**. Every scientifically meaningful capability shipped in the v0.7.0 → v0.8.3 cluster is now reachable from the dashboard. The README's central editorial promise — *screen → calibrate → tighten* — becomes operationally testable from the dashboard for the first time. Tier promotion to `CALIBRATED_LOCAL` remains a wet-lab-driven path; v0.8.4 ships the *machinery* but not the wet-lab handshake. The v0.9 maturity plateau is now defined exclusively by the three hardware/physics deferrals: live AKTA UNICORN socket (ADR-008), cyclic SMB dynamics (ADR-009), and MCMC inverse inference (ADR-010).
+
+### Detailed handover
+
+- `docs/handover/HANDOVER_v0_8_4_release.md` — combined release-level handover continuing the v0.8.2/0.8.3 consolidation pattern. Per-batch handover detail consolidated for the same-day patch cluster.
+
+### Architecture decisions
+
+No new ADRs introduced. The seven batches collectively respect ADR-001 through ADR-011; no architectural decisions opened or closed in this release. The joint engagement produced two new audit/architecture docs:
+- `docs/handover/AUDIT_v0_8_3_ui_completeness.md` (Phase 1, /scientific-advisor)
+- `docs/handover/ARCH_v0_8_3_ui_decomposition.md` (Phase 2, /architect)
+
 ## v0.8.3 — Pure-coding open work close (post-v0.8.2) (2026-05-10)
 
 Closes 5/5 work-plan items from `docs/update_workplan_2026-05-10_v0_8_3.md` — the residual pure-coding items from the v0.8.2 cumulative open list. Hardware-bound (AKTA UNICORN) and physics-deep (cyclic SMB) items remain v0.9 candidates per ADR-008 / ADR-009; wet-lab K_geom / ν calibration stays user-side. Patch bump per the project versioning policy.
