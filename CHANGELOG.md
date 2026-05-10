@@ -1,5 +1,63 @@
 # Changelog
 
+## v0.8.2 — Cumulative open-future-work close (2026-05-10)
+
+Closes 10/10 code-work items from `docs/update_workplan_2026-05-10_v0_8_2.md` — the cumulative open list inherited via the v0.8.1 release handover. The 11th item (wet-lab K_geom / ν calibration) is explicitly user-side and is NOT a v0.8.2 deliverable. Patch bump per the project versioning policy; v0.9 stays available for a matured-status plateau.
+
+Four new ADRs land alongside the code: ADR-006 (full SMA promotion path), ADR-007 (forward MC Bayesian envelope), ADR-008 (monitor source abstraction), ADR-009 (multi-column series scope vs cyclic SMB).
+
+### Closed — Tier 0 + Tier 1 (B-0g … B-1n)
+
+- **B-0g (W-036) — Pre-existing `confidence_tier` test stale-field fix.** v0.5.0 (D2) removed the legacy `confidence_tier: str` side-channel from `FunctionalMediaContract`'s public surface. The test at `test_breakthrough_inherits_fmc_qualitative_tier` was using the stale kwarg; removed it. The typed `model_manifest.evidence_tier` chain remains the source of truth for FMC evidence.
+- **B-1ℓ (W-037) — M1 plot tier-gating extension.** `plot_droplet_size_distribution` gains an optional `tier=` kwarg; when set, the d32 / d50 vertical-line annotations route through `render_decision_grade_annotation` from v0.8.1. `tier=None` preserves legacy formatting bit-for-bit. 4 new tests.
+- **B-1m (W-038) — IMAC imidazole-modulated Langmuir adapter.** New `module3_performance/isotherms/imidazole_dependent.py` mirrors W-034's `SaltModulatedLangmuir` for IMAC screening. Defaults: n=1.5 (mid-range His6 on Ni-NTA), c_imidazole_ref=50 mM. Routes `process_state["imidazole"]` through the existing `EquilibriumAdapter`. 21 new tests.
+- **B-1n (W-039) — Full SMA promotion adapter + ADR-006.** New `module3_performance/isotherms/sma_modulated.py` ships `SaltModulatedSMA` — the swap-in promotion target for `SaltModulatedLangmuir` documented in ADR-005. Same `equilibrium_loading(C, c_salt_mol_m3)` signature; internally invokes the full SMA fixed-point on q_salt. ADR-006 documents the per-rhs cost vs precision tradeoff (5–20× cost, captures saturation + steric shielding). 16 new tests.
+
+### Closed — Tier 2 (B-2k … B-2n)
+
+- **B-2k (W-040) — Multi-step pressure feasibility.** `PressureFeasibilityContext` gains an optional `step_program` field — a tuple of `PressureStep` instances each carrying (name, Q, mobile_phase). When supplied, `pressure_feasible` screens the candidate against every step's envelope and reports ALL step-level violations (not just the first). Single-step legacy v0.8.0 behaviour preserved exactly when `step_program=None`. 7 new tests.
+- **B-2ℓ (W-041) — Channeling auto-recovery action routing.** New `RecoveryAction` enum with seven members (NONE / CONTINUE_MONITOR / REDUCE_FLOW / SWITCH_TO_WASH / STOP_AND_REPACK / EMERGENCY_STOP / OPERATOR_REVIEW) plus `_RULE_TO_ACTION` mapping. `PressureMonitorOutput` and `ReplaySummary` gain a structured `recovery_action` field; the streaming UI's status panel now surfaces an action chip alongside the rule name. Sentinel test asserts every `PressureMonitorRule` has a non-NONE action mapping. 6 new tests.
+- **B-2m (W-042) — Multi-component competitive IEX salt modulation.** New `module3_performance/isotherms/competitive_salt_dependent.py` ships `SaltModulatedCompetitiveLangmuir` — the multi-component analogue of `SaltModulatedLangmuir`. Per-component characteristic-charge ν_i array; the salt-modulated K_L_i propagates through the shared competitive-Langmuir denominator, reproducing the textbook IEX displacement-train ordering. 13 new tests.
+- **B-2n (W-043) — Forward Monte Carlo Bayesian envelope wrapper + ADR-007.** New `module3_performance/pressure_envelope_mc.py` ships `monte_carlo_pressure_envelope` — lognormal multiplicative priors on K_geom (σ_log=0.20), μ (0.05), G_DN (0.30); n=500 default draws; aggregates to P05/P50/P95 of Q_max / dP_predicted / dP_max_operational / headroom_ratio plus tail probabilities (`p_blocker`, `p_warning`). MC bands stay SEMI_QUANTITATIVE per ADR-007 — they reflect priors, not measured posteriors. Inverse Bayesian inference deferred to v0.9. 9 new tests.
+
+### Closed — Tier 3 (B-3g + B-3h)
+
+- **B-3g (W-044) — Monitor source abstraction + simulator backend + ADR-008.** New `module3_performance/monitor_source.py` defines a `MonitorSource` typing.Protocol with three concrete backends: `CSVReplayMonitorSource`, `SimulatedMonitorSource` (synthetic ramp + linear fouling slope + Gaussian noise; deterministic via seed), and `NullMonitorSource`. ADR-008 documents the protocol and the deferred `UnicornSocketMonitorSource` (live AKTA UNICORN bridge — explicit v0.9 deliverable, requires hardware access). 15 new tests.
+- **B-3h (W-045) — Multi-column series envelope + ADR-009.** New `module3_performance/multi_column.py` ships `MultiColumnGeometry` and `compute_multi_column_envelope` with conservative aggregation rules: total ΔP sums in series; bottleneck column sets Q_max; worst column drives headroom; weakest tier rolls up; valid-domain violations are prefixed. ADR-009 documents the series scope and the deferred cyclic SMB physics (port valves, multi-bed displacement coupling — v0.9 candidate). 14 new tests.
+
+### Verification
+
+- 130+ new tests across the 10 work items; 100% pass.
+- ruff + mypy clean on all new source files.
+- AST gate: no new `is` / `is not` comparisons against managed enums.
+
+### Validation gates closed in this release
+
+- **Gate 14:** M1 plot annotations carry tier labels (B-1ℓ).
+- **Gate 15:** IMAC imidazole-driven elution is physics-aware (B-1m).
+- **Gate 16:** Full SMA promotion path is reachable from one constructor (B-1n + ADR-006).
+- **Gate 17:** BO can drop candidates infeasible at any step in the recipe (B-2k).
+- **Gate 18:** Streaming monitor outputs structured recovery actions (B-2ℓ).
+- **Gate 19:** Multi-component competitive IEX consumes salt envelope (B-2m).
+- **Gate 20:** Pressure envelope ships P05/P50/P95 uncertainty bands (B-2n + ADR-007).
+- **Gate 21:** Monitor source is hardware-agnostic (B-3g + ADR-008). UNICORN hardware bridge is the binding-open part — v0.9 candidate.
+- **Gate 22:** Multi-column series operations have an envelope (B-3h + ADR-009). Cyclic SMB dynamics is the binding-open part — v0.9 candidate.
+
+### Public-communication framing
+
+> v0.8.2 closes the cumulative open code work from the v0.8.1 release handover. Four new ADRs document the bounded-scope decisions (full SMA, MC propagation, monitor abstraction, multi-column series); two of those (monitor and multi-column) explicitly defer the **hardware-side** / **physics-side** binding-open parts to v0.9. Wet-lab K_geom / ν calibration remains user-side and is not a code deliverable. None of the new modules ship at higher than `SEMI_QUANTITATIVE` tier without user-supplied calibration.
+
+### Detailed handover
+
+- `docs/handover/HANDOVER_v0_8_2_release.md` — single combined release-level handover summarising every batch; per-batch detail consolidated to keep handover surface manageable across the rapid 0.7 / 0.8 / 0.8.1 / 0.8.2 same-day patch cluster.
+
+### Architecture decisions
+
+- `docs/decisions/ADR-006-full-sma-promotion-path.md`
+- `docs/decisions/ADR-007-mc-pressure-envelope.md`
+- `docs/decisions/ADR-008-monitor-source-abstraction.md`
+- `docs/decisions/ADR-009-multi-column-series.md`
+
 ## v0.8.1 — Salt-aware elution + plotly annotation tier-gating (2026-05-10)
 
 Closes 2/2 work-plan items from `docs/update_workplan_2026-05-10_v0_8_1.md` — the long-deferred "future scientific scope" items from the 2026-05-04 incremental-close handover. Patch bump per the project's versioning policy: minor bumps reserved for matured-status milestones; v0.9 stays available for a meaningful plateau.

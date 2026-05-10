@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import sys
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 # Supported Python range. Mirrors pyproject.toml's `requires-python` and
 # docs/decisions/ADR-001. Two-tuple (major, minor); upper bound exclusive.
