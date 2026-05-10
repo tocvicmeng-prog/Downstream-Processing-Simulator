@@ -179,7 +179,7 @@ class TestSweptVolume:
     def test_stirrer_A(self):
         sA = StirrerGeometry.pitched_blade_A()
         V = swept_volume(sA)
-        expected = np.pi / 4 * 0.059**2 * 0.010
+        expected = np.pi / 4 * 0.059**2 * 0.0085
         assert V == pytest.approx(expected, rel=1e-6)
         assert V < 0.0005  # must be less than tank volume
 

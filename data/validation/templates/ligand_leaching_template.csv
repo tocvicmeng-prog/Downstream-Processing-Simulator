@@ -1,0 +1,2 @@
+assay_id,sample_id,target_molecule,polymer_family,mobile_phase,pH,temperature_C,salt_type,salt_concentration_M,replicate,value,unit,LOD,LOQ,instrument,operator,notebook_ref,notes,cycle_number,storage_time_d
+LEACH-001,SAMPLE-001,IgG,agarose_chitosan,load_buffer,7.0,25.0,NaCl,0.15,1,0.005,1,0.001,0.003,ELISA,operator,NB-001,,10,7

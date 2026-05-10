@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from dpsim.datatypes import ModelEvidenceTier
-from dpsim.visualization.shell.tier_banner import render_tier_banner
+from dpsim.visualization.shell.tier_banner import (
+    derive_weakest_tier_for_banner,
+    render_tier_banner,
+)
 
 
 class _StubContainer:
@@ -31,6 +34,34 @@ class _StubContainer:
 
     def caption(self, t: str) -> None:
         self.captions.append(t)
+
+
+class _LifecycleWithProperty:
+    @property
+    def weakest_evidence_tier(self):
+        return ModelEvidenceTier.QUALITATIVE_TREND
+
+
+class _Graph:
+    def weakest_evidence_tier(self):
+        return ModelEvidenceTier.UNSUPPORTED
+
+
+class _LifecycleWithGraph:
+    graph = _Graph()
+
+
+class TestTierDerivation:
+    def test_prefers_lifecycle_property(self):
+        tier = derive_weakest_tier_for_banner(_LifecycleWithProperty())
+        assert tier == ModelEvidenceTier.QUALITATIVE_TREND
+
+    def test_falls_back_to_graph_method(self):
+        tier = derive_weakest_tier_for_banner(_LifecycleWithGraph())
+        assert tier == ModelEvidenceTier.UNSUPPORTED
+
+    def test_unknown_result_returns_none(self):
+        assert derive_weakest_tier_for_banner(object()) is None
 
 
 class TestDefaultPath:

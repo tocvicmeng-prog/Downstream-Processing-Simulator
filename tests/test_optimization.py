@@ -1,14 +1,22 @@
 """Tests for the optimisation engine."""
 
+import importlib.util
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
 
 from dpsim.datatypes import SimulationParameters
 from dpsim.optimization.objectives import (
     PARAM_BOUNDS,
     PARAM_NAMES,
     LOG_SCALE_INDICES,
+)
+
+
+_HAS_OPTIMIZATION_STACK = all(
+    importlib.util.find_spec(name) is not None
+    for name in ("torch", "botorch", "gpytorch")
 )
 
 
@@ -47,6 +55,10 @@ class TestSearchSpace:
         assert x_ss[2] == pytest.approx(0.7)
 
 
+@pytest.mark.skipif(
+    not _HAS_OPTIMIZATION_STACK,
+    reason="requires dpsim[optimization]",
+)
 class TestOptimizationEngine:
     def test_engine_initializes(self):
         from dpsim.optimization.engine import OptimizationEngine

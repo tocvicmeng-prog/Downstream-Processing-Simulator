@@ -10,6 +10,7 @@ from dpsim.core.decision_grade import OutputType, RenderMode
 from dpsim.datatypes import ModelEvidenceTier
 from dpsim.visualization.decision_grade_render import (
     caption_for_mode,
+    format_decision_claim,
     format_decision_graded,
     gate_decision_for,
     render_metric,
@@ -73,6 +74,39 @@ class TestFormatDecisionGraded:
         )
         assert mode == RenderMode.NUMBER
         assert "100" in display
+
+
+class TestFormatDecisionClaim:
+    def test_claim_carries_policy_floor_and_render_mode(self):
+        claim = format_decision_claim(
+            value=42.0,
+            output_type=OutputType.DBC,
+            tier=ModelEvidenceTier.CALIBRATED_LOCAL,
+            name="DBC10",
+            unit="mg/mL",
+            valid_domain_status="inside",
+            calibration_ref="assay-001",
+            assay_required="DBC breakthrough",
+        )
+        assert claim.name == "DBC10"
+        assert claim.required_tier == ModelEvidenceTier.VALIDATED_QUANTITATIVE
+        assert claim.render_mode == RenderMode.INTERVAL
+        assert claim.valid_domain_status == "inside"
+        assert claim.calibration_ref == "assay-001"
+        assert claim.assay_required == "DBC breakthrough"
+        assert claim.claim_allowed is True
+        assert claim.display.endswith("mg/mL")
+        assert claim.to_dict()["render_mode"] == "interval"
+
+    def test_claim_disallows_suppressed_value(self):
+        claim = format_decision_claim(
+            value=42.0,
+            output_type=OutputType.DBC,
+            tier=ModelEvidenceTier.QUALITATIVE_TREND,
+        )
+        assert claim.render_mode == RenderMode.SUPPRESS
+        assert claim.claim_allowed is False
+        assert "too weak" in claim.reason.lower()
 
 
 # ─── Captions ────────────────────────────────────────────────────────────────

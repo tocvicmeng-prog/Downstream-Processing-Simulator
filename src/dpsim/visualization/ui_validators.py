@@ -48,9 +48,10 @@ class ValidationResult:
 
 # Step types supported by M2.
 _M2_SUPPORTED_STEP_TYPES = {
-    "secondary_crosslinking", "activation",
+    "secondary_crosslinking", "activation", "acs_conversion",
     "ligand_coupling", "protein_coupling", "quenching",
-    "spacer_arm", "metal_charging", "protein_pretreatment", "washing",
+    "spacer_arm", "arm_activation", "metal_charging",
+    "protein_pretreatment", "washing",
 }
 
 # Temperature above which standard agarose gel re-melts [Celsius].

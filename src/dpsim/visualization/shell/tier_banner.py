@@ -57,6 +57,29 @@ _TIER_PROMOTION_HINTS: dict[str, str] = {
 }
 
 
+def derive_weakest_tier_for_banner(lifecycle_result: Any) -> Optional[ModelEvidenceTier]:
+    """Return the lifecycle's weakest evidence tier for the persistent banner.
+
+    ``DownstreamLifecycleResult`` is the canonical source of truth because its
+    graph carries all M1/M2/M3 model manifests. Older app glue tried to infer
+    the tier from stage attribute names and silently missed current lifecycle
+    fields such as ``m2_microsphere`` and ``m3_method``.
+    """
+    if lifecycle_result is None:
+        return None
+
+    tier = getattr(lifecycle_result, "weakest_evidence_tier", None)
+    if tier is not None:
+        return tier
+
+    graph = getattr(lifecycle_result, "graph", None)
+    weakest = getattr(graph, "weakest_evidence_tier", None)
+    if callable(weakest):
+        return weakest()
+
+    return None
+
+
 def render_tier_banner(
     *,
     container: Any = None,
@@ -141,4 +164,4 @@ def render_tier_banner(
         target.caption(f":material/upgrade: {promo_hint}")
 
 
-__all__ = ["render_tier_banner"]
+__all__ = ["derive_weakest_tier_for_banner", "render_tier_banner"]

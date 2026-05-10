@@ -691,6 +691,80 @@ FAMILY_REAGENT_MATRIX: tuple[FamilyReagentEntry, ...] = (
         PolymerFamily.STARCH, "stmp_secondary", "compatible",
         "STMP phosphate-crosslinks starch -OH; standard food-grade modification.",
     ),
+    # v9.5 multi-variant composite promotions. These entries keep the
+    # canonical G4 guardrail total over all UI-enabled families.
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "ech_activation", "qualitative_only",
+        "ECH can target chitosan -OH/-NH2 in the PEC; pectin -COOH is inert.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "dvs_activation", "qualitative_only",
+        "DVS targets chitosan -OH/-NH2 and residual pectin -OH; mixed selectivity.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "edc_nhs_activation", "compatible",
+        "EDC/NHS targets pectin -COOH and can couple to chitosan amines or ligand amines.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "genipin_secondary", "compatible",
+        "Genipin crosslinks the chitosan amine fraction in the PEC network.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "glutaraldehyde_secondary", "compatible",
+        "Glutaraldehyde crosslinks chitosan primary amines; pectin is a passive PEC partner.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PECTIN_CHITOSAN, "stmp_secondary", "qualitative_only",
+        "STMP can target chitosan/pectin -OH groups; less canonical than amine crosslinking.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "ech_activation", "qualitative_only",
+        "ECH can target gellan -OH; alginate -COOH is inert and dilutes the surface.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "dvs_activation", "qualitative_only",
+        "DVS can target gellan -OH; alginate contributes mostly ionic gelation and -COOH.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "edc_nhs_activation", "compatible",
+        "EDC/NHS targets alginate and gellan carboxylates; ligand coupling is chemically plausible.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "genipin_secondary", "incompatible",
+        "Gellan-alginate composites have no primary amines for genipin.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "glutaraldehyde_secondary", "incompatible",
+        "Gellan-alginate composites have no primary amines for glutaraldehyde.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.GELLAN_ALGINATE, "stmp_secondary", "qualitative_only",
+        "STMP can target gellan -OH; ionic gelation remains the dominant network.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "ech_activation", "compatible",
+        "Both glucan layers are -OH-rich and compatible with ECH activation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "dvs_activation", "compatible",
+        "Both glucan layers expose -OH groups for DVS activation under alkaline conditions.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "edc_nhs_activation", "incompatible",
+        "Pullulan-dextran has no native -COOH for EDC/NHS activation.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "genipin_secondary", "incompatible",
+        "Pullulan-dextran has no primary amines for genipin.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "glutaraldehyde_secondary", "incompatible",
+        "Pullulan-dextran has no primary amines for glutaraldehyde.",
+    ),
+    FamilyReagentEntry(
+        PolymerFamily.PULLULAN_DEXTRAN, "stmp_secondary", "compatible",
+        "Both glucan layers are -OH-rich and compatible with STMP phosphate crosslinking.",
+    ),
 
     # ═══════════════════════════════════════════════════════════════════
     # v0.5.0 — ACS Converter × Family compatibility (closes G4 gap 3).

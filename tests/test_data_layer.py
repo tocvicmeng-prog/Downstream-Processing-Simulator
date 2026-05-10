@@ -106,11 +106,12 @@ class TestStirrerGeometry:
         assert s.stirrer_type == StirrerType.PITCHED_BLADE
         assert s.impeller_diameter == pytest.approx(0.059, abs=1e-6)  # 59 mm
         assert s.shaft_diameter == pytest.approx(0.008, abs=1e-6)     # 8 mm
+        assert s.blade_count == 19
         assert s.blade_thickness == pytest.approx(0.001, abs=1e-6)    # 1 mm
-        assert s.blade_height == pytest.approx(0.010, abs=1e-6)       # 10 mm
+        assert s.blade_height == pytest.approx(0.0085, abs=1e-6)      # 8.5 mm
         assert s.blade_length == pytest.approx(0.009, abs=1e-6)       # 9 mm
         assert s.blade_angle == pytest.approx(10.0)
-        assert s.max_rpm == pytest.approx(2000.0)
+        assert s.max_rpm == pytest.approx(2500.0)
         assert s.has_stator is False
 
     def test_rotor_stator_B_dimensions(self):
@@ -136,8 +137,8 @@ class TestStirrerGeometry:
 
     def test_tip_speed(self):
         s = StirrerGeometry.pitched_blade_A()
-        # v_tip = π × 0.059 × 2000/60 ≈ 6.18 m/s
-        assert s.tip_speed == pytest.approx(6.18, rel=0.01)
+        # v_tip = pi * 0.059 * 2500/60 ≈ 7.72 m/s
+        assert s.tip_speed == pytest.approx(7.72, rel=0.01)
 
     def test_gap_width_stirrer_B(self):
         s = StirrerGeometry.rotor_stator_B()

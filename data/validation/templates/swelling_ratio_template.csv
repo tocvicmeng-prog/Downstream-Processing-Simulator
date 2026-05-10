@@ -1,0 +1,2 @@
+assay_id,sample_id,target_molecule,polymer_family,mobile_phase,pH,temperature_C,salt_type,salt_concentration_M,replicate,value,unit,LOD,LOQ,instrument,operator,notebook_ref,notes,dry_mass_mg,wet_mass_mg,equilibration_time_h
+SWELL-001,SAMPLE-001,IgG,agarose_chitosan,load_buffer,7.0,25.0,NaCl,0.15,1,2.5,1,,,balance,operator,NB-001,,10.0,25.0,16.0

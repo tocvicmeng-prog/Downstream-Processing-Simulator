@@ -182,6 +182,7 @@ class ProcessDossier:
 
     # Calibration consumed
     calibration_entries: list[dict] = field(default_factory=list)
+    decision_claims: list[dict] = field(default_factory=list)
 
     # Validation outcomes
     validation_blockers: list[dict] = field(default_factory=list)
@@ -251,6 +252,7 @@ class ProcessDossier:
             result_graph=list(d.get("result_graph", [])),
             manifests=list(d.get("manifests", [])),
             calibration_entries=list(d.get("calibration_entries", [])),
+            decision_claims=list(d.get("decision_claims", [])),
             validation_blockers=list(d.get("validation_blockers", [])),
             validation_warnings=list(d.get("validation_warnings", [])),
             git_commit=str(d.get("git_commit", "")),
@@ -282,6 +284,7 @@ def build_dossier(
     result_graph: Optional[list[dict]] = None,
     manifests: Optional[list[dict]] = None,
     calibration_entries: Optional[list[dict]] = None,
+    decision_claims: Optional[list[dict]] = None,
     validation_blockers: Optional[list[dict]] = None,
     validation_warnings: Optional[list[dict]] = None,
     smoke_status: str = "not_run",
@@ -308,6 +311,7 @@ def build_dossier(
         result_graph=list(result_graph or []),
         manifests=list(manifests or []),
         calibration_entries=cal,
+        decision_claims=list(decision_claims or []),
         validation_blockers=list(validation_blockers or []),
         validation_warnings=list(validation_warnings or []),
         git_commit=get_git_commit_short(repo_root),

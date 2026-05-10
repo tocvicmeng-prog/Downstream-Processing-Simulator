@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import platform
 import sys
+import hashlib
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -168,6 +169,8 @@ class ProcessDossier:
     timestamp_utc: str
     full_result: Any                        # FullResult (typed loosely to avoid circular import)
     calibration_entries: list[dict] = field(default_factory=list)
+    calibration_store_hash: str = ""
+    decision_claims: list[dict] = field(default_factory=list)
     assay_records: list[dict] = field(default_factory=list)
     target_profile: Optional[TargetProductProfile] = None
     environment: dict = field(default_factory=dict)
@@ -185,6 +188,7 @@ class ProcessDossier:
         target_profile: Optional[Any] = None,
         notes: str = "",
         mc_bands: Any = None,
+        decision_claims: Optional[list] = None,
     ) -> "ProcessDossier":
         # ``target_profile`` is typed as Optional[Any] rather than
         # ``Optional[TargetProductProfile]`` because the lifecycle
@@ -206,6 +210,20 @@ class ProcessDossier:
             for entry in getattr(calibration_store, "entries", []):
                 if hasattr(entry, "to_dict"):
                     cal_entries.append(entry.to_dict())
+            if hasattr(calibration_store, "content_hash"):
+                cal_hash = calibration_store.content_hash()
+            else:
+                cal_hash = _hash_calibration_entries(cal_entries)
+        else:
+            cal_hash = _hash_calibration_entries(cal_entries)
+
+        claim_dicts: list[dict] = []
+        if decision_claims:
+            for claim in decision_claims:
+                if hasattr(claim, "to_dict"):
+                    claim_dicts.append(claim.to_dict())
+                elif isinstance(claim, dict):
+                    claim_dicts.append(dict(claim))
 
         records_dicts: list[dict] = []
         if assay_records:
@@ -222,6 +240,8 @@ class ProcessDossier:
             timestamp_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             full_result=full_result,
             calibration_entries=cal_entries,
+            calibration_store_hash=cal_hash,
+            decision_claims=claim_dicts,
             assay_records=records_dicts,
             target_profile=target_profile,
             environment=_capture_environment(),
@@ -292,6 +312,8 @@ class ProcessDossier:
             "result_summary": result_summary,
             "run_report": run_report_dict,
             "calibration_entries": self.calibration_entries,
+            "calibration_store_hash": self.calibration_store_hash,
+            "decision_claims": self.decision_claims,
             "assay_records": self.assay_records,
             "target_profile": (
                 asdict(self.target_profile) if self.target_profile else None
@@ -309,3 +331,18 @@ class ProcessDossier:
             json.dump(self.to_json_dict(), f, indent=2, default=str)
         return path
 
+
+def _hash_calibration_entries(entries: list[dict]) -> str:
+    blob = json.dumps(
+        sorted(
+            entries,
+            key=lambda entry: (
+                str(entry.get("profile_key", "")),
+                str(entry.get("parameter_name", "")),
+                str(entry.get("target_module", "")),
+            ),
+        ),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()

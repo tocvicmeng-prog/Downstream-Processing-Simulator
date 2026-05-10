@@ -26,6 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+base = []
 # Pinned 2026-04-19 per ADR-002 (M4 v9.1.0). Verified runtime stack: torch
 # 2.11.0+cpu / botorch 0.17.2 / gpytorch 1.15.2 on Py 3.12. Allow patch updates
 # only; minor bumps require re-verifying FastNondominatedPartitioning duck-typing.
@@ -50,7 +51,9 @@ dev = [
 # them; bayesian_fit.fit_langmuir_posterior raises PymcNotInstalledError
 # with the install command when called without this extra.
 bayesian = ["pymc>=5.0", "arviz>=0.17"]
-all = ["downstream-processing-simulator[optimization,interactive,dev,ui,bayesian]"]
+# Spreadsheet ingestion / export support used by wet-lab calibration workflows.
+spreadsheet = ["pandas>=2.2", "openpyxl>=3.1"]
+all = ["downstream-processing-simulator[optimization,interactive,dev,ui,bayesian,spreadsheet]"]
 
 [project.scripts]
 dpsim = "dpsim.__main__:main"

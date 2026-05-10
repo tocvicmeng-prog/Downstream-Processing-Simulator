@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 import pytest
 
@@ -82,6 +83,52 @@ def _calibrated_fmc():
     return _FMC()
 
 
+def _fake_method_result(**kwargs):
+    fmc_manifest = getattr(getattr(kwargs.get("fmc"), "model_manifest", None), "evidence_tier", None)
+    fmc_calibration = getattr(getattr(kwargs.get("fmc"), "model_manifest", None), "calibration_ref", "")
+    tier = fmc_manifest or ModelEvidenceTier.SEMI_QUANTITATIVE
+    mass_balance_error = 1.0e-12
+    if int(kwargs.get("n_z", 0)) <= 3:
+        tier = ModelEvidenceTier.QUALITATIVE_TREND
+        mass_balance_error = 0.10
+    column = kwargs["column"]
+    bead_um = float(column.particle_diameter) * 1e6
+    return SimpleNamespace(
+        method_steps=list(kwargs.get("method_steps", [])),
+        step_results=[],
+        load_breakthrough=SimpleNamespace(
+            dbc_10pct=100.0 + bead_um,
+            mass_balance_error=mass_balance_error,
+        ),
+        loaded_elution=None,
+        operability=SimpleNamespace(
+            pressure_drop_Pa=10_000.0 + bead_um,
+            bed_compression_fraction=0.01,
+        ),
+        model_manifest=ModelManifest(
+            model_name="M3.method.fake",
+            evidence_tier=tier,
+            calibration_ref=fmc_calibration,
+            assumptions=["fast test double for M3 method aggregation"],
+            diagnostics={"mass_balance_error": mass_balance_error},
+        ),
+        assumptions=[],
+        wet_lab_caveats=[],
+    )
+
+
+def _fake_gradient_elution(**_kwargs):
+    return SimpleNamespace(
+        peaks=[SimpleNamespace(t_peak=1.0, area=1.0)],
+        mass_balance_errors=[1.0e-12],
+        model_manifest=ModelManifest(
+            model_name="M3.gradient.fake",
+            evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+            assumptions=["fast test double for gradient aggregation"],
+        ),
+    )
+
+
 # ─── Default fixture ─────────────────────────────────────────────────────────
 
 
@@ -91,6 +138,24 @@ def default_recipe():
     recipe = default_affinity_media_recipe()
     resolved = resolve_lifecycle_inputs(recipe)
     return performance_recipe_from_resolved(resolved)
+
+
+@pytest.fixture(autouse=True)
+def _fast_m3_method_solver(monkeypatch):
+    """Keep aggregation tests off the expensive loaded-state elution solver."""
+
+    import dpsim.module3_performance.method_simulation as method_simulation
+
+    monkeypatch.setattr(
+        method_simulation,
+        "run_chromatography_method",
+        _fake_method_result,
+    )
+    monkeypatch.setattr(
+        method_simulation,
+        "run_gradient_elution",
+        _fake_gradient_elution,
+    )
 
 
 # ─── M2-T01 — d50 path with FMC tier inheritance ─────────────────────────────

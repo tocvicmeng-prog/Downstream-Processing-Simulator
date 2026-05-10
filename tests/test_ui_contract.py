@@ -117,7 +117,7 @@ class TestOutputMetadata:
     def test_prebuilt_m2_acs_meta(self):
         assert M2_ACS_META.source_module == "M2"
         assert M2_ACS_META.confidence == ConfidenceLevel.LOW
-        assert "All 9 backend step types" in M2_ACS_META.validity_range
+        assert "All 11 backend step types" in M2_ACS_META.validity_range
 
     def test_prebuilt_mass_balance_meta_high(self):
         assert M3_MASS_BALANCE_META.confidence == ConfidenceLevel.HIGH

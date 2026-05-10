@@ -149,6 +149,17 @@ _TIER2_PREVIEW_ROWS: list[tuple[str, str]] = [
     ("Trivalent Al³⁺ gelant — non-biotherapeutic flag",
      "v9.4 Tier-3 implemented behind biotherapeutic_safe=False gate; "
      "documented here for awareness."),
+    ("Formaldehyde hardening — Tier-4 REJECTED",
+     "Tier-4 rejected crosslinker: residual-formaldehyde and protein-"
+     "compatibility risks are unacceptable for the intended downstream "
+     "biotherapeutic workflow; not implemented."),
+    ("Polyacrylamide base matrix — deferred non-biotherapeutic preview",
+     "v9.5+ deferred synthetic-polymer family. Useful in analytical gels, "
+     "but not selectable here until residual monomer, ligand leaching, and "
+     "biotherapeutic extractables gates are defined."),
+    ("Silica or glass bead base matrix — deferred non-biotherapeutic preview",
+     "v9.5+ deferred inorganic support. Requires a separate silanization, "
+     "dissolution/leachables, and pressure-fracture model before use."),
     ("Reversible borate-cis-diol crosslinking (borax) — REVERSIBILITY WARNING",
      "Implemented as a freestanding ion gelant (v9.4 Tier-3) and as a "
      "ReagentProfile (borax_reversible_crosslinking) for use as a "
@@ -158,6 +169,10 @@ _TIER2_PREVIEW_ROWS: list[tuple[str, str]] = [
      "a chromatography matrix — the network would dissociate under "
      "normal elution. Always pair with a covalent secondary crosslink "
      "(BDDE / ECH) before downstream packing."),
+    ("Acrylamide-bisacrylamide crosslinker — Tier-4 REJECTED",
+     "Tier-4 rejected for this simulator scope: radical polymerization, "
+     "residual acrylamide toxicity, and non-polysaccharide network physics "
+     "would require a separate validated model family."),
 ]
 
 
@@ -265,4 +280,3 @@ def render_family_selector(*, key: str = "m1v9_polymer_family") -> FamilyContext
             st.markdown(f"- **{row_name}** — {row_help}")
 
     return FamilyContext(family=family, display_name=sel_name)
-

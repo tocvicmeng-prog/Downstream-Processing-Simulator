@@ -181,9 +181,9 @@ class TestV9_3_Tier2ReagentProfiles:
         rp = REAGENT_PROFILES["hrp_h2o2_tyramine"]
         assert rp.target_acs.value == ACSSiteType.PHENOL_TYRAMINE.value
 
-    def test_pyridyl_disulfide_produces_thiol_acs(self):
+    def test_pyridyl_disulfide_reduction_produces_thiol_acs(self):
         from dpsim.module2_functionalization.acs import ACSSiteType
-        rp = REAGENT_PROFILES["pyridyl_disulfide_activation"]
+        rp = REAGENT_PROFILES["pyridyl_disulfide_reduction_to_thiol"]
         assert rp.product_acs.value == ACSSiteType.THIOL.value
 
     def test_tresyl_produces_sulfonate_leaving_acs(self):

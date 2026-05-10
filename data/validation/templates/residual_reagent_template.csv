@@ -1,0 +1,2 @@
+assay_id,sample_id,target_molecule,polymer_family,mobile_phase,pH,temperature_C,salt_type,salt_concentration_M,replicate,value,unit,LOD,LOQ,instrument,operator,notebook_ref,notes,reagent_key,wash_cycle
+RES-001,SAMPLE-001,IgG,agarose_chitosan,wash_buffer,7.0,25.0,NaCl,0.15,1,0.01,mol/m3,0.001,0.003,HPLC,operator,NB-001,,cnbr_activation,3

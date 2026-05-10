@@ -1,0 +1,2 @@
+assay_id,sample_id,target_molecule,polymer_family,mobile_phase,pH,temperature_C,salt_type,salt_concentration_M,replicate,value,unit,LOD,LOQ,instrument,operator,notebook_ref,notes,ligand_name,assay_method,bead_area_m2
+LIG-001,SAMPLE-001,IgG,agarose_chitosan,coupling_buffer,8.5,25.0,NaCl,0.15,1,1.0e-6,mol/m2,,,colorimetric,operator,NB-001,,Protein A,BCA_depletion,1.0

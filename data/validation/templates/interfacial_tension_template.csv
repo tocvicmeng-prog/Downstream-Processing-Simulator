@@ -1,0 +1,2 @@
+assay_id,sample_id,target_molecule,polymer_family,mobile_phase,pH,temperature_C,salt_type,salt_concentration_M,replicate,value,unit,LOD,LOQ,instrument,operator,notebook_ref,notes,oil_phase,surfactant_kg_m3,aqueous_polymer_kg_m3
+IFT-001,SAMPLE-001,IgG,agarose_chitosan,aqueous_phase,7.0,90.0,NaCl,0.0,1,0.012,N/m,,,pendant_drop,operator,NB-001,,paraffin,20.0,60.0

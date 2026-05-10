@@ -1,0 +1,2 @@
+assay_id,sample_id,target_molecule,polymer_family,mobile_phase,pH,temperature_C,salt_type,salt_concentration_M,replicate,value,unit,LOD,LOQ,instrument,operator,notebook_ref,notes,ligand_name,reference_activity
+ACT-001,SAMPLE-001,IgG,agarose_chitosan,load_buffer,7.0,25.0,NaCl,0.15,1,0.8,1,,,plate_reader,operator,NB-001,,Protein A,free_ligand_control

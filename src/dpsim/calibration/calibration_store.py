@@ -8,6 +8,7 @@ to FunctionalMediaContract, logging every override for transparency
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -181,6 +182,24 @@ class CalibrationStore:
         """All stored entries (read-only view)."""
         return list(self._entries)
 
+    def to_dict_list(self) -> list[dict]:
+        """All entries as deterministic JSON-ready dictionaries."""
+        return [entry.to_dict() for entry in self._entries]
+
+    def content_hash(self) -> str:
+        """Deterministic SHA-256 hash of calibration entries."""
+        entries = sorted(
+            self.to_dict_list(),
+            key=lambda entry: (
+                str(entry.get("profile_key", "")),
+                str(entry.get("parameter_name", "")),
+                str(entry.get("target_module", "")),
+                str(entry.get("source_reference", "")),
+            ),
+        )
+        blob = json.dumps(entries, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
     def __len__(self) -> int:
         return len(self._entries)
 
@@ -353,4 +372,3 @@ class CalibrationStore:
     def has_calibration_for(self, target_module: str) -> bool:
         """Return True if any calibration entries target this module."""
         return any(e.target_module == target_module for e in self._entries)
-

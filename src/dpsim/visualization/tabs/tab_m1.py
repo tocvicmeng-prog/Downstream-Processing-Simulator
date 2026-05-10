@@ -460,6 +460,7 @@ def render_tab_m1(
     """
     from dpsim.visualization.tabs.m1.hardware_section import render_hardware_mode_radio
     from dpsim.visualization.tabs.m1.family_selector import render_family_selector
+    from dpsim.visualization.panels.family_support import render_family_support_panel
     from dpsim.datatypes import PolymerFamily as _PF
 
     with tab_container:
@@ -482,6 +483,8 @@ def render_tab_m1(
             )
             _family_ctx = render_family_selector()
         _family = _family_ctx.family
+        with st.expander("Family model support", expanded=False):
+            render_family_support_panel(_family)
 
         # v9.0 M5-M7: dispatch non-A+C families to the family-specific runner.
         # Compare by .value (string), not enum identity — app.py reloads
@@ -1544,4 +1547,3 @@ def render_tab_m1(
                 "(K_L, \u0393\u221e), chitosan viscosity (\u03b7_intr), breakage dynamics (C3), "
                 "pore structure (empirical coefficients), and IPN mechanics (\u03b7_coupling)."
             )
-

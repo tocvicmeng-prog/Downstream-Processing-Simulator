@@ -1,8 +1,11 @@
 # DPSim — Current Support Matrix
 
-**Version:** v0.6.5 (post-Tier 2 working tree, 2026-05-04)
+**Version:** v0.8.9 (post-audit implementation baseline, 2026-05-10)
 **Maintainer:** `/architect`
 **Updated by:** any PR that materially changes a feature's support status
+
+**Authoritative runtime vocabulary:** `dpsim.core.support_status.SupportStatus`<br>
+**Family support registry:** `dpsim.core.family_support.FAMILY_SUPPORT_REGISTRY`
 
 This document is the **single source of truth** for what DPSim currently
 claims to support, at what level of evidence, and where each claim is
@@ -18,10 +21,10 @@ ledger.
 | Status | Meaning |
 |---|---|
 | **live** | Production-use ready; calibrated against the relevant analogue OR validated by a wet-lab dataset for the in-tree default recipe. Outputs renderable as numbers under the B-1b `decision_grade` policy without intervention. |
-| **screening** | Implementation correct, but uncalibrated; outputs are reliable as **trends and rankings** only. UI / report layer should render as INTERVAL or RANK_BAND per the B-1b policy. Default tier for v0.6.x. |
+| **screening** | Implementation correct, but uncalibrated; outputs are reliable as **trends and rankings** only. UI / report layer should render as INTERVAL or RANK_BAND per the B-1b policy. Default tier for uncalibrated current-release paths. |
 | **requires calibration** | Implementation correct; specifically blocked from quantitative use until paired with a wet-lab dataset (e.g., M3 DBC / cycle-life claims, ligand-density / coupling-yield numbers). Render-path will SUPPRESS or RANK_BAND until calibration is loaded. |
 | **scaffolded** | Module / API exists but the underlying physics or data path is incomplete. Useful for development and integration tests; not for production claims. |
-| **deferred** | Designed but intentionally not implemented in v0.6.x. Tracked under a `W-NNN` ID in `docs/update_workplan_2026-05-04.md`. |
+| **deferred** | Designed but intentionally not implemented in the current release line. Track in `docs/development_plan_from_audit_2026-05-10.md`, relevant ADRs, or a dated `docs/update_workplan_*.md`. |
 | **rejected** | Considered and explicitly out of scope for the current architecture (e.g., new polymer families, alternative isotherm formulations). Reopen via a new ADR if the constraint changes. |
 
 ---
@@ -107,13 +110,13 @@ ledger.
 
 ---
 
-## Deferred / rejected scope (explicit non-goals for v0.6.x)
+## Deferred / rejected scope (explicit non-goals for the current release line)
 
 | Item | Status | Reason |
 |---|---|---|
 | New polymer families beyond the 21 currently registered | rejected | Out of scope per work plan §7. Reopen via ADR if a target chemistry requires it. |
 | Isotherm physics beyond Langmuir + LRM + axial dispersion + film mass transfer | rejected | Same. M3 can render existing physics decision-grade; new physics demands a calibration campaign. |
-| Bayesian-fit gate semantics (R-hat / ESS / divergences) tightening | deferred | Audited only superficially in the v0.6.3 audits; tighter gate semantics are a Tier 3+ item. |
+| Bayesian-fit gate semantics (R-hat / ESS / divergences) tightening | deferred | Still requires tighter posterior-quality gate semantics before any quantitative wet-lab decision claim. |
 | Full `Quantity` adoption inside solver kernels | deferred | B-2c chose typed boundary helpers instead. Migration path is documented (`as_si_<quantity>_<unit>`). |
 | OpenFOAM end-to-end run on bench geometry | deferred | B-2b delivered the gating infrastructure. Running OpenFOAM requires user-side mesh + bench DSD data. |
 | `visualization/components/streamlit_components/` migration | deferred | These wrap a different Streamlit pattern (custom React component); not affected by the W-017 deprecation. Track separately if needed. |

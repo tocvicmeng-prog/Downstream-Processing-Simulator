@@ -6,7 +6,10 @@ and source reference (audit F2 requirement).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import hashlib
+import json
+from dataclasses import asdict, dataclass, field
+from typing import Any, Optional
 
 
 @dataclass
@@ -107,3 +110,72 @@ class CalibrationEntry:
             assay_quantitation_limit=float(d.get("assay_quantitation_limit", 0.0)),
         )
 
+
+@dataclass(frozen=True)
+class CalibrationDataset:
+    """A governed wet-lab assay dataset before fitting or tier promotion."""
+
+    dataset_id: str
+    assay_ids: tuple[str, ...]
+    assay_kind: str
+    target_molecule: str = ""
+    polymer_family: str = ""
+    mobile_phase: str = ""
+    temperature_C: Optional[float] = None
+    ph: Optional[float] = None
+    salt_concentration_M: Optional[float] = None
+    source_file: str = ""
+    quality_status: str = "unchecked"
+    issues: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["assay_ids"] = list(self.assay_ids)
+        data["issues"] = list(self.issues)
+        return data
+
+    @property
+    def content_hash(self) -> str:
+        blob = json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class CalibrationApplicability:
+    """Result of checking whether a calibration applies to a recipe context."""
+
+    applicable: bool
+    status: str
+    reasons: tuple[str, ...] = ()
+    matched_domain: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["reasons"] = list(self.reasons)
+        return data
+
+
+@dataclass(frozen=True)
+class CalibrationFit:
+    """First-class artifact emitted by calibration fitting workflows."""
+
+    fit_id: str
+    parameter_name: str
+    value: float
+    units: str
+    fit_method: str
+    source_assay_ids: tuple[str, ...]
+    diagnostics: dict[str, Any] = field(default_factory=dict)
+    valid_domain: dict[str, Any] = field(default_factory=dict)
+    posterior_uncertainty: float = 0.0
+    tier_promotion_recommendation: str = "none"
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["source_assay_ids"] = list(self.source_assay_ids)
+        return data
+
+    @property
+    def content_hash(self) -> str:
+        blob = json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()

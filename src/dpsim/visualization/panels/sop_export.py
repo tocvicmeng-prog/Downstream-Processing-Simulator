@@ -20,6 +20,10 @@ from typing import Any, Optional
 
 import streamlit as st
 
+from dpsim.core.decision_grade import OutputType
+from dpsim.core.qc_checkpoint import DEFAULT_QC_CHECKPOINTS
+from dpsim.visualization.decision_grade_render import format_decision_claim
+
 
 def _safe(value: Any, fmt: str = "{:.3g}") -> str:
     """Render a numeric or stringy value safely."""
@@ -47,7 +51,7 @@ def _build_sop_markdown() -> str:
     lines.append(
         f"**Generated:** {datetime.now(timezone.utc).isoformat()}  "
     )
-    lines.append("**Source:** DPSim v0.8.8 dashboard export  ")
+    lines.append("**Source:** DPSim v0.8.9 dashboard export  ")
     lines.append(
         "**Tier framing:** SEMI_QUANTITATIVE per ADR-007; promote to "
         "CALIBRATED_LOCAL via wet-lab handshake on the calibration store.  "
@@ -119,15 +123,59 @@ def _build_sop_markdown() -> str:
     lines.append("## 4. Pre-flight pressure envelope")
     lines.append("")
     if env is not None:
-        op_kpa = float(env.dP_max_operational_pa) / 1.0e3
-        pred_kpa = float(env.dP_predicted_pa) / 1.0e3
-        q_rec_ml = float(env.Q_recommended_m3_s) * 60.0 * 1.0e6
+        tier = env.decision_tier
+        op_claim = format_decision_claim(
+            float(env.dP_max_operational_pa),
+            OutputType.PRESSURE_LIMIT,
+            tier,
+            name="Operational pressure ceiling",
+            unit="kPa",
+            scale=1.0e-3,
+            valid_domain_status="inside" if not env.is_blocker else "blocker",
+            calibration_ref=getattr(env, "calibration_ref", ""),
+            assay_required="pressure-flow curve",
+        )
+        pred_claim = format_decision_claim(
+            float(env.dP_predicted_pa),
+            OutputType.PRESSURE_DROP,
+            tier,
+            name="Predicted pressure drop",
+            unit="kPa",
+            scale=1.0e-3,
+            valid_domain_status="inside" if not env.is_blocker else "blocker",
+            calibration_ref=getattr(env, "calibration_ref", ""),
+            assay_required="pressure-flow curve",
+        )
+        q_claim = format_decision_claim(
+            float(env.Q_recommended_m3_s),
+            OutputType.Q_MAX,
+            tier,
+            name="Recommended flow",
+            unit="mL/min",
+            scale=60.0e6,
+            valid_domain_status="inside" if not env.is_blocker else "blocker",
+            calibration_ref=getattr(env, "calibration_ref", ""),
+            assay_required="pressure-flow curve",
+        )
+        headroom_claim = format_decision_claim(
+            float(env.headroom_ratio),
+            OutputType.PRESSURE_HEADROOM,
+            tier,
+            name="Headroom ratio",
+            unit="",
+            valid_domain_status="inside" if not env.is_blocker else "blocker",
+            calibration_ref=getattr(env, "calibration_ref", ""),
+            assay_required="pressure-flow curve",
+        )
         lines.append(
-            f"- **Operational ceiling**: {op_kpa:.1f} kPa  "
-            f"(tier `{env.decision_tier.value}`)\n"
-            f"- **Predicted ΔP at Q_set**: {pred_kpa:.1f} kPa  \n"
-            f"- **Q_recommended (50 % headroom)**: {q_rec_ml:.2f} mL/min  \n"
-            f"- **Headroom ratio (Q_set / Q_max)**: {env.headroom_ratio:.2f}  \n"
+            f"- **Operational ceiling**: {op_claim.display} "
+            f"(`{op_claim.render_mode.value}`, tier `{tier.value}`)\n"
+            f"- **Predicted pressure drop at Q_set**: {pred_claim.display} "
+            f"(`{pred_claim.render_mode.value}`)\n"
+            f"- **Q_recommended (50 % headroom)**: {q_claim.display} "
+            f"(`{q_claim.render_mode.value}`)\n"
+            f"- **Headroom ratio (Q_set / Q_max)**: {headroom_claim.display} "
+            f"(`{headroom_claim.render_mode.value}`)\n"
         )
         if env.is_blocker:
             lines.append("")
@@ -156,8 +204,10 @@ def _build_sop_markdown() -> str:
     lines.append("")
     if cal_store is not None and getattr(cal_store, "entries", None):
         n_entries = len(cal_store.entries)
+        cal_hash = cal_store.content_hash() if hasattr(cal_store, "content_hash") else "unavailable"
         lines.append(
             f"**Calibration store loaded:** {n_entries} entry(ies). "
+            f"Store hash: `{cal_hash}`. "
             "Outputs claiming CALIBRATED_LOCAL or above must reference "
             "an entry in this store."
         )
@@ -170,8 +220,20 @@ def _build_sop_markdown() -> str:
         )
     lines.append("")
 
+    # ── QC checkpoints ───────────────────────────────────────────────
+    lines.append("## 6. QC checkpoints and assay links")
+    lines.append("")
+    lines.append("| Checkpoint | Stage | Required assay | Status |")
+    lines.append("|---|---|---|---|")
+    for checkpoint in DEFAULT_QC_CHECKPOINTS:
+        lines.append(
+            f"| `{checkpoint.kind.value}` | {checkpoint.stage} | "
+            f"{checkpoint.required_assay_kind} | {checkpoint.status} |"
+        )
+    lines.append("")
+
     # ── Bench procedure ─────────────────────────────────────────────
-    lines.append("## 6. Bench procedure")
+    lines.append("## 7. Bench procedure")
     lines.append("")
     lines.append(
         "1. **Pack column** to the geometry above (column ID, bed "

@@ -21,6 +21,7 @@ from .process_recipe import (
     ProcessRecipe,
     ProcessStep,
     ProcessStepKind,
+    StepExecutionMetadata,
     TargetProductProfile,
     default_affinity_media_recipe,
 )
@@ -165,7 +166,7 @@ def process_recipe_to_toml(recipe: ProcessRecipe) -> str:
     for step in recipe.steps:
         lines.extend(["", "[[steps]]"])
         step_data = _step_to_dict(step)
-        _write_scalar_fields(lines, step_data, exclude={"parameters"})
+        _write_scalar_fields(lines, step_data, exclude={"parameters", "execution"})
         primitive_params = {
             key: param_value
             for key, param_value in step.parameters.items()
@@ -179,6 +180,19 @@ def process_recipe_to_toml(recipe: ProcessRecipe) -> str:
                 _write_quantity_section(
                     lines, ("steps", "parameters", key), param_value
                 )
+        execution = step_data.get("execution", {})
+        if execution:
+            acceptance = execution.get("acceptance_criteria", {})
+            scalar_execution = {
+                key: value for key, value in execution.items()
+                if key != "acceptance_criteria"
+            }
+            if any(value for value in scalar_execution.values()):
+                lines.extend(["", "[steps.execution]"])
+                _write_scalar_fields(lines, scalar_execution)
+            if acceptance:
+                lines.extend(["", "[steps.execution.acceptance_criteria]"])
+                _write_scalar_fields(lines, acceptance)
 
     return "\n".join(lines).rstrip() + "\n"
 
@@ -368,6 +382,7 @@ def _step_to_dict(step: ProcessStep) -> dict[str, Any]:
         },
         "notes": step.notes,
         "qc_required": list(step.qc_required),
+        "execution": _execution_to_dict(step.execution),
     }
 
 
@@ -382,6 +397,39 @@ def _step_from_dict(data: dict[str, Any]) -> ProcessStep:
         },
         notes=str(data.get("notes", "")),
         qc_required=[str(item) for item in data.get("qc_required", [])],
+        execution=_execution_from_dict(data.get("execution", {})),
+    )
+
+
+def _execution_to_dict(execution: StepExecutionMetadata) -> dict[str, Any]:
+    return {
+        "material_lot": execution.material_lot,
+        "sample_id": execution.sample_id,
+        "operator": execution.operator,
+        "instrument_id": execution.instrument_id,
+        "acceptance_criteria": dict(execution.acceptance_criteria),
+        "qc_assay_link": execution.qc_assay_link,
+        "fraction_id": execution.fraction_id,
+        "hazard_note": execution.hazard_note,
+        "stop_go_condition": execution.stop_go_condition,
+    }
+
+
+def _execution_from_dict(data: dict[str, Any]) -> StepExecutionMetadata:
+    data = dict(data or {})
+    return StepExecutionMetadata(
+        material_lot=str(data.get("material_lot", "")),
+        sample_id=str(data.get("sample_id", "")),
+        operator=str(data.get("operator", "")),
+        instrument_id=str(data.get("instrument_id", "")),
+        acceptance_criteria={
+            str(key): str(value)
+            for key, value in data.get("acceptance_criteria", {}).items()
+        },
+        qc_assay_link=str(data.get("qc_assay_link", "")),
+        fraction_id=str(data.get("fraction_id", "")),
+        hazard_note=str(data.get("hazard_note", "")),
+        stop_go_condition=str(data.get("stop_go_condition", "")),
     )
 
 

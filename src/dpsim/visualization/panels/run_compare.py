@@ -20,6 +20,10 @@ from typing import Any, Optional
 
 import streamlit as st
 
+from dpsim.core.decision_grade import OutputType
+from dpsim.datatypes import ModelEvidenceTier
+from dpsim.visualization.decision_grade_render import format_decision_claim
+
 
 _HISTORY_KEY = "run_history"
 _MAX_SNAPSHOTS = 10
@@ -56,6 +60,40 @@ def _build_snapshot_for_current_run() -> Optional[dict[str, Any]]:
             env.decision_tier.value
             if hasattr(env.decision_tier, "value") else str(env.decision_tier)
         )
+    tier = _snapshot_tier(env)
+    claims = []
+    if bt is not None:
+        for name, attr in (
+            ("DBC5", "dbc_5pct"),
+            ("DBC10", "dbc_10pct"),
+            ("DBC50", "dbc_50pct"),
+        ):
+            value = getattr(bt, attr, None)
+            if value is not None:
+                claims.append(
+                    format_decision_claim(
+                        float(value),
+                        OutputType.DBC,
+                        tier,
+                        name=name,
+                        unit="mol/m3",
+                        assay_required="DBC breakthrough",
+                    ).to_dict()
+                )
+    if env is not None:
+        claims.append(
+            format_decision_claim(
+                float(env.dP_predicted_pa),
+                OutputType.PRESSURE_DROP,
+                tier,
+                name="Predicted pressure drop",
+                unit="kPa",
+                scale=1.0e-3,
+                assay_required="pressure-flow curve",
+            ).to_dict()
+        )
+    if claims:
+        snap["decision_claims"] = claims
     if iso is not None:
         snap["isotherm"] = (
             iso.choice.value
@@ -66,6 +104,18 @@ def _build_snapshot_for_current_run() -> Optional[dict[str, Any]]:
         snap["c_nacl_M"] = float(getattr(mp, "c_nacl_M", 0.0))
     snap["flow_ml_min"] = float(st.session_state.get("m3_flow", 0.0))
     return snap
+
+
+def _snapshot_tier(env: Any) -> ModelEvidenceTier:
+    if env is None:
+        return ModelEvidenceTier.SEMI_QUANTITATIVE
+    tier = getattr(env, "decision_tier", ModelEvidenceTier.SEMI_QUANTITATIVE)
+    if isinstance(tier, ModelEvidenceTier):
+        return tier
+    try:
+        return ModelEvidenceTier(str(tier))
+    except ValueError:
+        return ModelEvidenceTier.SEMI_QUANTITATIVE
 
 
 def render_run_compare_panel(*, container: Optional[Any] = None) -> None:

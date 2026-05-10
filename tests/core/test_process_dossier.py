@@ -82,6 +82,13 @@ class TestBuilder:
             calibration_entries=[
                 {"profile_key": "p", "parameter_name": "q", "measured_value": 1.0}
             ],
+            decision_claims=[
+                {
+                    "name": "DBC10",
+                    "render_mode": "interval",
+                    "evidence_tier": "calibrated_local",
+                }
+            ],
             validation_blockers=[{"code": "FP_X", "severity": "blocker"}],
             validation_warnings=[{"code": "FP_Y", "severity": "warning"}],
             smoke_status="pass",
@@ -93,6 +100,7 @@ class TestBuilder:
         assert dossier.smoke_status == "pass"
         assert dossier.notes == "hello"
         assert len(dossier.calibration_entries) == 1
+        assert dossier.decision_claims[0]["name"] == "DBC10"
         assert len(dossier.validation_blockers) == 1
         assert len(dossier.validation_warnings) == 1
 
@@ -113,12 +121,14 @@ class TestSerialisation:
             calibration_entries=[
                 {"profile_key": "p", "parameter_name": "q", "measured_value": 1.0}
             ],
+            decision_claims=[{"name": "pressure", "render_mode": "number"}],
         )
         recovered = ProcessDossier.from_dict(dossier.to_dict())
         assert recovered.recipe_toml == dossier.recipe_toml
         assert recovered.recipe_hash == dossier.recipe_hash
         assert recovered.calibration_store_hash == dossier.calibration_store_hash
         assert recovered.calibration_entries == dossier.calibration_entries
+        assert recovered.decision_claims == dossier.decision_claims
         assert recovered.dpsim_version == dossier.dpsim_version
 
     def test_json_round_trip(self):

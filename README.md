@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Python 3.11–3.12](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB.svg)](docs/decisions/ADR-001-python-version-policy.md)
-[![Version 0.8.3](https://img.shields.io/badge/Version-0.8.3-2DD4BF.svg)](CHANGELOG.md)
+[![Version 0.8.9](https://img.shields.io/badge/Version-0.8.9-2DD4BF.svg)](CHANGELOG.md)
 [![Win11 x64](https://img.shields.io/badge/Installer-Win11%20x64-0078D4.svg)](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
 [![ADRs: 11](https://img.shields.io/badge/ADRs-11-7C3AED.svg)](docs/decisions/)
 [![Tests: 800+](https://img.shields.io/badge/Tests-800%2B-22C55E.svg)](tests/)
@@ -296,7 +296,7 @@ DPSim ships three installation paths.
 
 ### One-click Windows installer (recommended for end-users)
 
-> [**Releases → DPSim-0.8.3-Setup.exe**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
+> [**Releases → DPSim-0.8.9-Setup.exe**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
 
 Built with Inno Setup. Per-user install (no admin required). Double-click the `.exe` and the installer:
 
@@ -311,7 +311,7 @@ The installer registers an uninstaller in Add/Remove Programs.
 
 ### Portable ZIP (no installation)
 
-> [**Releases → DPSim-0.8.3-Windows-x64-portable.zip**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
+> [**Releases → DPSim-0.8.9-Windows-x64-portable.zip**](https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator/releases/latest)
 
 Extract anywhere (`D:\Apps\DPSim`, `%USERPROFILE%\DPSim`, a USB stick — wherever). Run `install.bat` once to provision the venv and pip-install the bundled wheel; subsequent invocations of `launch_ui.bat` skip straight to the dashboard. No registry footprint, no Start-Menu entry, no admin elevation. Uninstall by deleting the folder.
 
@@ -938,7 +938,7 @@ Pinned versions are in `pyproject.toml`.
 If you use DPSim in published work, please cite:
 
 ```
-Holocyte Pty Ltd. (2026). DPSim — Downstream Processing Simulator (v0.8.3).
+Holocyte Pty Ltd. (2026). DPSim — Downstream Processing Simulator (v0.8.9).
 GNU General Public License v3.0.
 https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator
 ```
@@ -950,7 +950,7 @@ https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator
   author       = {{Holocyte Pty Ltd}},
   title        = {{DPSim} --- {Downstream Processing Simulator}},
   year         = {2026},
-  version      = {v0.8.3},
+  version      = {v0.8.9},
   url          = {https://github.com/tocvicmeng-prog/Downstream-Processing-Simulator},
   license      = {GPL-3.0-or-later},
   note         = {Polysaccharide-microsphere fabrication, functionalisation,

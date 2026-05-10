@@ -21,6 +21,8 @@ import pytest
 from dpsim.calibration.calibration_data import CalibrationEntry
 from dpsim.calibration.calibration_store import CalibrationStore
 from dpsim.config import load_config
+from dpsim.core.decision_grade import OutputType, make_decision_claim
+from dpsim.datatypes import ModelEvidenceTier
 from dpsim.pipeline.orchestrator import PipelineOrchestrator
 from dpsim.process_dossier import ProcessDossier, TargetProductProfile
 
@@ -59,6 +61,7 @@ def test_calibration_snapshot(smoke_result):
     ))
     dossier = ProcessDossier.from_run(smoke_result, calibration_store=store)
     assert len(dossier.calibration_entries) == 1
+    assert dossier.calibration_store_hash == store.content_hash()
     e = dossier.calibration_entries[0]
     assert e["parameter_name"] == "breakage_C1"
     assert e["measured_value"] == 1.2
@@ -69,6 +72,20 @@ def test_calibration_snapshot(smoke_result):
         units="-", confidence="low", source_reference="z", target_module="L1",
     ))
     assert len(dossier.calibration_entries) == 1
+
+
+def test_decision_claims_snapshot(smoke_result):
+    claim = make_decision_claim(
+        42.0,
+        OutputType.DBC,
+        ModelEvidenceTier.CALIBRATED_LOCAL,
+        name="DBC10",
+        unit="mg/mL",
+    )
+    dossier = ProcessDossier.from_run(smoke_result, decision_claims=[claim])
+    exported = dossier.to_json_dict()
+    assert exported["decision_claims"][0]["name"] == "DBC10"
+    assert exported["decision_claims"][0]["render_mode"] == "interval"
 
 
 def test_target_profile_round_trip(smoke_result, tmp_path):

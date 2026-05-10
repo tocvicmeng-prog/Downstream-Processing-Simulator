@@ -33,11 +33,11 @@ from typing import Optional
 
 import streamlit as st
 
+from dpsim.core.decision_claim import DecisionClaim, make_decision_claim
 from dpsim.core.decision_grade import (
     OutputType,
     RenderMode,
     decide_render_mode,
-    render_value,
 )
 from dpsim.datatypes import ModelEvidenceTier
 
@@ -65,13 +65,47 @@ def format_decision_graded(
     Returns ``(mode, display_string)`` so callers can branch on the mode
     if needed (e.g., add an "interval" caption only when degraded).
     """
-    scaled = float(value) * float(scale)
-    rv = render_value(
-        scaled, output_type, tier,
+    claim = format_decision_claim(
+        value,
+        output_type,
+        tier,
         unit=unit,
+        scale=scale,
         rank_reference=rank_reference,
     )
-    return rv.mode, rv.display
+    return claim.render_mode, claim.display
+
+
+def format_decision_claim(
+    value: float,
+    output_type: OutputType,
+    tier: ModelEvidenceTier,
+    *,
+    name: str = "",
+    unit: str = "",
+    scale: float = 1.0,
+    rank_reference: Optional[float] = None,
+    valid_domain_status: str = "unknown",
+    uncertainty_interval: Optional[tuple[float, float]] = None,
+    calibration_ref: str = "",
+    assay_required: str = "",
+    reason: str = "",
+) -> DecisionClaim:
+    """Return the structured decision claim for a displayed value."""
+    return make_decision_claim(
+        value,
+        output_type,
+        tier,
+        name=name,
+        unit=unit,
+        scale=scale,
+        rank_reference=rank_reference,
+        valid_domain_status=valid_domain_status,
+        uncertainty_interval=uncertainty_interval,
+        calibration_ref=calibration_ref,
+        assay_required=assay_required,
+        reason=reason,
+    )
 
 
 def caption_for_mode(mode: RenderMode) -> str:
@@ -259,6 +293,7 @@ def render_decision_grade_annotation(
 
 __all__ = [
     "caption_for_mode",
+    "format_decision_claim",
     "format_decision_graded",
     "gate_decision_for",
     "render_decision_grade_annotation",

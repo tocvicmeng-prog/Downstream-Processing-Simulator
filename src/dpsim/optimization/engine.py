@@ -14,22 +14,6 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-import torch
-from botorch.acquisition.multi_objective import (
-    qLogExpectedHypervolumeImprovement,
-)
-from botorch.models import SingleTaskGP
-from botorch.models.model_list_gp_regression import ModelListGP
-from botorch.models.transforms.outcome import Standardize
-from botorch.optim import optimize_acqf
-from botorch.utils.multi_objective.box_decompositions.non_dominated import (
-    FastNondominatedPartitioning,
-)
-from botorch.utils.multi_objective.pareto import is_non_dominated
-from botorch.utils.sampling import draw_sobol_samples
-from botorch.utils.transforms import normalize, unnormalize
-from gpytorch.mlls import ExactMarginalLogLikelihood
-from botorch.fit import fit_gpytorch_mll
 
 from ..datatypes import (
     FullResult,
@@ -52,10 +36,95 @@ from .objectives import (
 
 logger = logging.getLogger(__name__)
 
-# Reference point for hypervolume (worst acceptable objectives)
-REF_POINT = torch.tensor([5.0, 5.0, 3.0], dtype=torch.double)
+_OPTIMIZATION_EXTRA_MESSAGE = (
+    "The Bayesian optimization engine requires the optional optimization "
+    "stack. Install it with `pip install downstream-processing-simulator"
+    "[optimization]` or use the repo environment that includes torch, "
+    "botorch, and gpytorch."
+)
 
-_DTYPE = torch.double
+
+class OptimizationExtraNotInstalledError(ImportError):
+    """Raised when the optional BoTorch optimization stack is unavailable."""
+
+
+torch = None
+qLogExpectedHypervolumeImprovement = None
+SingleTaskGP = None
+ModelListGP = None
+Standardize = None
+optimize_acqf = None
+FastNondominatedPartitioning = None
+is_non_dominated = None
+draw_sobol_samples = None
+normalize = None
+unnormalize = None
+ExactMarginalLogLikelihood = None
+fit_gpytorch_mll = None
+_DTYPE = None
+REF_POINT = None
+
+
+def _ensure_optimization_stack() -> None:
+    """Load torch / BoTorch / GPyTorch only when the optimizer is used."""
+    global torch
+    global qLogExpectedHypervolumeImprovement
+    global SingleTaskGP
+    global ModelListGP
+    global Standardize
+    global optimize_acqf
+    global FastNondominatedPartitioning
+    global is_non_dominated
+    global draw_sobol_samples
+    global normalize
+    global unnormalize
+    global ExactMarginalLogLikelihood
+    global fit_gpytorch_mll
+    global _DTYPE
+    global REF_POINT
+
+    if torch is not None:
+        return
+
+    try:
+        import torch as _torch
+        from botorch.acquisition.multi_objective import (
+            qLogExpectedHypervolumeImprovement as _q_log_ehvi,
+        )
+        from botorch.fit import fit_gpytorch_mll as _fit_gpytorch_mll
+        from botorch.models import SingleTaskGP as _SingleTaskGP
+        from botorch.models.model_list_gp_regression import ModelListGP as _ModelListGP
+        from botorch.models.transforms.outcome import Standardize as _Standardize
+        from botorch.optim import optimize_acqf as _optimize_acqf
+        from botorch.utils.multi_objective.box_decompositions.non_dominated import (
+            FastNondominatedPartitioning as _FastNondominatedPartitioning,
+        )
+        from botorch.utils.multi_objective.pareto import (
+            is_non_dominated as _is_non_dominated,
+        )
+        from botorch.utils.sampling import draw_sobol_samples as _draw_sobol_samples
+        from botorch.utils.transforms import normalize as _normalize
+        from botorch.utils.transforms import unnormalize as _unnormalize
+        from gpytorch.mlls import ExactMarginalLogLikelihood as _ExactMarginalLogLikelihood
+    except ModuleNotFoundError as exc:
+        raise OptimizationExtraNotInstalledError(_OPTIMIZATION_EXTRA_MESSAGE) from exc
+
+    torch = _torch
+    qLogExpectedHypervolumeImprovement = _q_log_ehvi
+    SingleTaskGP = _SingleTaskGP
+    ModelListGP = _ModelListGP
+    Standardize = _Standardize
+    optimize_acqf = _optimize_acqf
+    FastNondominatedPartitioning = _FastNondominatedPartitioning
+    is_non_dominated = _is_non_dominated
+    draw_sobol_samples = _draw_sobol_samples
+    normalize = _normalize
+    unnormalize = _unnormalize
+    ExactMarginalLogLikelihood = _ExactMarginalLogLikelihood
+    fit_gpytorch_mll = _fit_gpytorch_mll
+    _DTYPE = _torch.double
+    # Reference point for hypervolume (worst acceptable objectives).
+    REF_POINT = _torch.tensor([5.0, 5.0, 3.0], dtype=_DTYPE)
 
 
 def _log_indices_for_mode(mode: str = "rotor_stator_legacy") -> list[int]:
@@ -84,6 +153,7 @@ def _from_search_space(x_ss: np.ndarray, mode: str = "rotor_stator_legacy") -> n
 def _get_search_bounds(mode: str = "rotor_stator_legacy",
                        stirrer_type: str = "pitched_blade") -> torch.Tensor:
     """Get parameter bounds in search space (2 x d)."""
+    _ensure_optimization_stack()
     bounds = get_param_bounds(mode, stirrer_type)
     for i in _log_indices_for_mode(mode):
         bounds[i, 0] = np.log10(bounds[i, 0])
@@ -111,6 +181,7 @@ def _x_to_params(x: np.ndarray, template: SimulationParameters) -> SimulationPar
 def _build_gp_models(X: torch.Tensor, Y: torch.Tensor,
                      bounds: torch.Tensor) -> ModelListGP:
     """Build independent GP models for each objective."""
+    _ensure_optimization_stack()
     X_norm = normalize(X, bounds)
     models = []
     for i in range(Y.shape[-1]):
@@ -162,6 +233,7 @@ class OptimizationEngine:
         against user targets, not the fixed legacy / stirred-vessel
         objectives).
         """
+        _ensure_optimization_stack()
         self.n_initial = n_initial
         self.max_iterations = max_iterations
         self.convergence_tol = convergence_tol
@@ -533,6 +605,13 @@ class OptimizationEngine:
 
     def _save_state(self, state: OptimizationState):
         """Save optimisation results to disk."""
+        try:
+            from .analysis import pareto_claims_export
+
+            pareto_claims = pareto_claims_export(state)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Pareto claim export failed: %s", exc)
+            pareto_claims = []
         out = {
             "n_evaluations": len(state.X_observed),
             "n_pareto": len(state.pareto_X),
@@ -546,6 +625,7 @@ class OptimizationEngine:
                 for x in state.pareto_X
             ],
             "pareto_evidence_tiers": list(state.pareto_evidence_tiers),
+            "pareto_decision_claims": pareto_claims,
         }
         with open(self.output_dir / "optimization_results.json", "w") as f:
             json.dump(out, f, indent=2)

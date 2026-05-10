@@ -19,6 +19,10 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
 
+pytest.importorskip("torch", reason="requires dpsim[optimization]")
+pytest.importorskip("botorch", reason="requires dpsim[optimization]")
+pytest.importorskip("gpytorch", reason="requires dpsim[optimization]")
+
 from dpsim.optimization.engine import OptimizationEngine
 from dpsim.optimization.objectives import TargetSpec
 from dpsim.runtime_paths import default_output_dir

@@ -120,6 +120,21 @@ class EquipmentProfile:
 
 
 @dataclass
+class StepExecutionMetadata:
+    """Wet-lab execution metadata for a recipe step."""
+
+    material_lot: str = ""
+    sample_id: str = ""
+    operator: str = ""
+    instrument_id: str = ""
+    acceptance_criteria: dict[str, str] = field(default_factory=dict)
+    qc_assay_link: str = ""
+    fraction_id: str = ""
+    hazard_note: str = ""
+    stop_go_condition: str = ""
+
+
+@dataclass
 class ProcessStep:
     """One operation in the lab-executable lifecycle recipe.
 
@@ -135,6 +150,7 @@ class ProcessStep:
     parameters: dict[str, Quantity | str | float | int] = field(default_factory=dict)
     notes: str = ""
     qc_required: list[str] = field(default_factory=list)
+    execution: StepExecutionMetadata = field(default_factory=StepExecutionMetadata)
 
 
 @dataclass

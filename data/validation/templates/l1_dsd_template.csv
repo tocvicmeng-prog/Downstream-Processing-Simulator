@@ -1,0 +1,2 @@
+assay_id,sample_id,target_molecule,polymer_family,mobile_phase,pH,temperature_C,salt_type,salt_concentration_M,replicate,value,unit,LOD,LOQ,instrument,operator,notebook_ref,notes,rpm,impeller_type,dispersed_phase_viscosity_Pa_s,d32_m,d10_m,d50_m,d90_m
+DSD-001,SAMPLE-001,IgG,agarose_chitosan,load_buffer,7.0,25.0,NaCl,0.15,1,100,um,,,laser_diffraction,operator,NB-001,,10000,rotor_stator_legacy,0.01,0.0001,0.00005,0.0001,0.0002

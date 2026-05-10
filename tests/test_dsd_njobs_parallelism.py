@@ -11,6 +11,7 @@ per-quantile full-method path can run in parallel.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -20,6 +21,7 @@ from dpsim.core.performance_recipe import (
     performance_recipe_from_resolved,
 )
 from dpsim.core.process_recipe import default_affinity_media_recipe
+from dpsim.datatypes import ModelEvidenceTier, ModelManifest
 from dpsim.lifecycle.recipe_resolver import resolve_lifecycle_inputs
 from dpsim.module3_performance.method_simulation import (
     _run_method_worker,
@@ -54,6 +56,63 @@ def _three_quantile_payload():
     )
 
 
+def _fake_method_result(**kwargs):
+    """Cheap ChromatographyMethodResult-shaped object for routing tests.
+
+    The real method path runs loaded-state elution through solve_ivp, which is
+    inappropriate for unit tests that only verify n_jobs dispatch mechanics.
+    """
+
+    column = kwargs["column"]
+    bead_um = float(column.particle_diameter) * 1e6
+    pressure = 10_000.0 + bead_um
+    return SimpleNamespace(
+        method_steps=list(kwargs.get("method_steps", [])),
+        step_results=[],
+        load_breakthrough=SimpleNamespace(
+            dbc_10pct=100.0 + bead_um,
+            mass_balance_error=1.0e-12,
+        ),
+        loaded_elution=None,
+        operability=SimpleNamespace(
+            pressure_drop_Pa=pressure,
+            bed_compression_fraction=0.01,
+        ),
+        model_manifest=ModelManifest(
+            model_name="M3.method_simulation.fake",
+            evidence_tier=ModelEvidenceTier.SEMI_QUANTITATIVE,
+        ),
+        assumptions=[],
+        wet_lab_caveats=[],
+    )
+
+
+class _FakeParallel:
+    """Synchronous stand-in for joblib.Parallel used by dispatch tests."""
+
+    calls: list[dict[str, object]] = []
+
+    def __init__(self, *, n_jobs, backend):
+        self.calls.append({"n_jobs": n_jobs, "backend": backend})
+
+    def __call__(self, tasks):
+        return [task() for task in tasks]
+
+
+def _fake_delayed(fn):
+    def _wrap(*args, **kwargs):
+        return lambda: fn(*args, **kwargs)
+
+    return _wrap
+
+
+def _fake_joblib_module() -> ModuleType:
+    module = ModuleType("joblib")
+    module.Parallel = _FakeParallel
+    module.delayed = _fake_delayed
+    return module
+
+
 @pytest.fixture
 def default_recipe():
     """Default PerformanceRecipe — d50 column, no DSD payload by default."""
@@ -68,15 +127,12 @@ def default_recipe():
 class TestDispatchSerialVsParallel:
     def test_n_jobs_1_uses_serial_path(self, default_recipe):
         """n_jobs=1 must NOT import or call joblib; pure serial."""
-        from dpsim.module3_performance.method import run_chromatography_method
-
         called_count = 0
-        original = run_chromatography_method
 
         def _spy(**kwargs):
             nonlocal called_count
             called_count += 1
-            return original(**kwargs)
+            return _fake_method_result(**kwargs)
 
         with patch(
             "dpsim.module3_performance.method_simulation.run_chromatography_method",
@@ -118,10 +174,39 @@ class TestDispatchSerialVsParallel:
                 "k_ads": default_recipe.k_ads,
             }
         ]
-        # No assertion on joblib non-import (hard to spy); just check it
-        # runs to completion.
-        results = _run_methods_parallel_or_serial(kwargs_list, n_jobs=4)
+        with (
+            patch(
+                "dpsim.module3_performance.method_simulation.run_chromatography_method",
+                side_effect=_fake_method_result,
+            ),
+        ):
+            results = _run_methods_parallel_or_serial(kwargs_list, n_jobs=4)
         assert len(results) == 1
+
+    def test_multi_row_uses_joblib_path(self, default_recipe):
+        """n_jobs > 1 with multiple rows dispatches through joblib.Parallel."""
+        _FakeParallel.calls = []
+        kwargs = {
+            "column": default_recipe.column,
+            "method_steps": list(default_recipe.method_steps),
+            "fmc": None,
+            "process_state": None,
+            "max_pressure_Pa": default_recipe.max_pressure_drop_Pa,
+            "pump_pressure_limit_Pa": default_recipe.pump_pressure_limit_Pa,
+            "n_z": default_recipe.n_z,
+            "D_molecular": default_recipe.D_molecular,
+            "k_ads": default_recipe.k_ads,
+        }
+        with (
+            patch(
+                "dpsim.module3_performance.method_simulation.run_chromatography_method",
+                side_effect=_fake_method_result,
+            ),
+            patch.dict("sys.modules", {"joblib": _fake_joblib_module()}),
+        ):
+            results = _run_methods_parallel_or_serial([kwargs, kwargs], n_jobs=2)
+        assert len(results) == 2
+        assert _FakeParallel.calls == [{"n_jobs": 2, "backend": "loky"}]
 
 
 # ─── DSDPolicy n_jobs flow ───────────────────────────────────────────────────
@@ -168,11 +253,11 @@ class TestWorkerIsPicklable:
 # ─── End-to-end: n_jobs=1 vs n_jobs>1 produce same results ──────────────────
 
 
-@pytest.mark.slow
 class TestNJobsEquivalence:
     """Serial and parallel runs must produce numerically equivalent results.
 
-    Marked slow because it runs the full M3 method 6× (3 quantiles × 2 modes).
+    Uses a deterministic method fake so the test validates n_jobs orchestration
+    without running the expensive M3 loaded-state elution solver six times.
     """
 
     def test_serial_and_parallel_match(self, default_recipe):
@@ -184,7 +269,11 @@ class TestNJobsEquivalence:
             n_jobs=1,  # serial
         )
         payload = _three_quantile_payload()
-        serial = run_method_simulation(recipe, dsd_payload=payload)
+        with patch(
+            "dpsim.module3_performance.method_simulation.run_chromatography_method",
+            side_effect=_fake_method_result,
+        ):
+            serial = run_method_simulation(recipe, dsd_payload=payload)
 
         recipe.dsd_policy = DSDPolicy(
             quantiles=(0.10, 0.50, 0.90),
@@ -192,7 +281,16 @@ class TestNJobsEquivalence:
             fast_pressure_screen=False,
             n_jobs=2,  # parallel
         )
-        parallel = run_method_simulation(recipe, dsd_payload=payload)
+        _FakeParallel.calls = []
+        with (
+            patch(
+                "dpsim.module3_performance.method_simulation.run_chromatography_method",
+                side_effect=_fake_method_result,
+            ),
+            patch.dict("sys.modules", {"joblib": _fake_joblib_module()}),
+        ):
+            parallel = run_method_simulation(recipe, dsd_payload=payload)
+        assert _FakeParallel.calls == [{"n_jobs": 2, "backend": "loky"}]
 
         # Both runs produce 3 quantile results in the same order.
         assert len(serial.dsd_quantile_results) == len(parallel.dsd_quantile_results) == 3

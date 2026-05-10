@@ -281,7 +281,7 @@ def main():
         "cfd-zones",
         help=(
             "Run the M1 PBE on a CFD-derived zones.json (variable-N "
-            "compartment model with per-zone ε)."
+            "compartment model with per-zone epsilon)."
         ),
     )
     cfd_p.add_argument(
@@ -322,7 +322,7 @@ def main():
     cfd_p.add_argument(
         "--legacy-eps", type=float, default=None,
         help=(
-            "Optional: cross-check the CFD volume-weighted ε against this "
+            "Optional: cross-check the CFD volume-weighted epsilon against this "
             "empirical legacy estimate (W/kg). Default 30%% tolerance."
         ),
     )
@@ -811,10 +811,10 @@ def _cmd_info(args):
 def _cmd_cfd_zones(args):
     """Run the M1 PBE on a CFD-derived zones.json (B5 zonal coupling).
 
-    Standalone command — does not touch the legacy run/lifecycle pipeline.
+    Standalone command - does not touch the legacy run/lifecycle pipeline.
     Loads zones.json, builds MaterialProperties from --config (if given) and
     per-property CLI overrides, calls integrate_pbe_with_zones, optionally
-    cross-checks against a legacy empirical ε via consistency_check_with_volume_avg,
+    cross-checks against a legacy empirical epsilon via consistency_check_with_volume_avg,
     and writes a results JSON.
     """
     import json as _json
@@ -850,7 +850,7 @@ def _cmd_cfd_zones(args):
         params = load_config(Path(args.config))
         # Best-effort: if the config attaches a property database / overrides, the
         # caller can pass --rho-oil etc. to override. For simplicity, start from
-        # MaterialProperties() — the cfd-zones command does not need the full
+        # MaterialProperties() - the cfd-zones command does not need the full
         # PropertyDatabase update path used by `run`.
         del params  # acknowledge load but don't use; keeps hook for future
     material = MaterialProperties()
@@ -1197,4 +1197,3 @@ def _cmd_ingest(args):
 
 if __name__ == "__main__":
     main()
-

@@ -1046,9 +1046,12 @@ def test_profile_count():
     #  protein_thiol_to_pyridyl_disulfide, generic_amine_to_cyanate_ester).
     # v0.5.1 per-protein pyridyl-disulfide variants: 3 profiles
     # (protein_a/g/l_thiol_to_pyridyl_disulfide).
-    assert len(REAGENT_PROFILES) == 103, (
-        f"Expected 103 profiles (59 v9.1 + 18 v9.2 + 13 v9.3 + 4 v9.4 + "
-        f"2 v0.4.x interim + 4 v0.5.0 + 3 v0.5.1), got {len(REAGENT_PROFILES)}"
+    # v0.5.2 explicit support-thiol reduction profile: 1 profile
+    # (pyridyl_disulfide_reduction_to_thiol).
+    assert len(REAGENT_PROFILES) == 104, (
+        f"Expected 104 profiles (59 v9.1 + 18 v9.2 + 13 v9.3 + 4 v9.4 + "
+        f"2 v0.4.x interim + 4 v0.5.0 + 3 v0.5.1 + 1 v0.5.2), "
+        f"got {len(REAGENT_PROFILES)}"
     )
 
 
@@ -1346,4 +1349,3 @@ class TestM2ModelManifest:
         assert microsphere.model_manifest is not None
         assert microsphere.model_manifest.evidence_tier == ModelEvidenceTier.UNSUPPORTED
         assert microsphere.model_manifest.diagnostics["n_steps"] == 0
-

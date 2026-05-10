@@ -4,7 +4,11 @@ import pytest
 
 from dpsim.config import load_config
 from dpsim.core import Quantity
-from dpsim.core.process_recipe import ProcessStepKind, default_affinity_media_recipe
+from dpsim.core.process_recipe import (
+    ProcessStepKind,
+    StepExecutionMetadata,
+    default_affinity_media_recipe,
+)
 from dpsim.core.recipe_io import (
     load_process_recipe,
     process_recipe_from_dict,
@@ -50,6 +54,28 @@ def test_process_recipe_dict_preserves_quantities_and_primitives():
     assert coupling.parameters["reagent_key"] == "protein_a_coupling"
     assert isinstance(coupling.parameters["pH"], Quantity)
     assert coupling.parameters["reagent_concentration"].unit == "mol/m3"
+
+
+def test_process_recipe_dict_preserves_execution_metadata():
+    recipe = default_affinity_media_recipe()
+    recipe.steps[0].execution = StepExecutionMetadata(
+        material_lot="LOT-001",
+        sample_id="SAMPLE-001",
+        operator="OP",
+        instrument_id="INST-001",
+        acceptance_criteria={"d50_um": "80-120"},
+        qc_assay_link="DSD-001",
+        fraction_id="F001",
+        hazard_note="Use local chemical hygiene plan.",
+        stop_go_condition="Stop if DSD d90 exceeds target.",
+    )
+
+    loaded = process_recipe_from_dict(process_recipe_to_dict(recipe))
+
+    execution = loaded.steps[0].execution
+    assert execution.material_lot == "LOT-001"
+    assert execution.acceptance_criteria["d50_um"] == "80-120"
+    assert execution.qc_assay_link == "DSD-001"
 
 
 def test_legacy_simulation_parameters_bridge_updates_m1_recipe_fields():

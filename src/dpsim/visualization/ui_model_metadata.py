@@ -147,9 +147,10 @@ M2_ACS_META = OutputMetadata(
     model_basis=ModelBasis.SEMI_QUANTITATIVE,
     confidence=ConfidenceLevel.LOW,
     validity_range=(
-        "All 9 backend step types: SECONDARY_CROSSLINKING, ACTIVATION, "
-        "LIGAND_COUPLING, PROTEIN_COUPLING, QUENCHING, SPACER_ARM, "
-        "METAL_CHARGING, PROTEIN_PRETREATMENT, WASHING"
+        "All 11 backend step types: SECONDARY_CROSSLINKING, ACTIVATION, "
+        "ACS_CONVERSION, LIGAND_COUPLING, PROTEIN_COUPLING, QUENCHING, "
+        "SPACER_ARM, ARM_ACTIVATION, METAL_CHARGING, "
+        "PROTEIN_PRETREATMENT, WASHING"
     ),
     calibration_required=True,
     warnings=(

@@ -341,12 +341,24 @@ def policy_floor(output_type: OutputType) -> ModelEvidenceTier:
     return DECISION_GRADE_POLICY[output_type]
 
 
+def make_decision_claim(*args, **kwargs):
+    """Single public entry point for structured user-facing value claims.
+
+    Imported lazily to keep this legacy policy module free of an eager circular
+    import while preserving the planned API location.
+    """
+    from dpsim.core.decision_claim import make_decision_claim as _make_decision_claim
+
+    return _make_decision_claim(*args, **kwargs)
+
+
 __all__ = [
     "OutputType",
     "RenderMode",
     "RenderedValue",
     "DECISION_GRADE_POLICY",
     "decide_render_mode",
+    "make_decision_claim",
     "render_value",
     "policy_floor",
 ]

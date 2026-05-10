@@ -1,0 +1,2 @@
+assay_id,sample_id,target_molecule,polymer_family,mobile_phase,pH,temperature_C,salt_type,salt_concentration_M,replicate,value,unit,LOD,LOQ,instrument,operator,notebook_ref,notes,breakthrough_threshold_fraction,flow_rate_mL_min,feed_concentration_mol_m3,bed_volume_m3
+DBC-001,SAMPLE-001,IgG,agarose_chitosan,load_buffer,7.0,25.0,NaCl,0.15,1,80,mol/m3,,,AKTA,operator,NB-001,,0.10,1.0,10.0,0.00001

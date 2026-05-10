@@ -23,11 +23,18 @@ from .process_recipe import (
     ProcessRecipe,
     ProcessStep,
     ProcessStepKind,
+    StepExecutionMetadata,
     TargetProductProfile,
     default_affinity_media_recipe,
 )
 from .m2_recipe_templates import available_m2_templates, m2_template_steps
 from .result_graph import ResultEdge, ResultGraph, ResultNode
+from .support_status import FeatureSupportRecord, SupportStatus
+from .family_support import (
+    FamilySupportRecord,
+    family_support_record,
+    registered_family_support,
+)
 from .recipe_io import (
     RECIPE_SCHEMA_VERSION,
     load_process_recipe,
@@ -42,6 +49,18 @@ from .validation import (
     ValidationSeverity,
     validate_model_manifest_domains,
 )
+from .qc_checkpoint import (
+    DEFAULT_QC_CHECKPOINTS,
+    QCCheckpoint,
+    QCCheckpointKind,
+    missing_required_checkpoints,
+)
+from .chromatography_trace import (
+    DetectorTrace,
+    FractionCollection,
+    TraceAlignment,
+    align_traces,
+)
 
 __all__ = [
     "Quantity",
@@ -54,6 +73,7 @@ __all__ = [
     "ProcessRecipe",
     "ProcessStep",
     "ProcessStepKind",
+    "StepExecutionMetadata",
     "TargetProductProfile",
     "default_affinity_media_recipe",
     "available_m2_templates",
@@ -61,6 +81,11 @@ __all__ = [
     "ResultEdge",
     "ResultGraph",
     "ResultNode",
+    "FeatureSupportRecord",
+    "SupportStatus",
+    "FamilySupportRecord",
+    "family_support_record",
+    "registered_family_support",
     "RECIPE_SCHEMA_VERSION",
     "load_process_recipe",
     "process_recipe_from_dict",
@@ -71,4 +96,12 @@ __all__ = [
     "ValidationReport",
     "ValidationSeverity",
     "validate_model_manifest_domains",
+    "DEFAULT_QC_CHECKPOINTS",
+    "QCCheckpoint",
+    "QCCheckpointKind",
+    "missing_required_checkpoints",
+    "DetectorTrace",
+    "FractionCollection",
+    "TraceAlignment",
+    "align_traces",
 ]

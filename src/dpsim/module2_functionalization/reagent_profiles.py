@@ -1846,6 +1846,38 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
             "competitive hydrolysis. See edc_nhs_kinetics.react_edc_nhs_two_step."
         ),
     ),
+    "pyridyl_disulfide_reduction_to_thiol": ReagentProfile(
+        name="Pyridyl-disulfide support reduction to free thiol",
+        cas="51805-45-9 (TCEP-HCl) / 3483-12-3 (DTT)",
+        reagent_identity="TCEP or DTT",
+        installed_ligand="Free thiol support handle",
+        functional_mode="arm_activator",
+        reaction_type="arm_activation",
+        chemistry_class="reduction",
+        target_acs=ACSSiteType.PYRIDYL_DISULFIDE,
+        product_acs=ACSSiteType.THIOL,
+        k_forward=5e-3,
+        E_a=20000.0,
+        stoichiometry=1.0,
+        hydrolysis_rate=0.0,
+        ph_optimum=7.5,
+        ph_min=6.5, ph_max=8.5,
+        temperature_default=298.15,
+        time_default=1800.0,
+        confidence_tier="semi_quantitative",
+        calibration_source=(
+            "Carlsson et al. (1978) Biochem. J. 173:723; standard "
+            "activated-thiol support reduction with TCEP/DTT"
+        ),
+        hazard_class="reversible_redox",
+        wetlab_observable="A_343_pyridine_2_thione",
+        notes=(
+            "Reductive cleavage of a pyridyl-disulfide-loaded support gives "
+            "a free support thiol and releases pyridine-2-thione. This is a "
+            "distinct operation from pyridyl_disulfide_activation, which "
+            "installs the electrophilic disulfide handle."
+        ),
+    ),
 
     # ═══════════════════════════════════════════════════════════════════
     # P3 — explicit alternate affinity-coupling chemistries
@@ -3627,4 +3659,3 @@ REAGENT_PROFILES: dict[str, ReagentProfile] = {
         ),
     ),
 }
-

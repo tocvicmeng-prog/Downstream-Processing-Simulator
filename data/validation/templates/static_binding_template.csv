@@ -1,0 +1,2 @@
+assay_id,sample_id,target_molecule,polymer_family,mobile_phase,pH,temperature_C,salt_type,salt_concentration_M,replicate,value,unit,LOD,LOQ,instrument,operator,notebook_ref,notes,liquid_concentration_mol_m3,molecular_weight_kDa,contact_time_h
+SBC-001,SAMPLE-001,IgG,agarose_chitosan,load_buffer,7.0,25.0,NaCl,0.15,1,100,mol/m3,,,UV280,operator,NB-001,,10.0,150.0,16.0
