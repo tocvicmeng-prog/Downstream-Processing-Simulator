@@ -910,6 +910,17 @@ def render_tab_m3(tab_container) -> None:
                 )
                 _render_monitor(envelope=_envelope, container=st)
 
+                # B-2u / W-063 (v0.8.4): post-lifecycle "what's next"
+                # affordance directing the user to the Calibration &
+                # Uncertainty tab for forward MC / inverse / multi-column.
+                from dpsim.visualization.components.next_step_affordance import (
+                    render_next_step_affordance,
+                )
+                render_next_step_affordance(
+                    container=st,
+                    lifecycle_result=_lifecycle_result,
+                )
+
                 st.divider()
 
             # Build sub-tabs for M3 results

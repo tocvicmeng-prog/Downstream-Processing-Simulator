@@ -289,5 +289,105 @@ def render_pressure_monitor_section(
     fig = _build_timeline_figure(summary, envelope)
     container.plotly_chart(fig, width="stretch")
 
+    # B-2u / W-062 (v0.8.4): per-rule RecoveryAction timeline. Surfaces
+    # the seven-rule taxonomy historically (which rule fired at which
+    # timestamp) so the operator can audit the run, not just see the
+    # final state.
+    _render_recovery_action_timeline(container=container, summary=summary)
+
+
+def _render_recovery_action_timeline(
+    *,
+    container: Any,
+    summary: ReplaySummary,
+) -> None:
+    """Per-reading state-chip + triggered-rule timeline ribbon.
+
+    B-2u / W-062 (v0.8.4). The streaming monitor's `state_timeline`
+    already carries (t_s, state.value, rule.value or None) tuples; this
+    helper renders them as a horizontal scatter strip below the ΔP
+    trace plot so the operator can see *which* rule fired at *which*
+    timestamp during replay. Hover-text shows the triggered rule.
+    """
+    if not summary.state_timeline:
+        return
+    container.markdown("**Per-rule action timeline**")
+    container.caption(
+        "Hover any chip for the triggered rule + recovery action. "
+        "Chips below the time axis show the state machine's history."
+    )
+    times = np.array([t for t, _, _ in summary.state_timeline], dtype=float)
+    states = [s for _, s, _ in summary.state_timeline]
+    rules = [r for _, _, r in summary.state_timeline]
+    colors = [_STATE_COLORS.get(s, "#9CA3AF") for s in states]
+
+    # Build per-chip hover text mapping rule → recovery action label.
+    from dpsim.module3_performance.pressure_monitor import _RULE_TO_ACTION
+    hover: list[str] = []
+    for s, r in zip(states, rules):
+        if r is None:
+            hover.append(f"{s.upper()} — no rule fired")
+        else:
+            try:
+                from dpsim.module3_performance.pressure_monitor import (
+                    PressureMonitorRule,
+                )
+                action = _RULE_TO_ACTION[PressureMonitorRule(r)]
+                action_label = _RECOVERY_ACTION_LABEL.get(
+                    action.value, action.value,
+                )
+            except (KeyError, ValueError):
+                action_label = "(unknown action)"
+            hover.append(f"{s.upper()} — rule={r}; action={action_label}")
+
+    fig_timeline = go.Figure()
+    fig_timeline.add_trace(
+        go.Scatter(
+            x=times,
+            y=np.zeros_like(times),
+            mode="markers",
+            marker=dict(size=14, color=colors, symbol="square"),
+            hovertext=hover,
+            hoverinfo="x+text",
+            showlegend=False,
+        )
+    )
+    fig_timeline.update_layout(
+        title=None,
+        xaxis_title="Time (s)",
+        yaxis=dict(visible=False, range=[-1, 1]),
+        height=120,
+        margin=dict(l=10, r=10, t=10, b=30),
+    )
+    container.plotly_chart(fig_timeline, width="stretch")
+
+    # Per-rule histogram below the chip strip — counts of each
+    # triggered-rule occurrence across the replay.
+    rule_counts: dict[str, int] = {}
+    for r in rules:
+        if r is None:
+            continue
+        rule_counts[r] = rule_counts.get(r, 0) + 1
+    if rule_counts:
+        with container.expander(
+            f"Rule frequency ({sum(rule_counts.values())} total triggers)"
+        ):
+            for rule_name, count in sorted(
+                rule_counts.items(), key=lambda kv: kv[1], reverse=True,
+            ):
+                try:
+                    from dpsim.module3_performance.pressure_monitor import (
+                        PressureMonitorRule,
+                    )
+                    action = _RULE_TO_ACTION[PressureMonitorRule(rule_name)]
+                    action_label = _RECOVERY_ACTION_LABEL.get(
+                        action.value, action.value,
+                    )
+                except (KeyError, ValueError):
+                    action_label = "(unknown action)"
+                container.write(
+                    f"• `{rule_name}` ×{count} → action: **{action_label}**"
+                )
+
 
 __all__ = ["render_pressure_monitor_section"]

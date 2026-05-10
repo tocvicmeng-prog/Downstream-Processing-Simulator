@@ -50,8 +50,11 @@ class _StubContainer:
         self.successes: list[str] = []
         self.plotly_charts: list[Any] = []
         self.downloads: list[tuple[str, str]] = []
+        self.markdowns: list[str] = []
+        self.writes: list[str] = []
         self._uploaded_bytes = uploaded_bytes
         self._columns: list[_StubColumn] = []
+        self._expanders: list["_StubExpander"] = []
 
     # ── Streamlit-imitation surface ────────────────────────────────
 
@@ -90,6 +93,35 @@ class _StubContainer:
         cols = [_StubColumn() for _ in range(n)]
         self._columns.extend(cols)
         return cols
+
+    # B-2u (W-062, v0.8.4): RecoveryAction timeline ribbon adds
+    # markdown / write / expander calls under the trace plot.
+    def markdown(self, text: str) -> None:
+        self.markdowns.append(text)
+
+    def write(self, text: str) -> None:
+        self.writes.append(text)
+
+    def expander(self, label: str, **kwargs: Any) -> "_StubExpander":
+        e = _StubExpander()
+        self._expanders.append(e)
+        return e
+
+
+class _StubExpander:
+    """Stub for st.expander context manager."""
+
+    def __init__(self) -> None:
+        self.entries: list[str] = []
+
+    def __enter__(self) -> "_StubExpander":
+        return self
+
+    def __exit__(self, *a: Any) -> None:
+        pass
+
+    def write(self, t: str) -> None:
+        self.entries.append(t)
 
 
 class _StubFile:
@@ -158,7 +190,9 @@ class TestRenderSmoothUpload:
         render_pressure_monitor_section(envelope=envelope, container=container)
         assert len(container.successes) >= 1
         assert "OK" in container.successes[0]
-        assert len(container.plotly_charts) == 1
+        # B-2u (W-062, v0.8.4) added the per-rule action timeline plot
+        # below the trace plot — total of 2 plotly charts now.
+        assert len(container.plotly_charts) == 2
         # The 5-column metrics row must be populated.
         assert len(container._columns) >= 1
 
