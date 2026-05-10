@@ -107,6 +107,12 @@ class _StubContainer:
         self._expanders.append(e)
         return e
 
+    # B-5d (W-076, v0.8.7): MonitorSource selection radio. The stub
+    # always returns "CSV replay" so existing tests exercise the
+    # CSV-replay code path unchanged.
+    def radio(self, label: str, options: list, **kwargs: Any) -> str:
+        return "CSV replay"
+
 
 class _StubExpander:
     """Stub for st.expander context manager."""

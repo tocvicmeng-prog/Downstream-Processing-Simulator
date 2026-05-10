@@ -32,13 +32,20 @@ from dpsim.datatypes import ModelEvidenceTier, PolymerFamily
 
 
 class IsothermChoice(Enum):
-    """Closed set of UI-selectable isotherms (managed enum per B-0i)."""
+    """Closed set of UI-selectable isotherms (managed enum per B-0i).
+
+    B-5a (W-078, v0.8.7): HIC and PROTEIN_A added. Closes the Phase 1
+    audit defect S-5 — HIC and ProteinA bare classes were defined in
+    backend but unreachable from the user-facing dropdown.
+    """
 
     LANGMUIR = "langmuir"
     SALT_MODULATED_LANGMUIR = "salt_modulated_langmuir"
     IMIDAZOLE_MODULATED_LANGMUIR = "imidazole_modulated_langmuir"
     SALT_MODULATED_SMA = "salt_modulated_sma"
     SALT_MODULATED_COMPETITIVE_LANGMUIR = "salt_modulated_competitive_langmuir"
+    HIC = "hic"
+    PROTEIN_A = "protein_a"
 
 
 _CHOICE_LABEL: dict[str, str] = {
@@ -51,6 +58,10 @@ _CHOICE_LABEL: dict[str, str] = {
         "Salt-modulated SMA (full Steric Mass Action, ADR-006)",
     IsothermChoice.SALT_MODULATED_COMPETITIVE_LANGMUIR.value:
         "Salt-modulated competitive Langmuir (multi-component IEX)",
+    IsothermChoice.HIC.value:
+        "HIC (hydrophobic interaction, salt-driven)",
+    IsothermChoice.PROTEIN_A.value:
+        "Protein A / G / L (pH-dependent affinity for IgG capture)",
 }
 
 
@@ -76,9 +87,11 @@ class IsothermSpec:
 
 # Family-First default selection table. Comparisons by .value.
 _FAMILY_TO_DEFAULT_CHOICE: dict[str, IsothermChoice] = {
-    # Affinity-strong families (Protein A workflow): bare Langmuir.
-    PolymerFamily.AGAROSE_CHITOSAN.value: IsothermChoice.LANGMUIR,
-    PolymerFamily.AGAROSE.value: IsothermChoice.LANGMUIR,
+    # B-5a (W-078, v0.8.7): Protein A workflow families now route to
+    # the dedicated ProteinA isotherm (was bare Langmuir before HIC +
+    # PROTEIN_A entered the selector). The user can still override.
+    PolymerFamily.AGAROSE_CHITOSAN.value: IsothermChoice.PROTEIN_A,
+    PolymerFamily.AGAROSE.value: IsothermChoice.PROTEIN_A,
     PolymerFamily.AGAROSE_DEXTRAN.value: IsothermChoice.LANGMUIR,
     PolymerFamily.CHITOSAN.value: IsothermChoice.LANGMUIR,
     # Cellulose / PLGA — usually screening; bare Langmuir is the safer default.
@@ -104,11 +117,15 @@ def _default_choice_for(
         return IsothermChoice.SALT_MODULATED_LANGMUIR
     if hint_lower in ("imac", "ni_nta", "co_nta"):
         return IsothermChoice.IMIDAZOLE_MODULATED_LANGMUIR
-    if hint_lower in ("hic", "phenyl"):
-        # HIC has its own physics; v0.9 candidate. Falls back to Langmuir.
-        return IsothermChoice.LANGMUIR
+    if hint_lower in ("hic", "phenyl", "butyl", "octyl"):
+        # B-5a (W-078, v0.8.7): HIC has dedicated physics — return the
+        # bare HIC isotherm now that it is selectable.
+        return IsothermChoice.HIC
     if hint_lower in ("protein_a", "protein_g", "protein_l"):
-        return IsothermChoice.LANGMUIR
+        # B-5a (W-078, v0.8.7): ProteinA has pH-dependent affinity
+        # physics — return the bare ProteinA isotherm now that it is
+        # selectable.
+        return IsothermChoice.PROTEIN_A
     fam_key = polymer_family.value
     return _FAMILY_TO_DEFAULT_CHOICE.get(fam_key, IsothermChoice.LANGMUIR)
 
@@ -147,6 +164,20 @@ _DEFAULTS_BY_CHOICE: dict[str, dict[str, Any]] = {
         "K_L_m3_mol": [1.0e3, 5.0e2],
         "nu": [6.0, 3.0],
         "c_salt_ref_mol_m3": 150.0,
+        "calibrated_locally": False,
+    },
+    IsothermChoice.HIC.value: {
+        "q_max_mol_m3": 50.0,
+        "K_0_m3_mol": 0.01,
+        "m_salt_m3_mol": 0.005,
+        "salt_type": "ammonium_sulfate",
+        "calibrated_locally": False,
+    },
+    IsothermChoice.PROTEIN_A.value: {
+        "q_max_mol_m3": 60.0,
+        "K_a_max_m3_mol": 1.0e5,
+        "pH_transition": 3.5,
+        "steepness": 5.0,
         "calibrated_locally": False,
     },
 }
@@ -342,6 +373,118 @@ def _render_competitive_salt_subform(
     }
 
 
+def _render_hic_subform(
+    container: Any, key_prefix: str, seed: dict[str, Any],
+) -> dict[str, Any]:
+    """HIC isotherm parameter inputs: q_max, K_0, m_salt, salt_type.
+
+    B-5a (W-078, v0.8.7). HIC physics: K_a(c_salt) = K_0 · exp(m_salt · c_salt),
+    where c_salt is the lyotropic salt concentration and m_salt encodes the
+    salting-out coefficient. Both K_0 and m_salt are protein- and salt-specific
+    and almost always require local calibration.
+    """
+    cols = container.columns(2)
+    q_max = cols[0].number_input(
+        "q_max (mol/m³)", min_value=1.0, max_value=500.0,
+        value=float(seed.get("q_max_mol_m3", 50.0)), step=1.0,
+        key=f"{key_prefix}_qmax",
+    )
+    K_0 = cols[1].number_input(
+        "K_0 — base affinity at zero salt (m³/mol)",
+        min_value=1.0e-4, max_value=1.0e3,
+        value=float(seed.get("K_0_m3_mol", 0.01)),
+        step=1.0e-3, format="%.4f",
+        key=f"{key_prefix}_K0",
+        help="Affinity extrapolated to zero salt — usually small for HIC.",
+    )
+    cols2 = container.columns(2)
+    m_salt = cols2[0].number_input(
+        "m_salt — salting-out coefficient (m³/mol)",
+        min_value=0.0, max_value=1.0,
+        value=float(seed.get("m_salt_m3_mol", 0.005)),
+        step=0.001, format="%.4f",
+        key=f"{key_prefix}_msalt",
+        help="Mid-range for IgG / phenyl ≈ 0.005; protein- and salt-specific.",
+    )
+    salt_type = cols2[1].selectbox(
+        "Salt type",
+        options=["ammonium_sulfate", "sodium_sulfate", "sodium_chloride", "potassium_phosphate"],
+        index=["ammonium_sulfate", "sodium_sulfate", "sodium_chloride", "potassium_phosphate"].index(
+            seed.get("salt_type", "ammonium_sulfate")
+        ),
+        key=f"{key_prefix}_salt",
+        help="Hofmeister-series anion identity. Used for validation gates.",
+    )
+    cal = container.checkbox(
+        "K_0 / m_salt calibrated locally (promotes tier to CALIBRATED_LOCAL)",
+        value=bool(seed.get("calibrated_locally", False)),
+        key=f"{key_prefix}_cal",
+    )
+    return {
+        "q_max_mol_m3": float(q_max),
+        "K_0_m3_mol": float(K_0),
+        "m_salt_m3_mol": float(m_salt),
+        "salt_type": str(salt_type),
+        "calibrated_locally": bool(cal),
+    }
+
+
+def _render_protein_a_subform(
+    container: Any, key_prefix: str, seed: dict[str, Any],
+) -> dict[str, Any]:
+    """Protein A pH-dependent affinity.
+
+    B-5a (W-078, v0.8.7). Sigmoid K_a(pH) = K_a_max / (1 + exp(steepness ·
+    (pH_transition − pH))). Default values are anchored to MabSelect SuRe /
+    IgG capture; pH_transition ≈ 3.5 (canonical low-pH elution); steepness ≈ 5
+    matches the sharp Protein A elution curve.
+    """
+    cols = container.columns(2)
+    q_max = cols[0].number_input(
+        "q_max (mol/m³)", min_value=1.0, max_value=200.0,
+        value=float(seed.get("q_max_mol_m3", 60.0)), step=1.0,
+        key=f"{key_prefix}_qmax",
+        help="Typical Protein A resin DBC ≈ 30-70 mg/mL ≈ 50-90 mol/m³.",
+    )
+    K_a_max = cols[1].number_input(
+        "K_a_max — neutral-pH affinity (m³/mol)",
+        min_value=1.0e3, max_value=1.0e7,
+        value=float(seed.get("K_a_max_m3_mol", 1.0e5)),
+        step=1.0e4, format="%.0f",
+        key=f"{key_prefix}_Kamax",
+        help="Very high — Protein A has nM-range K_d at neutral pH.",
+    )
+    cols2 = container.columns(2)
+    pH_transition = cols2[0].number_input(
+        "pH_transition (half-maximal K_a)",
+        min_value=2.0, max_value=6.0,
+        value=float(seed.get("pH_transition", 3.5)),
+        step=0.1, format="%.1f",
+        key=f"{key_prefix}_pHt",
+        help="Canonical low-pH elution ≈ 3.5; tune to your antibody's tolerance.",
+    )
+    steepness = cols2[1].number_input(
+        "Sigmoid steepness (1/pH unit)",
+        min_value=1.0, max_value=15.0,
+        value=float(seed.get("steepness", 5.0)),
+        step=0.5, format="%.1f",
+        key=f"{key_prefix}_steep",
+        help="Higher = sharper transition; ≈ 5 matches typical Protein A.",
+    )
+    cal = container.checkbox(
+        "K_a_max / pH_transition calibrated locally",
+        value=bool(seed.get("calibrated_locally", False)),
+        key=f"{key_prefix}_cal",
+    )
+    return {
+        "q_max_mol_m3": float(q_max),
+        "K_a_max_m3_mol": float(K_a_max),
+        "pH_transition": float(pH_transition),
+        "steepness": float(steepness),
+        "calibrated_locally": bool(cal),
+    }
+
+
 _SUBFORM_BY_CHOICE: dict[str, Any] = {
     IsothermChoice.LANGMUIR.value: _render_langmuir_subform,
     IsothermChoice.SALT_MODULATED_LANGMUIR.value:
@@ -351,6 +494,8 @@ _SUBFORM_BY_CHOICE: dict[str, Any] = {
     IsothermChoice.SALT_MODULATED_SMA.value: _render_sma_subform,
     IsothermChoice.SALT_MODULATED_COMPETITIVE_LANGMUIR.value:
         _render_competitive_salt_subform,
+    IsothermChoice.HIC.value: _render_hic_subform,
+    IsothermChoice.PROTEIN_A.value: _render_protein_a_subform,
 }
 
 
@@ -487,6 +632,24 @@ def to_isotherm(spec: IsothermSpec) -> Any:
             base=CompetitiveLangmuirIsotherm(q_max=q_arr, K_L=K_arr),
             nu=nu_arr,
             c_salt_ref_mol_m3=float(p.get("c_salt_ref_mol_m3", 150.0)),
+        )
+    if spec.choice.value == IsothermChoice.HIC.value:
+        from dpsim.module3_performance.isotherms.hic import HICIsotherm
+        return HICIsotherm(
+            q_max=float(p.get("q_max_mol_m3", 50.0)),
+            K_0=float(p.get("K_0_m3_mol", 0.01)),
+            m_salt=float(p.get("m_salt_m3_mol", 0.005)),
+            salt_type=str(p.get("salt_type", "ammonium_sulfate")),
+        )
+    if spec.choice.value == IsothermChoice.PROTEIN_A.value:
+        from dpsim.module3_performance.isotherms.protein_a import (
+            ProteinAIsotherm,
+        )
+        return ProteinAIsotherm(
+            q_max=float(p.get("q_max_mol_m3", 60.0)),
+            K_a_max=float(p.get("K_a_max_m3_mol", 1.0e5)),
+            pH_transition=float(p.get("pH_transition", 3.5)),
+            steepness=float(p.get("steepness", 5.0)),
         )
     raise ValueError(f"Unknown IsothermChoice: {spec.choice!r}")
 

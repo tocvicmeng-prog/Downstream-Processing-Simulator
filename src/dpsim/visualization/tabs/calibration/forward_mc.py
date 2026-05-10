@@ -107,6 +107,25 @@ def render_forward_mc_panel(
         )
         return None
 
+    # B-5e (W-077, v0.8.7): single-step vs multi-step coupled MC mode.
+    # Multi-step wires monte_carlo_step_program (B-2r / W-050) — draws
+    # once and evaluates every step under shared draws so cross-step
+    # correlations are preserved. Closes audit defect S-9 / A-8.
+    mc_mode = target.radio(
+        "MC mode",
+        options=["single-step", "multi-step coupled"],
+        index=0,
+        horizontal=True,
+        key=f"{key_prefix}_mcmode",
+        help=(
+            "single-step: classic forward MC at the current Q_set. "
+            "multi-step coupled (B-2r / W-050): shared parameter draws "
+            "across a 3-step program (equilibrate / load / wash) so "
+            "cross-step correlation is preserved. The worst-step "
+            "blocker probability becomes the headline."
+        ),
+    )
+
     cols = target.columns(3)
     n_samples = cols[0].slider(
         "Sample count",
@@ -154,20 +173,79 @@ def render_forward_mc_panel(
         return None
 
     if run:
+        # B-5e (W-077, v0.8.7): branch on MC mode. Multi-step uses
+        # monte_carlo_step_program with shared parameter draws across
+        # a 3-step program (equilibrate / load / wash) — closes
+        # audit defect S-9 / A-8.
         try:
-            bands_in_state = monte_carlo_pressure_envelope(
-                polymer_family=inputs.polymer_family,
-                column=inputs.column,
-                mobile_phase=inputs.mobile_phase,
-                Q_set_m3_s=inputs.Q_set_m3_s,
-                n_samples=int(n_samples),
-                seed=int(seed),
-                use_family_priors=(prior_mode == "family priors"),
-                log_cov=(
-                    np.asarray(posterior_log_cov, dtype=float)
-                    if use_log_cov else None
-                ),
-            )
+            if mc_mode == "multi-step coupled":
+                from dataclasses import dataclass as _dc
+                from dpsim.module3_performance.pressure_envelope_mc import (
+                    monte_carlo_step_program,
+                )
+
+                @_dc(frozen=True)
+                class _LightweightStep:
+                    """Duck-typed PressureStep for monte_carlo_step_program.
+
+                    Has the (name, Q_m3_s, mobile_phase) attributes the
+                    function requires; avoids the hard dependency on
+                    ``optimization.objectives.PressureStep`` per the
+                    docstring's typed-loosely guidance.
+                    """
+                    name: str
+                    Q_m3_s: float
+                    mobile_phase: Any
+
+                step_program = (
+                    _LightweightStep(
+                        name="equilibrate",
+                        Q_m3_s=float(inputs.Q_set_m3_s) * 0.5,
+                        mobile_phase=inputs.mobile_phase,
+                    ),
+                    _LightweightStep(
+                        name="load",
+                        Q_m3_s=float(inputs.Q_set_m3_s),
+                        mobile_phase=inputs.mobile_phase,
+                    ),
+                    _LightweightStep(
+                        name="wash",
+                        Q_m3_s=float(inputs.Q_set_m3_s) * 0.7,
+                        mobile_phase=inputs.mobile_phase,
+                    ),
+                )
+                step_result = monte_carlo_step_program(
+                    polymer_family=inputs.polymer_family,
+                    column=inputs.column,
+                    step_program=step_program,
+                    n_samples=int(n_samples),
+                    seed=int(seed),
+                    use_family_priors=(prior_mode == "family priors"),
+                    log_cov=(
+                        np.asarray(posterior_log_cov, dtype=float)
+                        if use_log_cov else None
+                    ),
+                )
+                # Use the worst-step bands as the panel's headline.
+                bands_in_state = step_result.per_step_bands[
+                    step_result.worst_step_index
+                ]
+                st.session_state["forward_mc_step_program_result"] = step_result
+            else:
+                bands_in_state = monte_carlo_pressure_envelope(
+                    polymer_family=inputs.polymer_family,
+                    column=inputs.column,
+                    mobile_phase=inputs.mobile_phase,
+                    Q_set_m3_s=inputs.Q_set_m3_s,
+                    n_samples=int(n_samples),
+                    seed=int(seed),
+                    use_family_priors=(prior_mode == "family priors"),
+                    log_cov=(
+                        np.asarray(posterior_log_cov, dtype=float)
+                        if use_log_cov else None
+                    ),
+                )
+                st.session_state.pop("forward_mc_step_program_result", None)
         except (ValueError, KeyError) as exc:
             target.error(f"Forward MC run failed: {exc}")
             return None
@@ -239,6 +317,29 @@ def render_forward_mc_panel(
         f"n={bands.n_samples} draws. Bands stay SEMI_QUANTITATIVE per "
         "ADR-007 — they reflect priors, not measured posteriors."
     )
+
+    # B-5e (W-077, v0.8.7): when multi-step coupled MC ran, surface
+    # the per-step blocker probabilities so the worst-step driver
+    # is visible at a glance.
+    multi_step_result: Any = st.session_state.get("forward_mc_step_program_result")
+    if multi_step_result is not None:
+        target.markdown("**Per-step blocker probabilities (coupled draws)**")
+        target.caption(
+            f"Worst step: **{multi_step_result.step_names[multi_step_result.worst_step_index]}** "
+            f"with p_blocker = {multi_step_result.worst_step_p_blocker*100:.1f} %. "
+            "Shared draws across steps preserve cross-step correlation per "
+            "ADR-007 §4."
+        )
+        step_cols = target.columns(len(multi_step_result.step_names))
+        for i, name in enumerate(multi_step_result.step_names):
+            step_cols[i].metric(
+                name,
+                f"{multi_step_result.per_step_bands[i].p_blocker * 100:.1f} %",
+                help=(
+                    f"headroom P50 = "
+                    f"{multi_step_result.per_step_bands[i].headroom_ratio_p50*100:.0f} %"
+                ),
+            )
 
     return bands
 

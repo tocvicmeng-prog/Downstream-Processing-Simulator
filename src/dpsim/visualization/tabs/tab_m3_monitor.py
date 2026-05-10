@@ -173,47 +173,131 @@ def render_pressure_monitor_section(
         passing a stub object that exposes the same method names —
         see ``tests/visualization/test_tab_m3_monitor.py``.
     """
-    container.subheader("Streaming pressure monitor (offline replay)")
+    container.subheader("Streaming pressure monitor")
     container.caption(
-        "Upload a CSV pressure trace from a prior run to replay it "
-        "against the active envelope. The function ships v0.8 — live "
-        "AKTA UNICORN integration is a v0.9 epic. Accepted columns: "
-        "`t_s` (or `t_min`), `dP_pa` (or `dP_kpa` / `dP_mpa` / `dP_bar`), "
-        "`Q_m3_s` (or `Q_mL_min`)."
+        "B-5d (W-076, v0.8.7): the monitor now consumes the ADR-008 "
+        "``MonitorSource`` Protocol. Three backends are selectable below; "
+        "live AKTA UNICORN is a durable v0.9 deferral (ADR-008)."
     )
 
-    container.download_button(
-        label="Download example trace.csv",
-        data=_EXAMPLE_CSV,
-        file_name="pressure_trace_example.csv",
-        mime="text/csv",
-        key="pressure_monitor_example_download",
+    # B-5d (W-076, v0.8.7): MonitorSource selection. The CSV-replay path
+    # was the only v0.8.x option; this exposes the SimulatedMonitorSource
+    # (training / demo) and NullMonitorSource (placeholder) alongside.
+    source_choice = container.radio(
+        "Monitor source",
+        options=["CSV replay", "Simulated trace", "Null (none)", "Live AKTA UNICORN"],
+        index=0,
+        horizontal=True,
+        key="m3_monitor_source",
+        help=(
+            "CSV replay: upload a trace from a prior run. "
+            "Simulated trace: synthetic ramp+fouling demo. "
+            "Null: no source bound. "
+            "Live AKTA UNICORN: deferred to v0.9 per ADR-008."
+        ),
     )
 
-    uploaded = container.file_uploader(
-        label="Upload pressure trace CSV",
-        type=["csv"],
-        key="pressure_monitor_csv_upload",
-    )
-    if uploaded is None:
-        container.info(
-            "No trace uploaded yet. The example CSV above shows the "
-            "expected format and a comfortable smooth-flow trace."
+    if source_choice == "Live AKTA UNICORN":
+        container.warning(
+            "Live AKTA UNICORN is a durable v0.9 deferral per ADR-008. "
+            "The MonitorSource Protocol slot is reserved; the socket "
+            "backend is hardware-bound and ships in a future release."
         )
         return
 
-    # Decode the uploaded bytes to text.
-    try:
-        text = uploaded.getvalue().decode("utf-8")
-    except (UnicodeDecodeError, AttributeError) as exc:
-        container.error(f"Could not decode uploaded file as UTF-8: {exc!r}")
+    if source_choice == "Null (none)":
+        container.info(
+            "Null monitor source — useful as a placeholder when no "
+            "trace is available. No replay or analysis runs."
+        )
         return
 
-    try:
-        readings = parse_csv(StringIO(text))
-    except ValueError as exc:
-        container.error(f"CSV parse failed: {exc}")
-        return
+    # ── Build the readings tuple from the selected source ─────────────
+    readings: tuple
+    if source_choice == "Simulated trace":
+        # B-5d (W-076, v0.8.7): SimulatedMonitorSource exposes a synthetic
+        # ramp + fouling trace useful for training and demos.
+        from dpsim.module3_performance.monitor_source import (
+            SimulatedMonitorSource,
+        )
+        sim_cols = container.columns(4)
+        sim_dp_steady_kpa = sim_cols[0].number_input(
+            "ΔP_steady (kPa)",
+            min_value=1.0, max_value=2000.0,
+            value=float(envelope.dP_max_operational_pa * 0.6 / 1.0e3),
+            step=5.0,
+            key="m3_mon_sim_dp_steady",
+        )
+        sim_ramp_s = sim_cols[1].number_input(
+            "ramp τ (s)", min_value=1.0, max_value=600.0,
+            value=60.0, step=5.0,
+            key="m3_mon_sim_ramp",
+        )
+        sim_fouling_pa_s = sim_cols[2].number_input(
+            "fouling slope (Pa/s)",
+            min_value=0.0, max_value=500.0,
+            value=20.0, step=1.0,
+            key="m3_mon_sim_foul",
+        )
+        sim_dur_s = sim_cols[3].number_input(
+            "duration (s)", min_value=30.0, max_value=7200.0,
+            value=600.0, step=30.0,
+            key="m3_mon_sim_dur",
+        )
+        sim_source = SimulatedMonitorSource(
+            Q_m3_s=float(envelope.Q_set_m3_s),
+            dP_steady_pa=float(sim_dp_steady_kpa) * 1.0e3,
+            ramp_seconds=float(sim_ramp_s),
+            fouling_slope_pa_per_s=float(sim_fouling_pa_s),
+            sample_period_s=5.0,
+            duration_s=float(sim_dur_s),
+            seed=42,
+        )
+        sim_readings: list = []
+        for _ in range(10_000):  # safety bound; SimulatedMonitorSource ends at duration_s
+            r = sim_source.next_reading()
+            if r is None:
+                break
+            sim_readings.append(r)
+        if not sim_readings:
+            container.error("Simulated source produced 0 readings.")
+            return
+        readings = tuple(sim_readings)
+    else:
+        # CSV replay (legacy path).
+        container.download_button(
+            label="Download example trace.csv",
+            data=_EXAMPLE_CSV,
+            file_name="pressure_trace_example.csv",
+            mime="text/csv",
+            key="pressure_monitor_example_download",
+        )
+        uploaded = container.file_uploader(
+            label="Upload pressure trace CSV",
+            type=["csv"],
+            key="pressure_monitor_csv_upload",
+        )
+        if uploaded is None:
+            container.info(
+                "No trace uploaded yet. The example CSV above shows the "
+                "expected format and a comfortable smooth-flow trace. "
+                "Accepted columns: `t_s` (or `t_min`), `dP_pa` (or "
+                "`dP_kpa` / `dP_mpa` / `dP_bar`), `Q_m3_s` (or `Q_mL_min`)."
+            )
+            return
+
+        # Decode the uploaded bytes to text.
+        try:
+            text = uploaded.getvalue().decode("utf-8")
+        except (UnicodeDecodeError, AttributeError) as exc:
+            container.error(f"Could not decode uploaded file as UTF-8: {exc!r}")
+            return
+
+        try:
+            readings = parse_csv(StringIO(text))
+        except ValueError as exc:
+            container.error(f"CSV parse failed: {exc}")
+            return
 
     try:
         summary = replay(readings, envelope)

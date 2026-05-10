@@ -1082,6 +1082,22 @@ def render_tab_m3(tab_container) -> None:
                         width="stretch",
                     )
 
+                    # B-5b (W-074, v0.8.7): detector-trace overlay — UV +
+                    # fluorescence + (when salt profile available)
+                    # conductivity. Closes audit defect S-6 / A-5: the
+                    # detection module family is reachable from the UI
+                    # for the first time. The user can now compare
+                    # predicted detector traces against their wet-lab
+                    # UNICORN export.
+                    from dpsim.visualization.components import (
+                        render_detector_traces,
+                    )
+                    with st.container(border=True):
+                        render_detector_traces(
+                            breakthrough_result=_bt,
+                            salt_profile=getattr(_bt, "salt_profile", None),
+                        )
+
                     if "m2_result" in st.session_state:
                         from dpsim.core.mobile_phase import MobilePhase as _MP_bt
                         from dpsim.module3_performance.hydrodynamics import ColumnGeometry as _CG_bt

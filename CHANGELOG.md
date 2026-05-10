@@ -1,5 +1,53 @@
 # Changelog
 
+## v0.8.7 — Orphan backend exposure (2026-05-10)
+
+Closes the v0.8.5 audit's HIGH/MEDIUM-severity orphan-backend defects (S-5, S-6, S-7, S-8, S-9 from `AUDIT_v0_8_5_e2e_phase1_scientific.md`; A-5, A-6, A-7, A-8, A-9 from `..._phase3_architecture.md`). At v0.8.6 the dashboard became *honest* — visible inputs drove the simulation. v0.8.7 makes it *complete* — every backend module the README claims is now reachable from the UI.
+
+### Closed (B-5a → B-5e)
+
+- **B-5a (W-078) — HIC + ProteinA selectable in the isotherm widget.** Extended `IsothermChoice` enum with `HIC` and `PROTEIN_A`. Added two new sub-forms exposing the dedicated parameters:
+  * **HIC** — `q_max`, `K_0` (zero-salt affinity), `m_salt` (salting-out coefficient), `salt_type` (Hofmeister anion). Physics: `K_a(c_salt) = K_0 · exp(m_salt · c_salt)`.
+  * **ProteinA** — `q_max`, `K_a_max` (neutral-pH affinity), `pH_transition` (canonical 3.5), `steepness`. Physics: pH-sigmoid `K_a(pH) = K_a_max / (1 + exp(steepness · (pH_transition − pH)))`.
+
+  Family-aware default routing updated: AGAROSE_CHITOSAN and AGAROSE now route to PROTEIN_A by default (was bare Langmuir). HIC hint (phenyl/butyl/octyl) routes to HIC. The AST gate already covers `IsothermChoice` (extended in v0.8.4 W-052) so the new members are automatically enforced. `to_isotherm()` converter extended to all 7 members. Closes **S-5** + **A-9**.
+- **B-5b (W-074) — Detector traces UI.** New `components/detector_traces.py` overlays predicted UV (mAU) / fluorescence (RFU) / conductivity (mS/cm) traces from the M3 breakthrough result. UV trace consumes `compute_uv_signal` + `apply_detector_broadening`; fluorescence is opt-in via a checkbox; conductivity renders only when `breakthrough_result.salt_profile` is available. Mounted at `tab_m3.py:1083` after the existing breakthrough+chromatogram plots. Closes **S-6** + **A-5** — the detection module family was 100 % UI-orphan at v0.8.6.
+- **B-5c KEYSTONE (W-075) — OptimizationEngine top-level UI tab.** New `tabs/tab_optimization.py` mounts the multi-objective Bayesian-optimisation engine in the dashboard for the first time. Exposes `TargetSpec` inputs (d32, pore size, G_DN with tolerances), Sobol initial-points + BO-iterations sliders, optional robust-BO toggle, and a Run button. Result panel shows the best-of-campaign objective values + 7-D search-space coordinates at SEMI_QUANTITATIVE per ADR-007. Gracefully degrades to an install-instructions banner when the optional `[optimization]` extra (torch + botorch + gpytorch) is not installed. Mounted at the bottom of the Calibration stage as a peer of `tab_calibration` (v0.9.0 W-085 hoists it into a dedicated *Inverse Design* stage). Closes **S-7** + **A-6** + **U-20** — the highest-impact orphan at v0.8.6.
+- **B-5d (W-076) — MonitorSource Protocol UI dropdown.** `tab_m3_monitor.py` now exposes the ADR-008 `MonitorSource` Protocol via a Source radio: **CSV replay** (legacy path), **Simulated trace** (synthetic ramp + fouling demo via `SimulatedMonitorSource` with editable steady-state ΔP / ramp τ / fouling slope / duration), **Null (none)** (placeholder), **Live AKTA UNICORN** (disabled, durable v0.9 deferral per ADR-008 hardware). Closes **S-8** + **A-7** — the Protocol's UI bypass at v0.8.6.
+- **B-5e (W-077) — Multi-step coupled MC mode.** Forward MC panel gains a *single-step / multi-step coupled* mode radio. Multi-step wires `monte_carlo_step_program` (B-2r / W-050) with a 3-step program (equilibrate / load / wash) and shared parameter draws across all steps so cross-step correlation is preserved per ADR-007 §4. Result panel adds per-step blocker probability columns + worst-step caption. Closes **S-9** + **A-8**.
+
+### Verification
+
+- **5 new tests** in `tests/visualization/test_isotherm_selector.py` covering HIC + ProteinA sub-forms + `to_isotherm` converter; **20/20 isotherm selector tests pass**.
+- **139/139 visualization tests pass** (134 prior + 5 new isotherm tests).
+- **523 tests pass** across the visualization + module3_performance + lifecycle + AST-gate scope (up from 518 at v0.8.6; +5 from B-5a coverage).
+- ruff: 0 violations across all edited paths.
+- mypy: 0 issues on `panels/isotherm_selector.py`, `components/detector_traces.py`, `tabs/tab_optimization.py`, `tabs/tab_m3_monitor.py`, `tabs/calibration/forward_mc.py`, `shell/stage_panels.py`.
+- AST gate (`test_v9_3_enum_comparison_enforcement.py`): 0 violations on extended `IsothermChoice` (HIC + PROTEIN_A).
+- Widget-mounting AST gate (`test_widget_mounting.py`): 0 violations — every new `render_*` is mounted.
+
+### New validation gates closed (48 → 53)
+
+- **48** HIC + ProteinA selectable via the isotherm widget; family-aware defaults route correctly.
+- **49** Detector traces render after every M3 run (UV always; fluorescence opt-in; conductivity when salt profile available).
+- **50** OptimizationEngine reachable from a top-level entry point in the Calibration stage; 3-input target case (d32 + pore + G_DN) completes; result rendered at SEMI_QUANTITATIVE.
+- **51** Streaming monitor source dropdown offers CSV / Simulated / Null + a v0.9-deferred AKTA UNICORN slot.
+- **52** Multi-step coupled MC reachable from forward MC panel; result reflects shared parameter draws via `monte_carlo_step_program`.
+- **53** AST gate covers extended `IsothermChoice` (HIC + PROTEIN_A) automatically.
+
+### Public-communication framing
+
+> v0.8.7 ships as **"the dashboard becomes complete"**. Where v0.8.6 closed the wiring breaks that made user inputs theatrical, v0.8.7 closes the orphan-backend gaps that made the README's promises structurally unreachable. Every scientifically meaningful capability shipped in the v0.7 → v0.8 cluster now has a UI path. The v0.9.0 maturation milestone — decision-grade consistency, pre-flight envelope relocation, calibration discipline, operator affordances, unit standardisation, first-run examples, predicted-vs-measured overlay — remains the next-step roadmap per `docs/update_workplan_2026-05-10_v0_9_0.md` §3. The three durable v0.9-deferred items (live AKTA UNICORN, MCMC inverse, cyclic SMB) remain v1.0+ candidates.
+
+### Detailed handover
+
+- `docs/handover/HANDOVER_v0_8_7_release.md` — combined release-level handover for B-5a → B-5e.
+- `docs/update_workplan_2026-05-10_v0_9_0.md` — joint three-role plan (v0.8.6 closed in §1, v0.8.7 closed in §2, v0.9.0 outstanding in §3).
+
+### Architecture decisions
+
+No new ADRs. v0.8.7 closes the *exposure gap* on ADR-005 (HIC/ProteinA), ADR-007 (multi-step MC), and ADR-008 (MonitorSource Protocol). The optimization extra remains pinned per ADR-002.
+
 ## v0.8.6 — Critical wiring fixes (2026-05-10)
 
 Closes the four CRITICAL wiring breaks identified in the v0.8.5 end-to-end audit (`docs/handover/AUDIT_v0_8_5_e2e_phase{1,2,3}_*.md`). The v0.8.4 release shipped three widgets — mobile-phase composition editor, isotherm selector, SEMI_QUANTITATIVE tier banner — that were defined and unit-tested but **never mounted in production**. Defects C1, C2, and W-1 from the v0.8.4 CHANGELOG were therefore *theatrically* closed: tests passed, but a user pressing *Run* received a simulation in which their actual mobile phase + isotherm choice were silently substituted by `MobilePhase()` water-at-20°C + bare Langmuir defaults. v0.8.6 turns the v0.8.4 closure into an *operationally true* closure.

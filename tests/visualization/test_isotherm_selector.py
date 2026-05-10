@@ -76,11 +76,14 @@ class _StubContainer:
 
 
 class TestDefaultRouting:
-    def test_agarose_chitosan_defaults_to_langmuir(self):
+    def test_agarose_chitosan_defaults_to_protein_a(self):
+        # B-5a (W-078, v0.8.7): AGAROSE_CHITOSAN is the canonical
+        # Protein-A workflow base resin; family default routes to
+        # PROTEIN_A now that the dedicated isotherm is selectable.
         choice = _default_choice_for(
             PolymerFamily.AGAROSE_CHITOSAN, binding_model_hint=None,
         )
-        assert choice.value == IsothermChoice.LANGMUIR.value
+        assert choice.value == IsothermChoice.PROTEIN_A.value
 
     def test_alginate_defaults_to_salt_modulated(self):
         # ALGINATE is registered as IEX-friendly per the registry.
@@ -102,12 +105,25 @@ class TestDefaultRouting:
         )
         assert choice.value == IsothermChoice.IMIDAZOLE_MODULATED_LANGMUIR.value
 
-    def test_protein_a_hint_keeps_langmuir(self):
+    def test_protein_a_hint_routes_to_protein_a(self):
+        # B-5a (W-078, v0.8.7): with the bare ProteinA isotherm
+        # selectable, the protein_a hint routes to it directly.
         choice = _default_choice_for(
             PolymerFamily.AGAROSE_CHITOSAN,
             binding_model_hint="protein_a",
         )
-        assert choice.value == IsothermChoice.LANGMUIR.value
+        assert choice.value == IsothermChoice.PROTEIN_A.value
+
+    def test_hic_hint_routes_to_hic(self):
+        # B-5a (W-078, v0.8.7).
+        from dpsim.visualization.panels.isotherm_selector import (
+            _default_choice_for,
+        )
+        choice = _default_choice_for(
+            PolymerFamily.AGAROSE,
+            binding_model_hint="hic",
+        )
+        assert choice.value == IsothermChoice.HIC.value
 
     def test_unknown_family_defaults_to_langmuir(self):
         # HYALURONATE not in the family default table → fall through.
@@ -120,10 +136,12 @@ class TestDefaultRouting:
 
 class TestLangmuirRender:
     def test_returns_langmuir_spec(self):
+        # Use HYALURONATE to get the Langmuir family default (was
+        # AGAROSE_CHITOSAN before B-5a / v0.8.7 routed that to PROTEIN_A).
         c = _StubContainer()
         spec = render_isotherm_widget(
             container=c, key_prefix="t",
-            polymer_family=PolymerFamily.AGAROSE_CHITOSAN,
+            polymer_family=PolymerFamily.HYALURONATE,
             binding_model_hint=None,
         )
         assert isinstance(spec, IsothermSpec)
@@ -138,10 +156,72 @@ class TestLangmuirRender:
         c = _StubContainer()
         spec = render_isotherm_widget(
             container=c, key_prefix="t",
-            polymer_family=PolymerFamily.AGAROSE_CHITOSAN,
+            polymer_family=PolymerFamily.HYALURONATE,
         )
         # No calibrated_locally key for bare Langmuir → SEMI_QUANTITATIVE.
         assert spec.estimated_tier == ModelEvidenceTier.SEMI_QUANTITATIVE
+
+
+class TestHICAndProteinARender:
+    """B-5a (W-078, v0.8.7): HIC + PROTEIN_A bare-isotherm sub-forms."""
+
+    def test_renders_hic_parameters(self):
+        c = _StubContainer(
+            force_choice_value=IsothermChoice.HIC.value,
+        )
+        spec = render_isotherm_widget(
+            container=c, key_prefix="t",
+            polymer_family=PolymerFamily.AGAROSE,
+            binding_model_hint="hic",
+        )
+        assert spec.choice.value == IsothermChoice.HIC.value
+        for k in ("q_max_mol_m3", "K_0_m3_mol", "m_salt_m3_mol", "salt_type"):
+            assert k in spec.params
+
+    def test_renders_protein_a_parameters(self):
+        c = _StubContainer(
+            force_choice_value=IsothermChoice.PROTEIN_A.value,
+        )
+        spec = render_isotherm_widget(
+            container=c, key_prefix="t",
+            polymer_family=PolymerFamily.AGAROSE_CHITOSAN,
+            binding_model_hint="protein_a",
+        )
+        assert spec.choice.value == IsothermChoice.PROTEIN_A.value
+        for k in ("q_max_mol_m3", "K_a_max_m3_mol", "pH_transition", "steepness"):
+            assert k in spec.params
+
+
+class TestToIsothermHICAndProteinA:
+    """B-5a (W-078, v0.8.7): converter coverage for HIC + PROTEIN_A."""
+
+    def test_to_isotherm_hic(self):
+        from dpsim.visualization.panels.isotherm_selector import to_isotherm
+        spec = IsothermSpec(
+            choice=IsothermChoice.HIC,
+            params={
+                "q_max_mol_m3": 60.0, "K_0_m3_mol": 0.02,
+                "m_salt_m3_mol": 0.008, "salt_type": "ammonium_sulfate",
+            },
+        )
+        iso = to_isotherm(spec)
+        assert type(iso).__name__ == "HICIsotherm"
+        assert iso.q_max == 60.0
+        assert iso.m_salt == 0.008
+
+    def test_to_isotherm_protein_a(self):
+        from dpsim.visualization.panels.isotherm_selector import to_isotherm
+        spec = IsothermSpec(
+            choice=IsothermChoice.PROTEIN_A,
+            params={
+                "q_max_mol_m3": 65.0, "K_a_max_m3_mol": 2.0e5,
+                "pH_transition": 3.2, "steepness": 6.0,
+            },
+        )
+        iso = to_isotherm(spec)
+        assert type(iso).__name__ == "ProteinAIsotherm"
+        assert iso.q_max == 65.0
+        assert iso.pH_transition == 3.2
 
 
 # ─── Widget render — modulated paths ──────────────────────────────────────

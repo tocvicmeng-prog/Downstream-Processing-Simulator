@@ -11,6 +11,9 @@ from dpsim.visualization.components.column_xsec import (
     ColumnPhase,
     render_column_xsec,
 )
+from dpsim.visualization.components.detector_traces import (
+    render_detector_traces,
+)
 from dpsim.visualization.components.impeller_xsec import render_impeller_xsec
 from dpsim.visualization.components.impeller_xsec_v2 import (
     render_impeller_xsec_v2,
@@ -34,6 +37,7 @@ __all__ = [
     "ColumnPhase",
     "StopButtonState",
     "render_column_xsec",
+    "render_detector_traces",
     "render_impeller_xsec",
     "render_impeller_xsec_v2",
     "render_impeller_xsec_v2_2",

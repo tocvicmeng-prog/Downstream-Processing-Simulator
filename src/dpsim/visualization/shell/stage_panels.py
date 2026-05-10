@@ -422,6 +422,18 @@ def render_calibration_stage(
     )
     render_tab_calibration()
 
+    # B-5c (W-075, v0.8.7): Inverse Design / Optimization tab. Mounted
+    # at the bottom of the Calibration stage as a top-level entry point
+    # for the BO engine. Closes audit defect S-7 / A-6 / U-20: the
+    # OptimizationEngine was CLI-only at v0.8.6.  v0.9.0 W-085 hoists
+    # it out into a dedicated *Inverse Design* stage; for v0.8.7 it
+    # ships as a peer of tab_calibration in the same stage.
+    st.html('<div class="dps-divider" style="margin:24px 0;"></div>')
+    from dpsim.visualization.tabs.tab_optimization import (
+        render_tab_optimization,
+    )
+    render_tab_optimization()
+
 
 __all__ = [
     "render_calibration_stage",
