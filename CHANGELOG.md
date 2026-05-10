@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — audit-plan code-actionable closeout (2026-05-11)
+## v0.8.9 — Audit-plan code-actionable closeout update (2026-05-11)
 
 - Closed the remaining code-actionable S1 metric-routing gap: user-facing `.metric(` call sites now route through `render_metric` or use non-metric tables, and the CI gate baseline is zero across visualization and suggestion UI surfaces.
 - Extended S4 wet-lab execution exports: deterministic dossiers can now carry execution records, QC checkpoints, fraction collections, and trace alignments; lifecycle SOP markdown surfaces step execution metadata when present.
