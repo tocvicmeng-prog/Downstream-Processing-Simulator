@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.8.5 — M3 real-time back-pressure indicator (2026-05-10)
+
+Closes the 5-item work plan in `docs/update_workplan_2026-05-10_v0_8_5.md` — a single-feature UI patch driven by the joint `/scientific-advisor` + `/architect` + `/dev-orchestrator` engagement. Adds a digital-style real-time back-pressure indicator pinned to the right of the M3 *Live phase view* column diagram. **No backend changes** — the `PressureEnvelope` dataclass at `src/dpsim/module3_performance/pressure_envelope.py:97` already exposes every quantity the indicator reads.
+
+### Closed (B-3a → B-3d)
+
+- **B-3a (W-064, W-065) — Pressure indicator component.** New `src/dpsim/visualization/components/pressure_indicator.py` exports `render_pressure_indicator(*, envelope, current_dp_pa, container, ...)`. The indicator's value coloured by headroom band: GREEN at `headroom_ratio < 0.70`, AMBER at `0.70 ≤ ratio < 1.00`, RED at `ratio ≥ 1.00`. Boundaries match the existing G8 recipe-validation gate (`PressureEnvelope.is_warning` / `is_blocker`). The `?` popover surfaces (a) the operational ceiling at the active `decision_tier` with the tier-aware interval bracket, (b) the `u_crit · K_geom · G_DN · d_p² / (μ · L)` calculation summary per ADR-004, and (c) four ranked remediations starting with *lower Q to Q_recommended* (mirrors the `RecoveryAction` enum's reversibility ordering at `tab_m3_monitor.py:50-58`).
+- **B-3b (W-066) — M3 live-phase 2-column layout.** `tabs/tab_m3.py:211-243` wraps `render_column_xsec(...)` in `st.columns([3, 1], gap="small")`; the indicator renders in the right column. The post-run pressure-envelope panel (`tab_m3.py:786-792`) caches the envelope into `st.session_state["m3_pressure_envelope"]` so the live-phase indicator picks it up on the next rerun. Before the first run the indicator renders a clearly-labelled placeholder (gate 41).
+- **B-3c (W-067) — Live-reading session_state read-through.** `tabs/tab_m3_monitor.py` writes `st.session_state["m3_latest_dp_pa"]` and `st.session_state["m3_latest_state"]` after each successful CSV replay. The indicator picks up the live reading on the next rerun (e.g. when the user changes the Phase radio); falls back to `envelope.dP_predicted_pa` when no replay is active. The write is wrapped defensively so unit tests without a Streamlit runtime do not regress.
+- **B-3d (W-068) — Test suite.** New `tests/visualization/test_pressure_indicator.py` exercises `_band` boundaries (×8 parameterised cases), `_resolve_dp` live-vs-predicted routing, `_help_modal_md` content (operational ceiling + decision tier + formula + ranked remediations + tier-aware interval), `_digit_html` colour mapping + Geist Mono / tabular-num compliance, `_placeholder_html` labelling, and integration via a stub container — 24 tests total, all passing.
+
+### Verification
+
+- **24 new tests** in `tests/visualization/test_pressure_indicator.py`; **128/128 visualization tests pass** (104 prior + 24 new); existing AST gate clean.
+- ruff: 0 violations across edited paths (`pressure_indicator.py`, `__init__.py`, `tab_m3.py`, `tab_m3_monitor.py`).
+- mypy: 0 issues on edited source files.
+
+### Validation gates closed in this release
+
+4 new gates (38–41) on top of the v0.8.4 floor:
+
+- **38** Indicator renders to the right of the column diagram in M3 Live-phase view.
+- **39** Value colour matches band (GREEN < 0.70, AMBER 0.70–1.00, RED ≥ 1.00 headroom_ratio).
+- **40** `?` popover surfaces operational ceiling at tier, calculation summary, and 4 ranked remediations.
+- **41** Indicator renders a clearly-labelled placeholder when envelope is absent (no misleading 0 / NaN).
+
+### Public-communication framing
+
+> v0.8.5 upgrades the **operator-facing situational awareness** during M3 column operation. Where v0.8.4 closed UI completeness for the *configuration* and *post-run analysis* surfaces, v0.8.5 adds a single live-cruise affordance: a digital number whose colour is bound to the bed-compression ceiling, with one-click access to the calculation and the remediation ladder. No backend changes; the v0.9 maturity plateau (live AKTA UNICORN socket, cyclic SMB, MCMC inverse) is unchanged.
+
+### Detailed handover
+
+- `docs/handover/HANDOVER_v0_8_5_release.md` — combined release-level handover for B-3a → B-3d.
+
+### Architecture decisions
+
+No new ADRs introduced. ADR-004 (per-family u_crit anchor) is the operative invariant for the indicator's safe-band semantics.
+
 ## v0.8.4 — UI completeness against the v0.8.3 backend (2026-05-10)
 
 Closes 13/13 work-plan items from `docs/update_workplan_2026-05-10_v0_8_4.md` — the UI-completeness pass that closes the gap between the v0.7 → v0.8.3 backend and the Streamlit dashboard. Driven by the joint `/scientific-advisor` + `/architect` + `/dev-orchestrator` engagement (audit + decomposition + work plan in `docs/handover/`). Patch bump per the project versioning policy.

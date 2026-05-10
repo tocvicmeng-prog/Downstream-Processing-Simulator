@@ -221,6 +221,22 @@ def render_pressure_monitor_section(
         container.error(f"Replay failed: {exc}")
         return
 
+    # B-3c (W-067, v0.8.5): publish the latest replay reading to
+    # session_state so the live-phase indicator (rendered above the
+    # run section) picks it up on the next rerun. Wrapped defensively
+    # because tests may invoke this without a real Streamlit runtime.
+    if summary.history:
+        try:
+            import streamlit as _st
+            _st.session_state["m3_latest_dp_pa"] = float(
+                summary.history[-1].dP_pa
+            )
+            _st.session_state["m3_latest_state"] = (
+                summary.final_state.value
+            )
+        except Exception:  # noqa: BLE001 — never let UI side-effects break replay
+            pass
+
     # Summary metrics row.
     cols = container.columns(5)
     cols[0].metric("Readings", f"{summary.n_readings}")

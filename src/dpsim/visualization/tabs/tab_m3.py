@@ -208,7 +208,10 @@ def render_tab_m3(tab_container) -> None:
         # recolour (bound payload concentration on resin) AND streaming
         # dots (eluate / wash / CIP outflow), with phase-dependent
         # legend labels.
-        from dpsim.visualization.components import render_column_xsec
+        from dpsim.visualization.components import (
+            render_column_xsec,
+            render_pressure_indicator,
+        )
         from dpsim.visualization.design import chrome as _chrome
         from dpsim.visualization.help import labeled_widget as _lw_xsec
         st.html(_chrome.eyebrow("Live phase view"))
@@ -226,11 +229,25 @@ def render_tab_m3(tab_container) -> None:
                 label_visibility="collapsed",
             ),
         )
-        render_column_xsec(
-            phase=_phase,  # type: ignore[arg-type]
-            column_length_mm=float(bed_height_cm * 10),
-            column_diameter_mm=float(col_diam_mm),
-        )
+        # B-3b (W-066, v0.8.5): pin a digital back-pressure indicator to
+        # the right of the column diagram. The indicator reads from
+        # ``m3_pressure_envelope`` (cached after the M3 run completes,
+        # see the post-run cache at the pressure-envelope panel) and
+        # ``m3_latest_dp_pa`` (set by the streaming monitor during
+        # offline replay). Both keys are absent on first load — the
+        # indicator then renders a clearly-labelled placeholder.
+        _col_xsec, _col_indicator = st.columns([3, 1], gap="small")
+        with _col_xsec:
+            render_column_xsec(
+                phase=_phase,  # type: ignore[arg-type]
+                column_length_mm=float(bed_height_cm * 10),
+                column_diameter_mm=float(col_diam_mm),
+            )
+        with _col_indicator:
+            render_pressure_indicator(
+                envelope=st.session_state.get("m3_pressure_envelope"),
+                current_dp_pa=st.session_state.get("m3_latest_dp_pa"),
+            )
 
         # v0.4.17 (P7): Monte-Carlo uncertainty card — promoted from
         # the sidebar popover into a primary M3 card per the canonical
@@ -781,6 +798,11 @@ def render_tab_m3(tab_container) -> None:
                 if _lifecycle_result is not None
                 else None
             )
+            # B-3b (W-066, v0.8.5): cache for the live-phase indicator
+            # (pinned at line ~211 above the run section, so it reads
+            # the envelope from session_state on the next rerun).
+            if _envelope is not None:
+                st.session_state["m3_pressure_envelope"] = _envelope
             if _envelope is not None:
                 from dpsim.core.decision_grade import OutputType
                 from dpsim.visualization.decision_grade_render import (

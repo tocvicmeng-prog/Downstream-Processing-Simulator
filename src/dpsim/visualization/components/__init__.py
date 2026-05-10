@@ -21,6 +21,9 @@ from dpsim.visualization.components.impeller_xsec_v2_2 import (
 from dpsim.visualization.components.impeller_xsec_v3 import (
     render_impeller_xsec_v3,
 )
+from dpsim.visualization.components.pressure_indicator import (
+    render_pressure_indicator,
+)
 from dpsim.visualization.components.streamlit_components import (
     StopButtonState,
     stop_button,
@@ -35,6 +38,7 @@ __all__ = [
     "render_impeller_xsec_v2",
     "render_impeller_xsec_v2_2",
     "render_impeller_xsec_v3",
+    "render_pressure_indicator",
     "stop_button",
     "triptych_panel",
 ]
