@@ -2,8 +2,10 @@
 
 B-3a / W-064 + W-065 (v0.8.5) — UI affordance pinned to the right of the
 M3 *Live phase view* column diagram. Reads the active step's
-``PressureEnvelope`` and surfaces the current ΔP as a digital number
-coloured by headroom band:
+``PressureEnvelope`` and surfaces the current ΔP as a digital number.
+When no live pressure input is available, the display intentionally reads
+``0.0`` in neutral grey instead of falling back to a predicted pressure.
+Actual live values are coloured by headroom band:
 
 * GREEN at ``headroom_ratio < 0.70`` — comfortable cruise.
 * AMBER at ``0.70 ≤ headroom_ratio < 1.00`` — approaching ceiling.
@@ -27,12 +29,13 @@ from typing import Any, Final, Literal, Optional
 
 from dpsim.module3_performance.pressure_envelope import PressureEnvelope
 
-_Band = Literal["green", "amber", "red"]
+_Band = Literal["gray", "green", "amber", "red"]
 
 
 # Mirrors ``tab_m3_monitor._STATE_COLORS``; redefined locally to keep
 # the components layer free of upward dependencies on tabs/.
 _BAND_COLOR: Final[dict[str, str]] = {
+    "gray": "#94A3B8",   # slate-400
     "green": "#10B981",  # green-500
     "amber": "#F59E0B",  # amber-500
     "red": "#EF4444",    # red-500
@@ -70,14 +73,14 @@ def _band(headroom_ratio: float) -> _Band:
 def _resolve_dp(
     envelope: PressureEnvelope, current_dp_pa: Optional[float]
 ) -> tuple[float, str]:
-    """Pick the value to display: live reading if available, else predicted.
+    """Pick the value to display from the live pressure input.
 
     Returns ``(dp_pa, source_label)`` where ``source_label`` is the
-    short tag rendered under the digit ("live" or "predicted").
+    short tag rendered under the digit ("live" or "no input").
     """
     if current_dp_pa is not None:
         return (float(current_dp_pa), "live")
-    return (float(envelope.dP_predicted_pa), "predicted")
+    return (0.0, "no input")
 
 
 def _help_modal_md(envelope: PressureEnvelope) -> str:
@@ -190,8 +193,16 @@ def _digit_html(
     dp_kpa = dp_pa / 1.0e3
     op_kpa = op_max_pa / 1.0e3
     headroom_pct = max(0.0, (1.0 - ratio) * 100.0)
+    has_live_input = source != "no input"
     # W-079 (v0.8.8): tier-aware bracket from the decision-grade policy.
-    tier_bracket = _format_dp_with_tier(dp_pa, decision_tier)
+    tier_bracket = (
+        _format_dp_with_tier(dp_pa, decision_tier)
+        if has_live_input else "waiting for input"
+    )
+    input_status = (
+        f"headroom {headroom_pct:.0f} % · {source}"
+        if has_live_input else "no live pressure input"
+    )
     return (
         '<div style="'
         'border:1px solid rgba(148,163,184,0.30);'
@@ -229,7 +240,7 @@ def _digit_html(
         'color:rgba(148,163,184,0.85);'
         'margin-top:4px;'
         '">'
-        f'headroom {headroom_pct:.0f} % · {source}'
+        f'{input_status}'
         '</div>'
         '<div style="'
         'font-size:11px;'
@@ -247,26 +258,39 @@ def _digit_html(
 
 
 def _placeholder_html() -> str:
-    """Render the no-envelope-yet placeholder.
-
-    Surfaces a clearly-labelled state per gate 41 — never a misleading
-    zero or NaN.
-    """
+    """Render the no-input placeholder as a neutral digital readout."""
     return (
         '<div style="'
         'border:1px dashed rgba(148,163,184,0.40);'
         'border-radius:4px;'
-        'padding:24px 8px;'
+        'padding:12px 8px;'
         'text-align:center;'
         'font-family:\'Geist Sans\',ui-sans-serif,system-ui,sans-serif;'
-        'font-size:12px;'
         'color:rgba(148,163,184,0.85);'
         '">'
-        'Back pressure'
-        '<br/>'
-        '<span style="font-size:11px;">'
-        '(envelope not yet computed —<br/>run the M3 lifecycle first)'
-        '</span>'
+        '<div style="'
+        'font-family:\'Geist Mono\',ui-monospace,SFMono-Regular,monospace;'
+        'font-feature-settings:\'tnum\';'
+        'font-weight:700;'
+        'font-size:28px;'
+        'line-height:1.1;'
+        f'color:{_BAND_COLOR["gray"]};'
+        '">'
+        '0.0'
+        '<span style="font-size:13px;color:rgba(148,163,184,0.85);'
+        'margin-left:4px;font-weight:500;">kPa</span>'
+        '</div>'
+        '<div style="'
+        'font-family:\'Geist Mono\',ui-monospace,monospace;'
+        'font-feature-settings:\'tnum\';'
+        'font-size:11px;'
+        'margin-top:4px;'
+        '">'
+        'no live pressure input'
+        '</div>'
+        '<div style="font-size:10px;margin-top:6px;">'
+        'run M3 or connect monitor input'
+        '</div>'
         '</div>'
     )
 
@@ -318,7 +342,7 @@ def render_pressure_indicator(
     dp_pa, source = _resolve_dp(envelope, current_dp_pa)
     op_max = envelope.dP_max_operational_pa
     ratio = (dp_pa / op_max) if op_max > 0 else float("inf")
-    band = _band(ratio)
+    band = "gray" if source == "no input" else _band(ratio)
     container.html(
         _digit_html(
             dp_pa=dp_pa,

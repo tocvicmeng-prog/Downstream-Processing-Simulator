@@ -131,16 +131,17 @@ class TestBand:
         assert _band(ratio) == expected
 
     def test_band_color_palette_matches_design(self):
+        assert _BAND_COLOR["gray"] == "#94A3B8"
         assert _BAND_COLOR["green"] == "#10B981"
         assert _BAND_COLOR["amber"] == "#F59E0B"
         assert _BAND_COLOR["red"] == "#EF4444"
 
 
 class TestResolveDp:
-    def test_falls_back_to_predicted_when_no_live_reading(self, envelope_ok):
+    def test_no_live_reading_renders_neutral_zero(self, envelope_ok):
         dp, source = _resolve_dp(envelope_ok, current_dp_pa=None)
-        assert dp == pytest.approx(envelope_ok.dP_predicted_pa)
-        assert source == "predicted"
+        assert dp == pytest.approx(0.0)
+        assert source == "no input"
 
     def test_uses_live_reading_when_provided(self, envelope_ok):
         dp, source = _resolve_dp(envelope_ok, current_dp_pa=12345.0)
@@ -223,8 +224,9 @@ class TestDigitHtml:
 class TestPlaceholderHtml:
     def test_clearly_labeled(self):
         html = _placeholder_html()
-        assert "envelope not yet computed" in html
-        assert "Back pressure" in html
+        assert "0.0" in html
+        assert "no live pressure input" in html
+        assert _BAND_COLOR["gray"] in html
 
 
 # ─── Integration via stub container ───────────────────────────────────────
@@ -238,7 +240,8 @@ class TestRenderIntegration:
         assert len(container._columns) == 2
         # Body html emitted is the placeholder.
         assert len(container.htmls) == 1
-        assert "envelope not yet computed" in container.htmls[0]
+        assert "0.0" in container.htmls[0]
+        assert _BAND_COLOR["gray"] in container.htmls[0]
         # No popover when envelope absent (the ? is a disabled caption).
         assert len(container._columns[1].popovers) == 0
 
@@ -258,8 +261,9 @@ class TestRenderIntegration:
         assert "Maximum safe back pressure" in modal_text
         # Digit body emitted.
         assert len(container.htmls) == 1
-        # Headroom annotation present.
-        assert "headroom" in container.htmls[0]
+        # Missing live input remains a neutral zero, not a predicted pressure.
+        assert "no live pressure input" in container.htmls[0]
+        assert _BAND_COLOR["gray"] in container.htmls[0]
 
     def test_live_reading_overrides_predicted(self, envelope_ok):
         container = _StubContainer()
@@ -272,9 +276,12 @@ class TestRenderIntegration:
         assert _BAND_COLOR["red"] in container.htmls[0]
         assert "live" in container.htmls[0]
 
-    def test_predicted_path_marked_as_predicted(self, envelope_ok):
+    def test_normal_live_reading_is_green(self, envelope_ok):
         container = _StubContainer()
         render_pressure_indicator(
-            envelope=envelope_ok, container=container
+            envelope=envelope_ok,
+            current_dp_pa=envelope_ok.dP_max_operational_pa * 0.1,
+            container=container,
         )
-        assert "predicted" in container.htmls[0]
+        assert _BAND_COLOR["green"] in container.htmls[0]
+        assert "live" in container.htmls[0]
