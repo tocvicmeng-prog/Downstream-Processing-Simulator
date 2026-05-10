@@ -54,6 +54,13 @@ class EquilibriumAdapter:
         elif _cls_name == "CompetitiveAffinityIsotherm":
             competitor = self._state.get("sugar_competitor", 0.0)
             return self._isotherm.equilibrium_loading(C, competitor)
+        elif _cls_name == "SaltModulatedLangmuir":
+            # B-1j / W-034 (v0.8.1): Mollerup-simplified salt-dependent
+            # Langmuir per ADR-005. State carries salt_concentration in
+            # mol/m³; the isotherm's equilibrium_loading forwards None
+            # when the field is absent → factor 1.0 (no salt modulation).
+            salt = self._state.get("salt_concentration")
+            return self._isotherm.equilibrium_loading(C, salt)
         else:
             return self._isotherm.equilibrium_loading(C)
 
