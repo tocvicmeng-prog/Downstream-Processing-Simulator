@@ -109,6 +109,8 @@ def plot_breakthrough_curve(
     dbc_5: float | None = None,
     dbc_10: float | None = None,
     dbc_50: float | None = None,
+    *,
+    tier=None,
 ) -> go.Figure:
     """C/C0 breakthrough curve with threshold lines and DBC annotations.
 
@@ -119,6 +121,12 @@ def plot_breakthrough_curve(
         dbc_5: Dynamic binding capacity at 5% breakthrough [mol/m^3 column].
         dbc_10: Dynamic binding capacity at 10% breakthrough [mol/m^3 column].
         dbc_50: Dynamic binding capacity at 50% breakthrough [mol/m^3 column].
+        tier: Optional ``ModelEvidenceTier`` for the DBC values. When
+            provided (B-1k / W-035, v0.8.1), DBC annotations are routed
+            through ``render_decision_grade_annotation`` so the rendered
+            text picks up the same NUMBER / INTERVAL / RANK_BAND /
+            SUPPRESS policy that gates ``st.metric`` widgets. When
+            ``None`` the legacy raw-value annotation is preserved.
 
     Returns:
         go.Figure showing normalised breakthrough profile.
@@ -163,16 +171,51 @@ def plot_breakthrough_curve(
             above = np.where(cc0 >= frac)[0]
             if len(above) > 0:
                 t_bt_min = time_min[above[0]]
+                # Vertical line is tier-blind; only the text label
+                # depends on the evidence tier.
                 fig.add_vline(
                     x=t_bt_min,
                     line_dash="dash",
                     line_color=color,
                     opacity=0.6,
-                    annotation_text=f"{label}={dbc_val:.1f} mol/m\u00b3",
-                    annotation_position="top left",
-                    annotation_font_color=color,
-                    annotation_font_size=10,
                 )
+                if tier is not None:
+                    # B-1k / W-035: tier-aware annotation. Output type
+                    # PRESSURE_DROP shares the SEMI_QUANTITATIVE policy
+                    # floor used for DBC values; tier rolls down when
+                    # M3 calibration is below QUANTITATIVE.
+                    from dpsim.core.decision_grade import OutputType
+                    from dpsim.visualization.decision_grade_render import (
+                        render_decision_grade_annotation,
+                    )
+
+                    render_decision_grade_annotation(
+                        fig,
+                        label=label,
+                        value=float(dbc_val),
+                        output_type=OutputType.DBC,
+                        tier=tier,
+                        unit="mol/m\u00b3",
+                        x=t_bt_min,
+                        y=frac,
+                        xref="x",
+                        yref="y",
+                        xanchor="left",
+                        yanchor="bottom",
+                        font={"size": 10, "color": color},
+                    )
+                else:
+                    fig.add_annotation(
+                        x=t_bt_min,
+                        y=frac,
+                        xref="x",
+                        yref="y",
+                        text=f"{label}={dbc_val:.1f} mol/m\u00b3",
+                        showarrow=False,
+                        xanchor="left",
+                        yanchor="bottom",
+                        font={"size": 10, "color": color},
+                    )
 
     fig.update_layout(
         title="Breakthrough Curve",
@@ -605,6 +648,8 @@ def plot_pressure_flow_curve(
     column: ColumnGeometry,
     Q_max: float,
     mu: float = 1e-3,
+    *,
+    tier=None,
 ) -> go.Figure:
     """Pressure drop vs flow rate with safe/unsafe zone annotations.
 
@@ -617,12 +662,21 @@ def plot_pressure_flow_curve(
     The legacy bursting-modulus self-derived Q_max was removed with
     ``ColumnGeometry.max_safe_flow_rate``.
 
+    v0.8.1 (B-1k / W-035): the Q_max badge is now tier-gated when
+    ``tier`` is supplied — text is routed through
+    ``render_decision_grade_annotation`` so the policy decides whether
+    to render NUMBER / INTERVAL / RANK_BAND / SUPPRESS. When ``tier``
+    is None the legacy raw-value badge is preserved.
+
     Args:
         column: ColumnGeometry instance (provides particle size, bed
             height, porosity for the KC pressure-drop curve).
         Q_max: Operational maximum flow rate [m^3/s] from the v0.7
             pressure envelope.
         mu: Dynamic viscosity [Pa.s]. Default: water at 20 C (1e-3).
+        tier: Optional ``ModelEvidenceTier`` for the envelope's Q_max
+            value. When set, the badge text is routed through the
+            decision-grade gate; otherwise legacy formatting is kept.
 
     Returns:
         go.Figure with dP [bar] vs Q [mL/min].
@@ -674,14 +728,45 @@ def plot_pressure_flow_curve(
         line=dict(color="darkorange", width=2),
     ))
 
-    # Q_max vertical marker
+    # Q_max vertical marker (tier-blind line, tier-aware text)
     fig.add_vline(
         x=Q_max_mlmin,
         line_dash="dash",
         line_color="tomato",
-        annotation_text=f"Q_max={Q_max_mlmin:.2f} mL/min",
-        annotation_position="top left",
     )
+    if tier is not None:
+        from dpsim.core.decision_grade import OutputType
+        from dpsim.visualization.decision_grade_render import (
+            render_decision_grade_annotation,
+        )
+
+        render_decision_grade_annotation(
+            fig,
+            label="Q_max",
+            value=Q_max_mlmin,
+            output_type=OutputType.Q_MAX,
+            tier=tier,
+            unit="mL/min",
+            x=Q_max_mlmin,
+            y=dP_max_bar,
+            xref="x",
+            yref="y",
+            xanchor="left",
+            yanchor="top",
+            font={"size": 11, "color": "tomato"},
+        )
+    else:
+        fig.add_annotation(
+            x=Q_max_mlmin,
+            y=dP_max_bar,
+            xref="x",
+            yref="y",
+            text=f"Q_max={Q_max_mlmin:.2f} mL/min",
+            showarrow=False,
+            xanchor="left",
+            yanchor="top",
+            font={"size": 11, "color": "tomato"},
+        )
 
     fig.update_layout(
         title=f"Pressure-Flow Curve (E\u22c6={column.E_star/1000:.0f} kPa, dp={column.particle_diameter*1e6:.0f} \u00b5m)",

@@ -146,9 +146,121 @@ def gate_decision_for(
     return decide_render_mode(output_type, tier)
 
 
+# ─── Plotly annotation tier-gating (B-1k / W-035, v0.8.1) ───────────────────
+
+
+_MODE_TAG: dict[RenderMode, str] = {
+    RenderMode.NUMBER: "",
+    RenderMode.INTERVAL: " [INTERVAL]",
+    RenderMode.RANK_BAND: " [RANK]",
+    RenderMode.SUPPRESS: "",  # not annotated; gate skips drawing
+}
+
+_MODE_COLOR_HINT: dict[RenderMode, str] = {
+    RenderMode.NUMBER: "",
+    RenderMode.INTERVAL: "rgba(120, 120, 120, 0.85)",     # de-saturated grey
+    RenderMode.RANK_BAND: "rgba(160, 100, 0, 0.85)",      # caution amber
+    RenderMode.SUPPRESS: "rgba(180, 180, 180, 0.55)",
+}
+
+
+def render_decision_grade_annotation(
+    fig,
+    *,
+    label: str,
+    value: float,
+    output_type: OutputType,
+    tier: ModelEvidenceTier,
+    unit: str = "",
+    scale: float = 1.0,
+    rank_reference: Optional[float] = None,
+    color_override: Optional[str] = None,
+    show_mode_tag: bool = True,
+    **annotation_kwargs,
+) -> Optional[RenderMode]:
+    """Add a tier-gated text annotation to a Plotly figure.
+
+    Companion to :func:`render_metric` for plotly chart overlays.
+    Routes ``value`` through :func:`format_decision_graded`, picks a
+    color hint based on the chosen render mode, and emits a
+    ``fig.add_annotation`` call carrying the formatted display string.
+
+    Suppress branch: when the policy returns ``RenderMode.SUPPRESS`` the
+    function returns the mode without drawing — callers that want to
+    visibly mark suppression should branch on the return value and add
+    a "data not available" badge instead.
+
+    Parameters
+    ----------
+    fig :
+        ``plotly.graph_objects.Figure`` (or any object accepting
+        ``add_annotation``). Annotation is drawn in-place.
+    label :
+        Prefix shown in the annotation text (e.g. ``"DBC₁₀"``).
+    value :
+        Raw numeric value before scale.
+    output_type :
+        Decision-grade output type that gates the policy.
+    tier :
+        Current evidence tier.
+    unit :
+        Unit string for display (e.g. ``"mol/m³"``, ``"kPa"``).
+    scale :
+        Multiplicative scale applied to ``value`` before formatting,
+        per the same convention as :func:`format_decision_graded`.
+    rank_reference :
+        Optional rank-band anchor when the mode lands at RANK_BAND.
+    color_override :
+        Optional explicit annotation font color; when None, the helper
+        picks an unobtrusive color hint based on mode.
+    show_mode_tag :
+        When True, append a ``[INTERVAL]`` / ``[RANK]`` suffix so users
+        reading the chart see the render mode without hovering.
+    **annotation_kwargs :
+        Extra kwargs forwarded to ``fig.add_annotation`` — typically
+        ``x``, ``y``, ``xref``, ``yref``, ``showarrow``, ``font``, etc.
+
+    Returns
+    -------
+    RenderMode or None
+        The render mode chosen by the policy, or ``None`` when no
+        annotation was drawn (only happens if the caller had passed
+        an explicit ``annotation_text`` that overrode the formatted
+        display — in current usage, always returns a RenderMode).
+    """
+    mode, display = format_decision_graded(
+        value, output_type, tier,
+        unit=unit, scale=scale, rank_reference=rank_reference,
+    )
+    if mode == RenderMode.SUPPRESS:
+        return mode
+
+    tag = _MODE_TAG[mode] if show_mode_tag else ""
+    text = f"{label}={display}{tag}" if label else f"{display}{tag}"
+    color = (
+        color_override
+        if color_override is not None
+        else _MODE_COLOR_HINT.get(mode) or None
+    )
+
+    kwargs = {
+        "text": text,
+        "showarrow": False,
+    }
+    if color:
+        font = annotation_kwargs.pop("font", None) or {}
+        if "color" not in font:
+            font = {**font, "color": color}
+        kwargs["font"] = font
+    kwargs.update(annotation_kwargs)
+    fig.add_annotation(**kwargs)
+    return mode
+
+
 __all__ = [
     "caption_for_mode",
     "format_decision_graded",
     "gate_decision_for",
+    "render_decision_grade_annotation",
     "render_metric",
 ]
