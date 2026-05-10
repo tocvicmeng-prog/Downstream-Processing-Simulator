@@ -264,6 +264,7 @@ class DownstreamProcessOrchestrator:
         dsd_max_representatives: int = 9,
         dsd_run_breakthrough: bool = False,
         dsd_quantiles: tuple[float, ...] = (0.10, 0.50, 0.90),
+        mobile_phase: MobilePhase | None = None,
     ) -> DownstreamLifecycleResult:
         """Run M1 fabrication, M2 Protein A functionalization, and M3 breakthrough.
 
@@ -775,10 +776,14 @@ class DownstreamProcessOrchestrator:
         # PolymerFamily lives on MaterialProperties (datatypes.py:1001),
         # not on SimulationParameters. Mirrors the resolution at line 525.
         try:
+            # B-1p / W-054 (v0.8.4): honour user-supplied mobile phase
+            # when the caller threads it through. Default `MobilePhase()`
+            # preserves the v0.7 behaviour for backwards compatibility.
+            _mobile_phase = mobile_phase or MobilePhase()
             pressure_envelope = compute_pressure_envelope(
                 polymer_family=props.polymer_family,
                 column=m3_column,
-                mobile_phase=MobilePhase(),
+                mobile_phase=_mobile_phase,
                 Q_set_m3_s=m3_flow_rate,
             )
         except Exception as exc:  # pragma: no cover — defensive
