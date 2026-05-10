@@ -309,56 +309,14 @@ def render_tab_m3(tab_container) -> None:
             )
             render_lifetime_panel(as_card=True)
 
-        # B-4a + B-4b (W-069 + W-070, v0.8.6): mount the mobile-phase
-        # composition editor + isotherm selector. The v0.8.4 widgets
-        # (panels/mobile_phase.py, panels/isotherm_selector.py) were
-        # defined and unit-tested but never mounted in production —
-        # see AUDIT_v0_8_5_e2e_phase3_architecture.md §A-1, §A-2.
-        # Mounting here threads user choices into st.session_state so
-        # the pre-flight envelope (line 1054) and ui_workflow's
-        # lifecycle invocation (B-4d) honour them. A user pressing
-        # Run after v0.8.6 sees their actual reagents drive the sim.
-        with st.container(border=True):
-            st.html(
-                _chrome_top.card_header_strip(
-                    eyebrow_text="Method conditions",
-                    title="Mobile phase + isotherm",
-                    right_html=_chrome_top.chip(
-                        "drives pressure envelope + breakthrough",
-                        color="var(--dps-text-muted)",
-                    ),
-                )
-            )
-            from dpsim.visualization.panels.mobile_phase import (
-                render_mobile_phase_widget,
-            )
-            from dpsim.visualization.panels.isotherm_selector import (
-                render_isotherm_widget,
-            )
-            _mp_user = render_mobile_phase_widget(
-                key_prefix="m3_mp",
-                initial=st.session_state.get("m3_mobile_phase"),
-            )
-            st.session_state["m3_mobile_phase"] = _mp_user
-
-            # Resolve the polymer family for family-aware isotherm default
-            # routing. Fall back to AGAROSE before M2 has run.
-            from dpsim.datatypes import PolymerFamily as _PF_iso
-            _fam_for_iso = _PF_iso.AGAROSE
-            _m2r_iso = st.session_state.get("m2_result")
-            if _m2r_iso is not None:
-                _candidate = getattr(_m2r_iso, "polymer_family", None)
-                if _candidate is None:
-                    _m1_contract = getattr(_m2r_iso, "m1_contract", None)
-                    _candidate = getattr(_m1_contract, "polymer_family", None)
-                if isinstance(_candidate, _PF_iso):
-                    _fam_for_iso = _candidate
-            _iso_spec_user = render_isotherm_widget(
-                key_prefix="m3_iso",
-                polymer_family=_fam_for_iso,
-                initial=st.session_state.get("m3_isotherm_spec"),
-            )
-            st.session_state["m3_isotherm_spec"] = _iso_spec_user
+        # W-087 (v0.8.9): the method-conditions section was extracted
+        # into tabs/m3/method_conditions_section.py as the first
+        # proof-of-pattern split of this 1198-LOC file. Behaviour is
+        # unchanged — same widgets, same session_state keys.
+        from dpsim.visualization.tabs.m3 import (
+            render_method_conditions_section,
+        )
+        render_method_conditions_section(container=st)
 
         # Mode-specific inputs
         chrom_mode = "Breakthrough"
@@ -1163,19 +1121,28 @@ def render_tab_m3(tab_container) -> None:
                         st.session_state["mobile_phase"] = (
                             st.session_state.get("m3_mobile_phase") or _MP_bt()
                         )
-                        # B-4d (W-072, v0.8.6): honour the user's mobile-phase
-                        # choice from the method-conditions widget. Falls
-                        # back to MobilePhase() defaults when absent.
-                        _mp_bt_user = (
-                            st.session_state.get("m3_mobile_phase")
-                            or _MP_bt()
-                        )
-                        _env_bt = _cpe_bt(
-                            polymer_family=_fam_bt,
-                            column=_col_bt,
-                            mobile_phase=_mp_bt_user,
-                            Q_set_m3_s=max(flow_rate_mL / 60.0e6, 1e-12),
-                        )
+                        # W-083 (v0.8.9): consolidate to a single source-of-
+                        # truth via session_state. Prefer the cached
+                        # `m3_pressure_envelope` (populated by the lifecycle's
+                        # post-run path at line ~860 above, OR by an inline
+                        # compute on first load). Fall back to a fresh
+                        # compute only when the cache is empty. Closes audit
+                        # defect A-12 — at v0.8.8 the same envelope was
+                        # computed twice in this file.
+                        _env_bt = st.session_state.get("m3_pressure_envelope")
+                        if _env_bt is None:
+                            # First-load fallback — compute once, cache.
+                            _mp_bt_user = (
+                                st.session_state.get("m3_mobile_phase")
+                                or _MP_bt()
+                            )
+                            _env_bt = _cpe_bt(
+                                polymer_family=_fam_bt,
+                                column=_col_bt,
+                                mobile_phase=_mp_bt_user,
+                                Q_set_m3_s=max(flow_rate_mL / 60.0e6, 1e-12),
+                            )
+                            st.session_state["m3_pressure_envelope"] = _env_bt
                         st.plotly_chart(
                             plot_pressure_flow_curve(_col_bt, Q_max=_env_bt.Q_max_m3_s),
                             width="stretch",

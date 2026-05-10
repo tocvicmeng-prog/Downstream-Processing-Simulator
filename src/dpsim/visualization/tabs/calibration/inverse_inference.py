@@ -120,6 +120,16 @@ def render_inverse_inference_panel(
 
     # ── Measurement table editor ──────────────────────────────────────
     target.markdown("**Measured (Q, ΔP, σ) data points**")
+    # W-096 (v0.8.9): unit-conversion crib for the SI-anchored columns.
+    # Closes audit defect U-24 partial — bench data is typically in
+    # mL/min and kPa, but the SI schema (Q_m3_s, dP_pa) requires
+    # conversion. The crib makes the conversions one-glance obvious.
+    target.caption(
+        ":material/calculate: **Unit conversions** — "
+        "1 mL/min = 1.667 × 10⁻⁸ m³/s · "
+        "1 kPa = 1000 Pa · "
+        "1 bar = 1.0 × 10⁵ Pa."
+    )
     seed_df = pd.DataFrame(
         st.session_state.get(
             f"{key_prefix}_measurements_df", _DEFAULT_MEASUREMENTS,
@@ -130,11 +140,19 @@ def render_inverse_inference_panel(
         num_rows="dynamic",
         column_config={
             "Q_m3_s": st.column_config.NumberColumn(
-                "Q (m³/s)", help="Measured volumetric flow rate.",
+                "Q (m³/s)",
+                help=(
+                    "Measured volumetric flow rate in m³/s. "
+                    "To convert from mL/min, divide by 6.0e7."
+                ),
                 min_value=0.0, format="%.3e",
             ),
             "dP_pa": st.column_config.NumberColumn(
-                "ΔP (Pa)", help="Measured pressure drop.",
+                "ΔP (Pa)",
+                help=(
+                    "Measured pressure drop in Pa. "
+                    "To convert from kPa, multiply by 1000."
+                ),
                 min_value=0.0, format="%.0f",
             ),
             "sigma_dP_pa": st.column_config.NumberColumn(

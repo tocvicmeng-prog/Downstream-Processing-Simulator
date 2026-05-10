@@ -28,9 +28,17 @@ class _StubColumn:
 
     def __init__(self) -> None:
         self.metric_calls: list[tuple[str, str]] = []
+        # W-092 (v0.8.9): RecoveryAction clickable controls add button() calls
+        # on individual columns. The stub returns False so the click handler
+        # never fires under tests.
+        self.button_calls: list[str] = []
 
     def metric(self, label: str, value: Any, **kwargs: Any) -> None:
         self.metric_calls.append((label, str(value)))
+
+    def button(self, label: str, **kwargs: Any) -> bool:
+        self.button_calls.append(label)
+        return False
 
 
 class _StubContainer:

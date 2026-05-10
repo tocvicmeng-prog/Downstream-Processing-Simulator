@@ -324,14 +324,14 @@ def render_pressure_monitor_section(
     # session_state so the live-phase indicator (rendered above the
     # run section) picks it up on the next rerun. Wrapped defensively
     # because tests may invoke this without a real Streamlit runtime.
+    # W-102 (v0.8.9): m3_latest_state was an orphan write at v0.8.5 —
+    # no production reader. Removed; the indicator and tier banner
+    # have their own sources for state.
     if summary.history:
         try:
             import streamlit as _st
             _st.session_state["m3_latest_dp_pa"] = float(
                 summary.history[-1].dP_pa
-            )
-            _st.session_state["m3_latest_state"] = (
-                summary.final_state.value
             )
         except Exception:  # noqa: BLE001 — never let UI side-effects break replay
             pass
@@ -400,6 +400,15 @@ def render_pressure_monitor_section(
             f"{summary.n_readings} readings."
         )
 
+    # W-092 (v0.8.9): RecoveryAction → clickable controls. v0.8.8
+    # W-091 closed "reduce flow to Q_recommended" on the pressure
+    # indicator; this surfaces the dashboard-controllable subset of
+    # the remaining actions next to the final-state chip. Bench-only
+    # actions (stop & repack, emergency stop) intentionally remain
+    # text-labelled — no UI control can perform a physical
+    # repacking. Closes audit defect U-23.
+    _render_recovery_action_controls(container=container, summary=summary)
+
     # Trace plot.
     fig = _build_timeline_figure(summary, envelope)
     container.plotly_chart(fig, width="stretch")
@@ -409,6 +418,99 @@ def render_pressure_monitor_section(
     # timestamp) so the operator can audit the run, not just see the
     # final state.
     _render_recovery_action_timeline(container=container, summary=summary)
+
+
+def _render_recovery_action_controls(
+    *,
+    container: Any,
+    summary: ReplaySummary,
+) -> None:
+    """W-092 (v0.8.9) — clickable RecoveryAction controls.
+
+    The audit's defect U-23 said "labels are text-only — no UI control
+    linking". This function surfaces clickable buttons for the subset
+    of RecoveryAction values that map to dashboard-controllable
+    operations:
+
+    * ``reduce_flow`` → set m3_flow to Q_recommended (mirrors W-091).
+    * ``switch_to_wash`` → reset m3_mobile_phase to a low-salt wash
+      profile (PBS-style).
+    * ``operator_review`` → write a note to session_state for audit.
+
+    Bench-only actions (``stop_and_repack``, ``emergency_stop``,
+    ``continue_monitor``) remain text-labelled in the chip above —
+    no UI control can perform a physical column repack.
+    """
+    action_value = summary.final_recovery_action.value
+    if action_value in ("none", "continue_monitor"):
+        return  # Nothing actionable.
+
+    container.markdown("**Recovery actions** (dashboard-controllable subset)")
+    cols = container.columns(3)
+
+    # Action 1: reduce flow (mirrors W-091 from the indicator).
+    if action_value in (
+        "reduce_flow", "switch_to_wash", "operator_review", "stop_and_repack"
+    ):
+        try:
+            import streamlit as _st_a
+            envelope = _st_a.session_state.get("m3_pressure_envelope")
+            if envelope is not None:
+                q_rec = float(envelope.Q_recommended_m3_s) * 60.0 * 1.0e6
+                if cols[0].button(
+                    f"⤓ Set Q to Q_rec ({q_rec:.2f} mL/min)",
+                    key="recact_reduce_flow",
+                    use_container_width=True,
+                ):
+                    _st_a.session_state["m3_flow"] = float(q_rec)
+                    _st_a.rerun()
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Action 2: switch to wash buffer (reset m3_mobile_phase).
+    if action_value in ("switch_to_wash", "operator_review"):
+        if cols[1].button(
+            "⇆ Switch to wash buffer (PBS, no glycerol)",
+            key="recact_switch_wash",
+            use_container_width=True,
+        ):
+            try:
+                import streamlit as _st_a
+                from dpsim.core.mobile_phase import MobilePhase
+                _st_a.session_state["m3_mobile_phase"] = MobilePhase(
+                    T_C=22.0, c_nacl_M=0.15,
+                    phi_glycerol=0.0, phi_ethanol=0.0,
+                )
+                _st_a.rerun()
+            except Exception:  # noqa: BLE001
+                pass
+
+    # Action 3: operator review note.
+    if action_value in ("operator_review", "stop_and_repack", "emergency_stop"):
+        if cols[2].button(
+            "📝 Flag run for operator review",
+            key="recact_review",
+            use_container_width=True,
+        ):
+            try:
+                import streamlit as _st_a
+                from datetime import datetime, timezone
+                notes = list(_st_a.session_state.get("m3_review_notes", []))
+                notes.append({
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "rule": (
+                        summary.final_rule.value
+                        if summary.final_rule is not None
+                        else "(unknown)"
+                    ),
+                    "action": action_value,
+                })
+                _st_a.session_state["m3_review_notes"] = notes
+                container.success(
+                    f":material/flag: Run flagged ({len(notes)} total review notes)."
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _render_recovery_action_timeline(

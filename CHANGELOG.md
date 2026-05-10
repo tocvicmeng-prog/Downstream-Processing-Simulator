@@ -1,5 +1,53 @@
 # Changelog
 
+## v0.8.9 — All deferred W-items closed (2026-05-10)
+
+Closes the remaining 7 W-items deferred at v0.8.8 close. With v0.8.9 all 25 W-items in `docs/update_workplan_2026-05-10_v0_9_0.md` §3 are now closed (the v0.8.8 + v0.8.9 cumulative total). Versioned as v0.8.9 (not v0.9.0) per the project's versioning policy — v0.9 stays reserved for the durable v1.0 deferral plateau.
+
+### Closed (7 W-items)
+
+- **W-081** — Tier-routing CI gate. New `tests/visualization/test_tier_routing_gate.py` walks the visualization tree for bare `.metric(` callsites and asserts the count never exceeds the documented baseline (43 at v0.8.9 close). Companion to the v0.8.6 widget-mounting AST gate (W-073). New numeric displays must route through `render_metric` from `decision_grade_render` carrying `OutputType` + `tier`.
+- **W-083** — Removed parallel pre-flight envelope compute at `tab_m3.py:1051`. The post-run pressure-flow plot now reads from the cached `m3_pressure_envelope` (single source-of-truth via session_state) and falls back to a fresh compute only when the cache is empty. Closes audit defect A-12.
+- **W-084** — M3 geometry + flow rate writethrough to recipe. `ui_workflow.render_lifecycle_run_panel` now mutates the recipe's M3 `PACK_COLUMN` step (`column_diameter`, `bed_height`, `bed_porosity`) and `LOAD` step (`flow_rate`) with the user's UI session_state values *before* invoking the lifecycle. The lifecycle and the in-page preview now use the same geometry. Closes audit defect S-13 / U-7 / A-13.
+- **W-087** — `tab_m3.py` refactor — proof-of-pattern split. New `tabs/m3/` directory with `method_conditions_section.py` (the v0.8.6 mobile-phase + isotherm widgets, ~80 LOC). `tab_m3.py` reduces by ~50 LOC and the call site collapses to a single `render_method_conditions_section(...)`. Validates the refactor pattern; full split (every cohesive section) queued for v1.0. Partial closure of audit defect A-18.
+- **W-092** — RecoveryAction labels become clickable controls. New `_render_recovery_action_controls` helper in `tab_m3_monitor.py` surfaces three dashboard-controllable buttons next to the final-state chip:
+  * *Set Q to Q_recommended* — mirrors the v0.8.8 W-091 control on the pressure indicator.
+  * *Switch to wash buffer (PBS, no glycerol)* — resets `m3_mobile_phase` to a low-salt wash profile.
+  * *Flag run for operator review* — appends a timestamped audit note to `m3_review_notes`.
+
+  Bench-only actions (stop & repack, emergency stop, continue & monitor) intentionally remain text-labelled — no UI control can perform a physical column repack. Closes audit defect U-23.
+- **W-096** — Unit-conversion crib in the inverse Bayesian measurement editor. Closes audit defect U-24 partial. The data editor's column headers now carry inline help tooltips with the SI ↔ bench unit conversions (`1 mL/min = 1.667e-8 m³/s`, `1 kPa = 1000 Pa`, `1 bar = 1.0e5 Pa`). Full unit standardisation across every input boundary remains a v1.0 sweep.
+- **W-102** — Removed orphan write of `m3_latest_state` in `tab_m3_monitor.py`. The v0.8.5 W-067 introduced the write but no production reader ever consumed it; the indicator and tier banner have their own state sources. Closes audit defect A-10.
+
+### Verification
+
+- **2 new tests** (`test_tier_routing_gate.py`); **525 tests pass** across the visualization + module3_performance + lifecycle + AST-gate scope (up from 523 at v0.8.8).
+- ruff: 0 violations across all edited paths.
+- mypy: 0 issues on the changed source files.
+- AST gate: 0 violations on managed enums.
+- Widget-mounting AST gate (W-073): 0 violations.
+- Tier-routing CI gate (W-081): baseline 43, current 43 — passing.
+
+### Public-communication framing
+
+> v0.8.9 ships as **"all v0.9.0 plan items closed"**. Every W-item from the joint three-role plan §3 is now resolved (W-079 → W-102, 24 items + 1 follow-on). The dashboard has now traversed every milestone in the plan: honest (v0.8.6) → complete (v0.8.7) → wet-lab-credible (v0.8.8) → fully-mature-as-scoped (v0.8.9). The v0.9 maturity tag remains reserved for once the three durable v1.0 deferrals close (live AKTA UNICORN, MCMC inverse, cyclic SMB).
+
+### Remaining (durable v1.0 candidates)
+
+Unchanged. Three durable deferrals remain v1.0+ candidates per the original ADRs:
+
+- **Live AKTA UNICORN socket** (ADR-008 hardware deferral). The `MonitorSource.unicorn_socket` slot is reserved and the v0.8.7 UI exposes a disabled placeholder.
+- **MCMC inverse promotion** (ADR-010 dataset-bound). The importance-sampling inverse stays the v0.9 ceiling. Promotion awaits datasets that warrant the `pymc` cold-import cost.
+- **Cyclic SMB / multi-bed dynamics** (ADR-009 §"Out of scope"). Substantial physics scope.
+
+### Detailed handover
+
+- `docs/handover/HANDOVER_v0_8_9_release.md` — combined release-level handover for the 7 W-items.
+
+### Architecture decisions
+
+No new ADRs. v0.8.9 closes the operational maturity gap to its scoped completion. The new `tabs/m3/` directory introduced by W-087 establishes the pattern for the v1.0 `tab_m3.py` full split.
+
 ## v0.8.8 — Maturation milestone (2026-05-10)
 
 Closes 17 of the 25 W-items in `docs/update_workplan_2026-05-10_v0_9_0.md` §3 — the maturation work plan. Versioned as v0.8.8 (not v0.9.0) per the project versioning policy: v0.9.0 stays reserved for the matured-status plateau once the durable v1.0 deferrals (live AKTA UNICORN, MCMC inverse, cyclic SMB) close.

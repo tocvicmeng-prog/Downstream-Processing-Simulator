@@ -903,6 +903,55 @@ def render_lifecycle_run_panel(
                 _user_isotherm = to_isotherm(_user_isotherm_spec)
             except Exception:  # noqa: BLE001 — never let UI side break run
                 _user_isotherm = None
+
+        # W-084 (v0.8.9): write M3 geometry + flow inputs through to
+        # the recipe's M3 ProcessSteps so the lifecycle uses the
+        # user's bench geometry rather than the recipe defaults. Closes
+        # audit defect S-13 / U-7 / A-13 — at v0.8.8 the M3 tab's
+        # geometry inputs and the recipe's PACK_COLUMN parameters
+        # could diverge silently. Mutates the recipe in-place; the
+        # recipe is held by reference in session_state so subsequent
+        # calls see the updated values.
+        try:
+            from dpsim.core.quantities import Quantity
+            from dpsim.core.process_recipe import (
+                LifecycleStage,
+                ProcessStepKind,
+            )
+            _user_col_d_mm = session_state.get("m3_col_d")
+            _user_bed_h_cm = session_state.get("m3_bed_h")
+            _user_eps_b = session_state.get("m3_eps_b")
+            _user_flow_ml_min = session_state.get("m3_flow")
+            for _step in recipe.steps:
+                if _step.stage != LifecycleStage.M3_PERFORMANCE:
+                    continue
+                if (
+                    _step.kind == ProcessStepKind.PACK_COLUMN
+                    and isinstance(_step.parameters, dict)
+                ):
+                    if _user_col_d_mm is not None:
+                        _step.parameters["column_diameter"] = Quantity(
+                            float(_user_col_d_mm), "mm", source="user_ui_v0.8.9"
+                        )
+                    if _user_bed_h_cm is not None:
+                        _step.parameters["bed_height"] = Quantity(
+                            float(_user_bed_h_cm), "cm", source="user_ui_v0.8.9"
+                        )
+                    if _user_eps_b is not None:
+                        _step.parameters["bed_porosity"] = Quantity(
+                            float(_user_eps_b), "fraction", source="user_ui_v0.8.9"
+                        )
+                if (
+                    _step.kind == ProcessStepKind.LOAD
+                    and isinstance(_step.parameters, dict)
+                    and _user_flow_ml_min is not None
+                ):
+                    _step.parameters["flow_rate"] = Quantity(
+                        float(_user_flow_ml_min), "mL/min",
+                        source="user_ui_v0.8.9",
+                    )
+        except Exception:  # noqa: BLE001 — UI side-effect; never block run
+            pass
         bg_run = run_in_background(
             orchestrator.run,
             kwargs=dict(
