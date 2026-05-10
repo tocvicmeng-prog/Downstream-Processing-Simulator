@@ -506,11 +506,15 @@ class TestM3ModelManifest:
             assumptions=["Ranking-only ligand class."],
             diagnostics={"fmc_confidence_tier": "ranking_only"},
         )
+        # v0.5.0 (D2) removed the public ``confidence_tier`` side-channel
+        # from FunctionalMediaContract; the typed-enum
+        # ``model_manifest.evidence_tier`` carries that info now. The
+        # ``diagnostics["fmc_confidence_tier"]`` string above is what the
+        # downstream tier inheritance check reads when present.
         fmc = FunctionalMediaContract(
             bead_d50=default_column.particle_diameter,
             porosity=default_column.particle_porosity,
             estimated_q_max=100.0,
-            confidence_tier="ranking_only",
             model_manifest=ranking_manifest,
         )
 
