@@ -61,6 +61,12 @@ class EquilibriumAdapter:
             # when the field is absent → factor 1.0 (no salt modulation).
             salt = self._state.get("salt_concentration")
             return self._isotherm.equilibrium_loading(C, salt)
+        elif _cls_name == "ImidazoleModulatedLangmuir":
+            # B-1m / W-038 (v0.8.2): single-component IMAC screening
+            # adapter. State carries imidazole concentration in mol/m³;
+            # absent field degrades to bare base behaviour.
+            imidazole = self._state.get("imidazole")
+            return self._isotherm.equilibrium_loading(C, imidazole)
         else:
             return self._isotherm.equilibrium_loading(C)
 
