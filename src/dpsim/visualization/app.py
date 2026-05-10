@@ -328,19 +328,18 @@ _SCIENTIFIC_MODE_OPTIONS: tuple[tuple[str, str, str], ...] = (
     ("hybrid", "Hybrid Coupled", ModelMode.HYBRID_COUPLED.value),
     ("mechanistic", "Mechanistic Research", ModelMode.MECHANISTIC_RESEARCH.value),
 )
+# Short, single-line help text for the segmented-control's title= tooltip.
+# v0.8.10 fix: the v0.8.8 W-098 multi-paragraph version (with \n\n blank
+# lines) leaked into the rendered page because Streamlit's markdown
+# parser treats blank lines as paragraph breaks even inside HTML
+# attributes, splitting the anchor and dumping the help body as visible
+# text. Tooltips need to be single-line; the rich exposition lives in
+# the W-099 *Guided workflow tour* sidebar expander.
 _SCIENTIFIC_MODE_HELP = (
-    "W-098 (v0.8.8) — clearer consequence framing per audit defect U-2:\n\n"
-    "EMPIRICAL ENGINEERING — fast screening (~30s/run). Phenomenological "
-    "fits; suppresses non-critical model warnings. Use for early-phase "
-    "what-if scoping. Outputs render as SEMI_QUANTITATIVE.\n\n"
-    "HYBRID COUPLED (default) — balanced fidelity (~60s/run). "
-    "Phenomenological DN model + trust gates. The recommended default for "
-    "wet-lab planning. Outputs honour the decision-grade ladder.\n\n"
-    "MECHANISTIC RESEARCH — full physics (~120s/run). Flory-Rehner affine "
-    "IPN model; strictest trust gates; emits ALL warnings including soft "
-    "out-of-domain ones. Use for publication-grade simulations.\n\n"
-    "Switching modes triggers a Streamlit rerun — unsaved sliders persist "
-    "via session_state, but the run report from the active mode does not."
+    "Empirical: fast screening (~30s, suppresses model warnings). "
+    "Hybrid (default): balanced fidelity (~60s, decision-grade ladder). "
+    "Mechanistic: full physics (~120s, strictest trust gates). "
+    "Switching triggers a rerun; unsaved sliders persist via session_state."
 )
 
 # Consume ?dpsim_mode=… written by anchor clicks.
@@ -392,9 +391,17 @@ def _render_scientific_mode_radio() -> None:
         active = key == current
         bg = "var(--dps-accent)" if active else "transparent"
         fg = "var(--dps-slate-950)" if active else "var(--dps-text-muted)"
+        # v0.8.10 fix: strip newlines defensively. Streamlit's markdown
+        # parser treats \n\n blank lines as paragraph breaks even
+        # inside HTML attributes, which would split the anchor and
+        # dump the title body as visible page text — the v0.8.8 W-098
+        # regression. Single-line title is the contract for tooltips.
+        _title_safe = _h.escape(
+            " ".join(_SCIENTIFIC_MODE_HELP.split())
+        )
         return (
             f'<a href="?{_SCIENTIFIC_MODE_QUERY}={key}" target="_self" '
-            f'title="{_h.escape(_SCIENTIFIC_MODE_HELP)}" '
+            f'title="{_title_safe}" '
             f'style="display:inline-flex;align-items:center;'
             f'justify-content:center;padding:0 10px;height:20px;'
             f'border-radius:3px;background:{bg};color:{fg};'
