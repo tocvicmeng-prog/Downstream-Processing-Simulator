@@ -9,8 +9,19 @@ from plotly.subplots import make_subplots
 from ..datatypes import EmulsificationResult, GelationResult, CrosslinkingResult, MechanicalResult, FullResult
 
 
-def plot_droplet_size_distribution(result: EmulsificationResult) -> go.Figure:
-    """Volume-weighted droplet size distribution from Level 1."""
+def plot_droplet_size_distribution(
+    result: EmulsificationResult,
+    *,
+    tier=None,
+) -> go.Figure:
+    """Volume-weighted droplet size distribution from Level 1.
+
+    v0.8.2 (B-1ℓ / W-037): when ``tier`` is supplied, the d32 / d50
+    annotations route through ``render_decision_grade_annotation`` so
+    the rendered text picks up the policy floor for ``OutputType.D32``.
+    When ``tier`` is None (default) the legacy raw-value annotation
+    is preserved bit-for-bit.
+    """
     d_bins_safe = np.maximum(result.d_bins * 1e6, 1e-6)
     vol = result.n_d * (np.pi / 6.0 * result.d_bins**3)
     vol_pct = vol / np.sum(vol) * 100 if np.sum(vol) > 0 else vol
@@ -22,10 +33,52 @@ def plot_droplet_size_distribution(result: EmulsificationResult) -> go.Figure:
         marker_color="steelblue",
         name="Volume %",
     ))
-    fig.add_vline(x=result.d32 * 1e6, line_dash="dash", line_color="red",
-                  annotation_text=f"d32={result.d32*1e6:.1f} µm")
-    fig.add_vline(x=result.d50 * 1e6, line_dash="dot", line_color="green",
-                  annotation_text=f"d50={result.d50*1e6:.1f} µm")
+
+    if tier is not None:
+        from dpsim.core.decision_grade import OutputType
+        from dpsim.visualization.decision_grade_render import (
+            render_decision_grade_annotation,
+        )
+
+        # Vertical lines stay tier-blind; only the labels are gated.
+        fig.add_vline(x=result.d32 * 1e6, line_dash="dash", line_color="red")
+        render_decision_grade_annotation(
+            fig,
+            label="d32",
+            value=float(result.d32),
+            output_type=OutputType.D32,
+            tier=tier,
+            unit="µm",
+            scale=1.0e6,  # m → µm
+            x=result.d32 * 1e6,
+            y=max(vol_pct) * 0.95 if len(vol_pct) > 0 else 1.0,
+            xref="x",
+            yref="y",
+            xanchor="left",
+            font={"color": "red", "size": 10},
+        )
+        fig.add_vline(x=result.d50 * 1e6, line_dash="dot", line_color="green")
+        render_decision_grade_annotation(
+            fig,
+            label="d50",
+            value=float(result.d50),
+            output_type=OutputType.D32,  # share the policy floor
+            tier=tier,
+            unit="µm",
+            scale=1.0e6,
+            x=result.d50 * 1e6,
+            y=max(vol_pct) * 0.85 if len(vol_pct) > 0 else 1.0,
+            xref="x",
+            yref="y",
+            xanchor="left",
+            font={"color": "green", "size": 10},
+        )
+    else:
+        fig.add_vline(x=result.d32 * 1e6, line_dash="dash", line_color="red",
+                      annotation_text=f"d32={result.d32*1e6:.1f} µm")
+        fig.add_vline(x=result.d50 * 1e6, line_dash="dot", line_color="green",
+                      annotation_text=f"d50={result.d50*1e6:.1f} µm")
+
     fig.update_layout(
         title="Droplet Size Distribution (L1)",
         xaxis_title="Diameter (µm)", xaxis_type="log",
