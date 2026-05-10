@@ -411,6 +411,17 @@ def render_calibration_stage(
     st.html('<div class="dps-divider" style="margin:16px 0;"></div>')
     render_calibration_status_panel(session_state)
 
+    # B-2s / W-059 (v0.8.4): forward MC + inverse Bayesian + multi-column
+    # series + the dedicated wet-lab YAML ingestion panel. The above
+    # legacy uploader stashes raw bytes without applying; the new tab
+    # below parses + previews the tier-promotion diff + commits via
+    # apply_campaign with proper validation.
+    st.html('<div class="dps-divider" style="margin:24px 0;"></div>')
+    from dpsim.visualization.tabs.tab_calibration import (
+        render_tab_calibration,
+    )
+    render_tab_calibration()
+
 
 __all__ = [
     "render_calibration_stage",
