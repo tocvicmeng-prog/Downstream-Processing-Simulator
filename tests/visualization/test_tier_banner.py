@@ -1,7 +1,8 @@
-"""Tests for the top-of-page tier banner (B-1r / W-058, v0.8.4)."""
+"""Tests for the persistent evidence-tier notice (B-1r / W-058, v0.8.4)."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from dpsim.datatypes import ModelEvidenceTier
@@ -71,6 +72,13 @@ class TestDefaultPath:
         assert len(c.infos) == 1
         assert "SEMI_QUANTITATIVE" in c.infos[0]
         assert "validated" in c.infos[0].lower()
+
+    def test_app_mounts_tier_notice_after_shell_body(self):
+        app_path = Path(__file__).resolve().parents[2] / "src" / "dpsim" / "visualization" / "app.py"
+        source = app_path.read_text(encoding="utf-8")
+
+        assert source.rfind("_render_bottom_tier_notice()") > source.find("render_shell(")
+        assert source.rfind("_render_bottom_tier_notice()") > source.find("render_triptych(")
 
 
 class TestStrongTierPaths:

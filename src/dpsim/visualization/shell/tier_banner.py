@@ -1,8 +1,8 @@
-"""Top-of-page SEMI_QUANTITATIVE banner.
+"""Persistent SEMI_QUANTITATIVE evidence-tier notice.
 
 B-1r / W-058 — v0.8.4. Resolves audit defect W-1 (Phase 1 §6).
 
-Persistent banner rendered as the first child of every stage. Surfaces
+Persistent notice rendered on every page. Surfaces
 the weakest evidence tier across the lifecycle result + whether
 calibration data is loaded into the calibration store. Three visual
 states reuse the existing semantic palette (no new colours per
@@ -10,8 +10,8 @@ DESIGN.md).
 
 The README guardrail — "do not describe DPSim outputs as 'validated'
 unless the calibration store carries the wet-lab data that justifies
-the claim" — is the canonical project framing. The banner enforces
-visibility of that framing at the top of every screen.
+the claim" — is the canonical project framing. The notice enforces
+visibility of that framing without occupying the primary stage header.
 """
 
 from __future__ import annotations

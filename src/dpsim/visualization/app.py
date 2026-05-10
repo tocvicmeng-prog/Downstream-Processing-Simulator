@@ -659,11 +659,10 @@ _status_map = derive_stage_status(current_recipe=_workflow_recipe)
 # always visible, focused column expands.
 _direction = get_direction()
 
-# B-4c (W-071, v0.8.6): mount the SEMI_QUANTITATIVE tier banner at the
-# top of every stage. The widget was defined in v0.8.4 (W-058) but never
-# mounted in production — see AUDIT_v0_8_5_e2e_phase3_architecture.md
-# §A-3. Mounting here surfaces the worst tier across the lifecycle
-# result + whether calibration data is loaded, on every page.
+# B-4c (W-071, v0.8.6): mount the SEMI_QUANTITATIVE tier notice on every
+# page. It now renders after the shell body so the scientific disclaimer
+# lives at the bottom of the page instead of competing with primary stage
+# controls at the top.
 from dpsim.visualization.shell.tier_banner import (
     derive_weakest_tier_for_banner as _derive_weakest_tier_for_banner,
     render_tier_banner as _render_tier_banner,
@@ -675,10 +674,16 @@ try:
     )
 except Exception:  # noqa: BLE001 — never let banner break the page
     _weakest_tier_for_banner = None
-_render_tier_banner(
-    weakest_tier=_weakest_tier_for_banner,
-    has_calibration=bool(st.session_state.get("_cal_store")),
-)
+
+
+def _render_bottom_tier_notice() -> None:
+    """Render the evidence-tier guardrail after the page content."""
+
+    st.html('<div class="dps-divider" style="margin:24px 0 12px 0;"></div>')
+    _render_tier_banner(
+        weakest_tier=_weakest_tier_for_banner,
+        has_calibration=bool(st.session_state.get("_cal_store")),
+    )
 
 if _direction == "a":
     render_shell(
@@ -757,3 +762,5 @@ else:
             evidence_stages=_evidence_stages,
             dock_renderer=_b_dock,
         )
+
+_render_bottom_tier_notice()
