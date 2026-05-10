@@ -73,6 +73,14 @@ class EquilibriumAdapter:
             # the underlying solve is the SMA fixed-point on q_salt.
             salt = self._state.get("salt_concentration")
             return self._isotherm.equilibrium_loading(C, salt)
+        elif _cls_name == "SaltModulatedCompetitiveLangmuir":
+            # B-2m / W-042 (v0.8.2): multi-component competitive Langmuir
+            # with per-component characteristic-charge ν_i. Routes the
+            # same salt_concentration field; degrades to bare base when
+            # the field is absent.
+            salt = self._state.get("salt_concentration")
+            C_arr = np.atleast_1d(np.asarray(C, dtype=float))
+            return self._isotherm.equilibrium_loading(C_arr, salt)
         else:
             return self._isotherm.equilibrium_loading(C)
 
