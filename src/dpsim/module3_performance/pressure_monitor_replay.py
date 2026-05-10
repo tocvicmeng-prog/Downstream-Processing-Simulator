@@ -35,6 +35,7 @@ from dpsim.module3_performance.pressure_monitor import (
     PressureMonitorReading,
     PressureMonitorRule,
     PressureMonitorState,
+    RecoveryAction,
     evaluate_pressure_trace,
 )
 
@@ -204,6 +205,7 @@ class ReplaySummary:
     max_dpdt_pct_per_min: float
     history: tuple[PressureMonitorReading, ...]
     state_timeline: tuple[tuple[float, str, Optional[str]], ...]
+    final_recovery_action: RecoveryAction = RecoveryAction.NONE
 
 
 def replay(
@@ -298,6 +300,7 @@ def replay(
         max_dpdt_pct_per_min=max_dpdt,
         history=history,
         state_timeline=tuple(timeline),
+        final_recovery_action=output.recovery_action,
     )
 
 

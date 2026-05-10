@@ -45,6 +45,18 @@ _STATE_COLORS: dict[str, str] = {
     PressureMonitorState.BLOCKER.value: "#EF4444",  # red-500
 }
 
+
+# B-2ℓ / W-041 (v0.8.2): operator-facing labels for RecoveryAction.
+_RECOVERY_ACTION_LABEL: dict[str, str] = {
+    "none": "no action",
+    "continue_monitor": "continue & monitor",
+    "reduce_flow": "reduce flow to Q_recommended",
+    "switch_to_wash": "switch to wash buffer",
+    "stop_and_repack": "stop & repack column",
+    "emergency_stop": "EMERGENCY STOP",
+    "operator_review": "operator review (fouling-suggestive)",
+}
+
 _EXAMPLE_CSV: str = (
     "t_s,dP_pa,Q_m3_s\n"
     "0,40000,1.0e-7\n"
@@ -237,6 +249,13 @@ def render_pressure_monitor_section(
     )
 
     # Final-state advisory chip.
+    # B-2ℓ / W-041: structured recovery-action chip alongside the
+    # legacy advisory message.
+    action_label = _RECOVERY_ACTION_LABEL.get(
+        summary.final_recovery_action.value,
+        summary.final_recovery_action.value.replace("_", " ").title(),
+    )
+
     if summary.final_state == PressureMonitorState.BLOCKER:
         rule = (
             summary.final_rule.value
@@ -244,8 +263,9 @@ def render_pressure_monitor_section(
             else "(unknown)"
         )
         container.error(
-            f"Final state BLOCKER (rule: `{rule}`). The trace reached an "
-            "operational ceiling or a fouling / channeling rule fired."
+            f"Final state BLOCKER (rule: `{rule}`, action: **{action_label}**). "
+            "The trace reached an operational ceiling or a fouling / "
+            "channeling rule fired."
         )
     elif summary.final_state == PressureMonitorState.WARNING:
         rule = (
@@ -254,14 +274,15 @@ def render_pressure_monitor_section(
             else "(unknown)"
         )
         container.warning(
-            f"Final state WARNING (rule: `{rule}`). Trace ended in the "
-            "advisory zone — the run is not safe to continue without "
-            "operator review."
+            f"Final state WARNING (rule: `{rule}`, action: **{action_label}**). "
+            "Trace ended in the advisory zone — the run is not safe to "
+            "continue without operator review."
         )
     else:
         container.success(
-            f"Final state OK. Replay stayed within the operational "
-            f"envelope across all {summary.n_readings} readings."
+            f"Final state OK (action: **{action_label}**). Replay stayed "
+            f"within the operational envelope across all "
+            f"{summary.n_readings} readings."
         )
 
     # Trace plot.

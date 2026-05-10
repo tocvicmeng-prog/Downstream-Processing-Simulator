@@ -67,6 +67,61 @@ class PressureMonitorState(Enum):
     BLOCKER = "blocker"
 
 
+class RecoveryAction(Enum):
+    """Structured action recommendation for the streaming monitor.
+
+    B-2ℓ / W-041 (v0.8.2). Companion to ``PressureMonitorRule`` —
+    while the rule labels *what* tripped, the action labels *what to
+    do*. A typed enum lets downstream UI consumers branch on the
+    action without parsing free-form text from ``suggested_action``.
+
+    Members
+    -------
+    NONE :
+        OK state — no operator action needed.
+    CONTINUE_MONITOR :
+        WARNING band; continue the run but watch the next readings.
+    REDUCE_FLOW :
+        Drop Q to the recommended setpoint (envelope.Q_recommended_m3_s)
+        before continuing.
+    SWITCH_TO_WASH :
+        Pause the load step; switch the inlet to wash buffer to
+        prevent further fouling / channeling progression.
+    STOP_AND_REPACK :
+        Abort the run. The bed has channeled (MODEL_DEVIATION_LOW)
+        and lowering Q will not recover; repack or replace the column.
+    EMERGENCY_STOP :
+        SPIKE rule fired — sudden ΔP collapse / surge. Halt flow,
+        depressurize, and inspect before any further operation.
+    OPERATOR_REVIEW :
+        State outside the rule taxonomy (e.g., MODEL_DEVIATION_HIGH
+        is fouling-suggestive but not auto-actionable). Surface the
+        diagnostic ratios for human review.
+    """
+
+    NONE = "none"
+    CONTINUE_MONITOR = "continue_monitor"
+    REDUCE_FLOW = "reduce_flow"
+    SWITCH_TO_WASH = "switch_to_wash"
+    STOP_AND_REPACK = "stop_and_repack"
+    EMERGENCY_STOP = "emergency_stop"
+    OPERATOR_REVIEW = "operator_review"
+
+
+# ─── Rule → action mapping (B-2ℓ / W-041) ───────────────────────────────────
+
+
+_RULE_TO_ACTION: dict[PressureMonitorRule, RecoveryAction] = {
+    PressureMonitorRule.HEADROOM_WARNING: RecoveryAction.REDUCE_FLOW,
+    PressureMonitorRule.HEADROOM_BLOCKER: RecoveryAction.REDUCE_FLOW,
+    PressureMonitorRule.DPDT_WARNING: RecoveryAction.CONTINUE_MONITOR,
+    PressureMonitorRule.DPDT_BLOCKER: RecoveryAction.SWITCH_TO_WASH,
+    PressureMonitorRule.MODEL_DEVIATION_LOW: RecoveryAction.STOP_AND_REPACK,
+    PressureMonitorRule.MODEL_DEVIATION_HIGH: RecoveryAction.OPERATOR_REVIEW,
+    PressureMonitorRule.SPIKE: RecoveryAction.EMERGENCY_STOP,
+}
+
+
 # ─── Value types ─────────────────────────────────────────────────────────────
 
 
@@ -116,6 +171,12 @@ class PressureMonitorOutput:
     model_deviation_ratio :
         ΔP_measured / envelope.dP_predicted_pa. < 0.6 → channeling;
         > 1.5 → fouling/clogging.
+    recovery_action :
+        Typed structured action recommendation (B-2ℓ / W-041, v0.8.2).
+        ``RecoveryAction.NONE`` on OK; otherwise the rule-specific
+        enum member. Lets downstream UI consumers branch on the
+        action without parsing free-form text from
+        ``suggested_action``.
     history :
         Updated trace history (NEW tuple; immutable).
     """
@@ -126,6 +187,7 @@ class PressureMonitorOutput:
     headroom_ratio: float
     dpdt_pct_per_min: float
     model_deviation_ratio: float
+    recovery_action: RecoveryAction = RecoveryAction.NONE
     history: tuple[PressureMonitorReading, ...] = field(default_factory=tuple)
 
 
@@ -350,6 +412,11 @@ def evaluate_pressure_trace(
             "channeling onset. Monitor; prepare to switch to wash."
         )
 
+    recovery = (
+        _RULE_TO_ACTION[triggered]
+        if triggered is not None
+        else RecoveryAction.NONE
+    )
     return PressureMonitorOutput(
         state=state,
         triggered_rule=triggered,
@@ -357,5 +424,6 @@ def evaluate_pressure_trace(
         headroom_ratio=headroom_ratio,
         dpdt_pct_per_min=dpdt_pct,
         model_deviation_ratio=deviation_ratio,
+        recovery_action=recovery,
         history=new_history,
     )
