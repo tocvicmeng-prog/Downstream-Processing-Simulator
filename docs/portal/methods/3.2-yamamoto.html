@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Methods §3.2 — Yamamoto isotherm fit · DPSim docs</title>
+<meta name="description" content="How DPSim resolves the residence-time vs. capacity tradeoff under explicit uncertainty propagation, and what an evidence tier means at each step.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500;1,8..60,600&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  /*  Light register — docs portal default
+      ──────────────────────────────────── */
+  :root {
+    --paper:           #FAF7F0;
+    --paper-surface:   #F2EDDD;
+    --paper-deepest:   #EDE5CF;
+    --ink:             #1A1A1A;
+    --ink-muted:       #5C5750;
+    --ink-faint:       #8C8780;
+    --gold:            #B0904A;
+    --gold-hover:      #946F2C;
+    --gold-soft:       rgba(176, 144, 74, 0.14);
+    --rule:            rgba(26, 26, 26, 0.18);
+    --border:          rgba(26, 26, 26, 0.10);
+    --paper-tint:      rgba(120, 95, 50, 0.025);
+
+    /* Evidence tier (light) */
+    --tier-validated:    #2D7A3E;
+    --tier-validated-bg: rgba(45, 122, 62, 0.10);
+    --tier-calibrated:   #4A8B3A;
+    --tier-calibrated-bg:rgba(74, 139, 58, 0.10);
+    --tier-semi:         #B07820;
+    --tier-semi-bg:      rgba(176, 120, 32, 0.12);
+    --tier-qual:         #A24A1F;
+    --tier-qual-bg:      rgba(162, 74, 31, 0.10);
+    --tier-unsupp:       #8E2929;
+    --tier-unsupp-bg:    rgba(142, 41, 41, 0.10);
+
+    /* Spacing scale (docs / editorial) */
+    --s-1: 4px;  --s-2: 8px;  --s-3: 12px;  --s-4: 16px;
+    --s-6: 24px; --s-8: 32px; --s-12: 48px; --s-16: 64px;
+
+    /* Typography stack */
+    --serif: "Source Serif 4", Iowan, Georgia, serif;
+    --sans:  "IBM Plex Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    --mono:  "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+    /* Layout */
+    --col-toc:     220px;
+    --col-content: 620px;
+    --col-margin:  220px;
+    --gutter:      var(--s-8);
+
+    /* Motion */
+    --t-quick: 150ms ease-out;
+    --t-cite:  200ms ease-out;
+  }
+
+  /*  Dark register — auto via prefers-color-scheme
+      ──────────────────────────────────────────── */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:         #0E0E10;
+      --paper-surface: #1A1A1F;
+      --paper-deepest: #07070A;
+      --ink:           #E8E4DA;
+      --ink-muted:     #8C8780;
+      --ink-faint:     #5A554F;
+      --gold:          #D4B26A;
+      --gold-hover:    #E5C485;
+      --gold-soft:     rgba(212, 178, 106, 0.12);
+      --rule:          rgba(232, 228, 218, 0.16);
+      --border:        rgba(232, 228, 218, 0.10);
+      --paper-tint:    transparent;
+
+      --tier-validated:    #4FA86A;
+      --tier-validated-bg: rgba(79, 168, 106, 0.14);
+      --tier-calibrated:   #6EAE56;
+      --tier-calibrated-bg:rgba(110, 174, 86, 0.14);
+      --tier-semi:         #D9A24A;
+      --tier-semi-bg:      rgba(217, 162, 74, 0.14);
+      --tier-qual:         #C97A4A;
+      --tier-qual-bg:      rgba(201, 122, 74, 0.14);
+      --tier-unsupp:       #C25555;
+      --tier-unsupp-bg:    rgba(194, 85, 85, 0.14);
+    }
+  }
+
+  /* Manual override (flips data-theme on <html>) */
+  :root[data-theme="dark"] {
+    --paper:         #0E0E10;
+    --paper-surface: #1A1A1F;
+    --paper-deepest: #07070A;
+    --ink:           #E8E4DA;
+    --ink-muted:     #8C8780;
+    --ink-faint:     #5A554F;
+    --gold:          #D4B26A;
+    --gold-hover:    #E5C485;
+    --gold-soft:     rgba(212, 178, 106, 0.12);
+    --rule:          rgba(232, 228, 218, 0.16);
+    --border:        rgba(232, 228, 218, 0.10);
+    --paper-tint:    transparent;
+
+    --tier-validated:    #4FA86A;
+    --tier-validated-bg: rgba(79, 168, 106, 0.14);
+    --tier-calibrated:   #6EAE56;
+    --tier-calibrated-bg:rgba(110, 174, 86, 0.14);
+    --tier-semi:         #D9A24A;
+    --tier-semi-bg:      rgba(217, 162, 74, 0.14);
+    --tier-qual:         #C97A4A;
+    --tier-qual-bg:      rgba(201, 122, 74, 0.14);
+    --tier-unsupp:       #C25555;
+    --tier-unsupp-bg:    rgba(194, 85, 85, 0.14);
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { background: var(--paper); }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    background-image:
+      radial-gradient(var(--paper-tint) 1px, transparent 1px);
+    background-size: 18px 18px;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
+
+  a { color: var(--gold); text-decoration: none; }
+  a:hover { color: var(--gold-hover); }
+
+  :focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /*  Masthead
+      ─────── */
+  .masthead {
+    border-bottom: 1px solid var(--rule);
+    padding: var(--s-6) var(--s-12);
+    background: var(--paper);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .masthead-row {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-6);
+  }
+  .brand {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 19px;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+    text-decoration: none;
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-2);
+  }
+  .brand em {
+    font-style: italic;
+    color: var(--gold);
+    font-weight: 500;
+    font-size: 14px;
+  }
+  .breadcrumb {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-muted);
+    letter-spacing: 0.04em;
+  }
+  .breadcrumb a { color: var(--ink-muted); border-bottom: 1px dotted transparent; }
+  .breadcrumb a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+  .breadcrumb .sep { color: var(--ink-faint); margin: 0 6px; }
+  .breadcrumb .here { color: var(--ink); font-weight: 500; }
+
+  .nav-utils {
+    display: flex;
+    gap: var(--s-3);
+    align-items: center;
+  }
+  .theme-toggle {
+    background: transparent;
+    color: var(--ink-muted);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: color var(--t-quick), border-color var(--t-quick);
+  }
+  .theme-toggle:hover { color: var(--gold); border-color: var(--gold); }
+
+  /*  Layout
+      ─────  */
+  .layout {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: var(--col-toc) 1fr;
+    gap: var(--s-12);
+    padding: var(--s-12) var(--s-12) var(--s-16);
+  }
+
+  /*  TOC sidebar
+      ────────── */
+  .toc {
+    font-family: var(--sans);
+    font-size: 13px;
+    align-self: start;
+    position: sticky;
+    top: calc(var(--s-12) + 64px);
+  }
+  .toc h4 {
+    font-size: 10px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 500;
+    margin: 0 0 var(--s-3);
+    padding: 0 var(--s-3);
+  }
+  .toc ul {
+    list-style: none;
+    margin: 0 0 var(--s-6);
+    padding: 0;
+  }
+  .toc li {
+    color: var(--ink-muted);
+    padding: 4px var(--s-3);
+    border-left: 2px solid transparent;
+    cursor: pointer;
+    transition: color var(--t-quick);
+  }
+  .toc li:hover { color: var(--gold); }
+  .toc li.active {
+    color: var(--gold);
+    font-weight: 500;
+    background: var(--gold-soft);
+    border-left-color: var(--gold);
+  }
+  .toc li.sub { padding-left: var(--s-8); font-size: 12px; }
+  .toc li.sub.active { font-weight: 500; }
+  .toc-section { font-weight: 500; color: var(--ink); }
+
+  /*  Article + marginalia
+      ─────────────────── */
+  .article-wrap {
+    display: grid;
+    grid-template-columns: var(--col-content) var(--col-margin);
+    gap: var(--gutter);
+    align-items: start;
+    position: relative;
+    min-width: 0;
+  }
+  .article {
+    min-width: 0;
+    max-width: var(--col-content);
+  }
+  .margin-rail {
+    position: relative;
+    min-width: 0;
+  }
+
+  /*  Article typography
+      ───────────────── */
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 11px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: var(--s-3);
+    font-weight: 500;
+  }
+  .eyebrow .sep { color: var(--ink-faint); margin: 0 8px; }
+
+  .article h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 38px;
+    line-height: 1.12;
+    letter-spacing: -0.012em;
+    margin: 0 0 var(--s-3);
+    color: var(--ink);
+  }
+  .deck {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--ink-muted);
+    margin: 0 0 var(--s-6);
+  }
+
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-4);
+    align-items: center;
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-faint);
+    padding: var(--s-3) 0;
+    margin: 0 0 var(--s-6);
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    letter-spacing: 0.02em;
+  }
+  .byline .pill {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-muted);
+    font-feature-settings: "tnum";
+  }
+  .byline .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    background: var(--tier-calibrated-bg);
+    color: var(--tier-calibrated);
+  }
+
+  .article p {
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.65;
+    margin: 0 0 var(--s-4);
+    color: var(--ink);
+    text-wrap: pretty;
+    hyphens: auto;
+  }
+
+  .dropcap {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 64px;
+    line-height: 0.85;
+    float: left;
+    margin: 8px 12px 0 0;
+    color: var(--gold);
+  }
+
+  .article h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 24px;
+    line-height: 1.25;
+    letter-spacing: -0.005em;
+    margin: var(--s-12) 0 var(--s-3);
+    color: var(--ink);
+  }
+  .article h3 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 19px;
+    line-height: 1.3;
+    margin: var(--s-8) 0 var(--s-2);
+    color: var(--ink);
+  }
+
+  .article blockquote {
+    margin: var(--s-6) 0;
+    padding: var(--s-2) 0 var(--s-2) var(--s-4);
+    border-left: 2px solid var(--gold);
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 17px;
+    line-height: 1.55;
+    color: var(--ink-muted);
+  }
+
+  .citation {
+    color: var(--gold);
+    cursor: pointer;
+    border-bottom: 1px dotted color-mix(in srgb, var(--gold) 50%, transparent);
+    font-size: 0.78em;
+    vertical-align: super;
+    line-height: 0;
+    padding: 0 1px;
+    font-family: var(--sans);
+    font-weight: 500;
+    transition: background var(--t-cite), color var(--t-cite);
+  }
+  .citation:hover { color: var(--gold-hover); background: var(--gold-soft); }
+  .citation.active { background: var(--gold-soft); color: var(--gold-hover); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: var(--gold-soft);
+    padding: 1px 5px;
+    border-radius: 2px;
+    color: var(--ink);
+  }
+
+  .equation {
+    display: block;
+    text-align: center;
+    margin: var(--s-6) 0;
+    padding: var(--s-4) 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 15px;
+    color: var(--ink);
+  }
+  .equation em {
+    font-family: var(--serif);
+    font-style: italic;
+  }
+  .eq-num {
+    float: right;
+    color: var(--ink-faint);
+    font-size: 12px;
+    font-feature-settings: "tnum";
+  }
+
+  /*  Figure / breakout
+      ──────────────── */
+  .figure {
+    margin: var(--s-8) 0;
+    padding: var(--s-4);
+    background: var(--paper-surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .figure figcaption {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: var(--s-3);
+    line-height: 1.5;
+  }
+  .figure figcaption strong {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .figure svg { display: block; width: 100%; height: auto; }
+
+  /*  Data table
+      ────────── */
+  .data {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--sans);
+    font-size: 13px;
+    margin: var(--s-6) 0;
+  }
+  .data thead th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: var(--s-2) var(--s-3);
+    border-bottom: 1px solid var(--rule);
+  }
+  .data tbody td {
+    padding: var(--s-2) var(--s-3);
+    border-bottom: 1px solid var(--border);
+    color: var(--ink);
+  }
+  .data tbody td.num {
+    font-family: var(--mono);
+    font-feature-settings: "tnum";
+    text-align: right;
+  }
+  .data tbody tr:hover td { background: var(--gold-soft); }
+
+  /*  Marginalia
+      ────────── */
+  .margin-note {
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-muted);
+    padding: var(--s-1) 0 var(--s-1) var(--s-3);
+    border-left: 1px solid var(--gold);
+    margin-bottom: var(--s-6);
+    transition: opacity var(--t-cite);
+  }
+  .margin-note .num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--gold);
+    letter-spacing: 0.06em;
+    margin-bottom: 2px;
+    font-weight: 500;
+  }
+  .margin-note strong { color: var(--ink); font-weight: 500; }
+  .margin-note code { font-size: 11px; }
+  .margin-note.active {
+    background: var(--gold-soft);
+    border-left-width: 2px;
+  }
+
+  /*  Tier badges (inline in article when discussing)
+      ───────────────────────────────────────────── */
+  .tier {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 2px;
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    line-height: 1.5;
+    vertical-align: 1px;
+  }
+  .tier-validated   { color: var(--tier-validated);  background: var(--tier-validated-bg); }
+  .tier-calibrated  { color: var(--tier-calibrated); background: var(--tier-calibrated-bg); }
+  .tier-semi        { color: var(--tier-semi);       background: var(--tier-semi-bg); }
+  .tier-qual        { color: var(--tier-qual);       background: var(--tier-qual-bg); }
+  .tier-unsupported { color: var(--tier-unsupp);     background: var(--tier-unsupp-bg); }
+
+  /*  Footer
+      ────── */
+  footer {
+    border-top: 1px solid var(--rule);
+    padding: var(--s-12) var(--s-12);
+    color: var(--ink-muted);
+    font-family: var(--sans);
+    font-size: 12px;
+    margin-top: var(--s-16);
+  }
+  .footer-row {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--s-6);
+    align-items: baseline;
+  }
+  footer em { font-family: var(--serif); font-style: italic; color: var(--ink); }
+  .colophon {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+  }
+  footer .nav-foot {
+    display: flex;
+    gap: var(--s-6);
+  }
+  footer .nav-foot a {
+    color: var(--ink-muted);
+    border-bottom: 1px dotted transparent;
+  }
+  footer .nav-foot a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+
+  /*  Responsive — stack at <1024px (tablet) and <768px (mobile)
+      ──────────────────────────────────────────────────────── */
+  @media (max-width: 1024px) {
+    .layout {
+      grid-template-columns: 1fr;
+      padding: var(--s-6) var(--s-6) var(--s-12);
+      gap: var(--s-8);
+    }
+    .toc {
+      position: relative;
+      top: 0;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: var(--s-6);
+    }
+    .article-wrap {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+    .article {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .margin-rail {
+      max-width: 720px;
+      margin: 0 auto;
+      border-top: 1px solid var(--rule);
+      padding-top: var(--s-6);
+      margin-top: var(--s-8);
+    }
+    .margin-rail::before {
+      content: "Notes";
+      display: block;
+      font-family: var(--sans);
+      font-size: 10px;
+      color: var(--ink-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 500;
+      margin-bottom: var(--s-3);
+    }
+    .margin-note {
+      position: static !important;
+      top: auto !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .masthead { padding: var(--s-3) var(--s-4); }
+    .masthead-row { flex-wrap: wrap; gap: var(--s-2); }
+    .breadcrumb { font-size: 11px; }
+    .article h1 { font-size: 30px; }
+    .deck { font-size: 17px; }
+    .article p { font-size: 16px; }
+    .dropcap { font-size: 54px; }
+    .layout { padding: var(--s-4); gap: var(--s-6); }
+    footer { padding: var(--s-8) var(--s-4); }
+    .footer-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-row">
+    <a class="brand" href="/">DPSim <em>docs</em></a>
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/methods">Methods</a>
+      <span class="sep">›</span>
+      <a href="/methods#section-3">§3 Affinity column</a>
+      <span class="sep">›</span>
+      <span class="here">3.2 Yamamoto fit</span>
+    </nav>
+    <div class="nav-utils">
+      <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle theme">Dark register →</button>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- TOC sidebar -->
+  <aside class="toc" aria-label="Table of contents">
+    <h4>Methods</h4>
+    <ul>
+      <li>3.1 Pressure envelope</li>
+      <li class="toc-section active">3.2 Yamamoto fit
+        <ul style="list-style:none; padding:0; margin:6px 0 0;">
+          <li class="sub active">Setup &amp; assumptions</li>
+          <li class="sub">Solver branching</li>
+          <li class="sub">Evidence tier mapping</li>
+          <li class="sub">Wet-lab calibration</li>
+          <li class="sub">Limits of the fit</li>
+        </ul>
+      </li>
+      <li>3.3 Lumped-rate transport</li>
+      <li>3.4 Solver matrix</li>
+    </ul>
+    <h4>Companion</h4>
+    <ul>
+      <li>ADR-003 · Tier enforcement</li>
+      <li>ADR-007 · Solver matrix</li>
+      <li>Limitations</li>
+      <li>Citation</li>
+    </ul>
+  </aside>
+
+  <!-- Article + marginalia -->
+  <main class="article-wrap">
+
+    <article class="article" id="article">
+
+      <div class="eyebrow">
+        Methods <span class="sep">·</span> §3.2
+        <span class="sep">·</span> 6 min read
+        <span class="sep">·</span> Updated 11 May 2026
+      </div>
+
+      <h1 data-pretext>Yamamoto isotherm fit on packed-bed affinity columns</h1>
+      <p class="deck" data-pretext>How DPSim resolves the residence-time vs. capacity tradeoff under explicit uncertainty propagation, and what an evidence tier means at every step of the fit.</p>
+
+      <div class="byline">
+        <span class="pill">DPSim 0.8.9</span>
+        <span class="pill">commit 6642532</span>
+        <span class="badge">CALIBRATED · LOCAL</span>
+      </div>
+
+      <p data-pretext><span class="dropcap">T</span>he dynamic binding capacity of an affinity column is the load you can apply before breakthrough — the moment the protein you wanted to capture starts coming out the other end. It is the single most important number in packed-bed chromatography, and it is the easiest one to lie to yourself about. DPSim refuses to render it without an evidence tier<a class="citation" data-cite="1" href="#note-1">¹</a>, and the renderer is architecturally biased toward silence over false precision.</p>
+
+      <p data-pretext>The isotherm we fit is Yamamoto's two-parameter form, parameterised by maximum capacity <code>q_max</code> and the binding affinity constant <code>K</code>. The fit is performed under the lumped-rate transport model with a BDF solver when the gradient program is time-varying, LSODA otherwise<a class="citation" data-cite="2" href="#note-2">²</a>. The two solver branches exist because LSODA oscillates modes when the binding equilibrium is non-stationary; this was diagnosed in <code>v0.7.4</code> and is now the documented behaviour.</p>
+
+      <div class="equation" role="math" aria-label="Yamamoto two-parameter isotherm">
+        q&nbsp;=&nbsp;(<em>q<sub>max</sub></em>&nbsp;·&nbsp;<em>K</em>&nbsp;·&nbsp;<em>c</em>)&nbsp;/&nbsp;(1&nbsp;+&nbsp;<em>K</em>&nbsp;·&nbsp;<em>c</em>)
+        <span class="eq-num">(3.2.1)</span>
+      </div>
+
+      <p data-pretext>Equation (3.2.1) collapses, in the dilute limit (<em>K</em>·<em>c</em> ≪ 1), to <em>q</em>&nbsp;≈&nbsp;<em>q<sub>max</sub></em>·<em>K</em>·<em>c</em> — a linear regime where the apparent affinity <em>K</em> dominates and the column is far from saturation. The opposite limit (<em>K</em>·<em>c</em> ≫ 1) gives <em>q</em>&nbsp;→&nbsp;<em>q<sub>max</sub></em>: the column is loaded to its ceiling and additional protein flows straight through. Calibrated fits live in the curved transition region where neither limit dominates and where small errors in <em>K</em> propagate hardest into capacity estimates.</p>
+
+      <h2 data-pretext>What the evidence tier means here</h2>
+
+      <p data-pretext>A <span class="tier tier-calibrated">CALIBRATED</span> badge means we have wet-lab calibration data for the specific reagent / ligand / matrix combination at hand — typical case for BSA on Protein A agarose<a class="citation" data-cite="3" href="#note-3">³</a>. <span class="tier tier-semi">SEMI-QUANT.</span> means we are extrapolating from a related family; the breakthrough time has the right order of magnitude but you should not cite it as a final number. <span class="tier tier-qual">QUAL.</span> means we are predicting only the direction of change, never the value.</p>
+
+      <p data-pretext>The tier flows from the input data, not from the fit quality. A perfect <code>R² = 0.999</code> on uncalibrated extrapolation still ships as <span class="tier tier-semi">SEMI-QUANT.</span> The fit answers "is this self-consistent?" The tier answers "is this connected to reality?" These are independent questions, and DPSim refuses to conflate them.</p>
+
+      <blockquote data-pretext>No quantitative claim leaves DPSim without a tier. If the renderer cannot decide, the result is suppressed and the user is told why. The simulator is architecturally biased toward silence over false precision — a posture inherited from analytical chemistry, not from data dashboards.</blockquote>
+
+      <!-- Inline figure -->
+      <figure class="figure">
+        <svg viewBox="0 0 600 220" preserveAspectRatio="xMidYMid meet" aria-label="Breakthrough curve, model fit and experimental measurements">
+          <!-- axes -->
+          <line x1="48" y1="14" x2="48" y2="190" stroke="var(--rule)" stroke-width="1"/>
+          <line x1="48" y1="190" x2="588" y2="190" stroke="var(--rule)" stroke-width="1"/>
+          <text x="40" y="18" text-anchor="end" fill="var(--ink-muted)" font-family="IBM Plex Mono" font-size="10">1.0</text>
+          <text x="40" y="104" text-anchor="end" fill="var(--ink-muted)" font-family="IBM Plex Mono" font-size="10">0.5</text>
+          <text x="40" y="194" text-anchor="end" fill="var(--ink-muted)" font-family="IBM Plex Mono" font-size="10">0.0</text>
+          <text x="48" y="208" fill="var(--ink-muted)" font-family="IBM Plex Mono" font-size="10">0</text>
+          <text x="318" y="208" fill="var(--ink-muted)" font-family="IBM Plex Mono" font-size="10">12</text>
+          <text x="586" y="208" text-anchor="end" fill="var(--ink-muted)" font-family="IBM Plex Mono" font-size="10">25 min</text>
+          <text x="14" y="104" fill="var(--ink-faint)" font-family="IBM Plex Sans" font-size="10" transform="rotate(-90 14 104)">C/C₀</text>
+
+          <!-- 95% uncertainty ribbon -->
+          <path d="M 48,190 L 220,188 L 280,162 L 320,102 L 360,52 L 420,32 L 588,28 L 588,40 L 420,46 L 360,68 L 320,118 L 280,180 L 220,190 L 48,190 Z"
+                fill="var(--gold-soft)" stroke="none"/>
+          <!-- model -->
+          <path d="M 48,190 L 220,189 L 280,170 L 320,108 L 360,58 L 420,38 L 588,32"
+                fill="none" stroke="var(--gold)" stroke-width="1.6"/>
+          <!-- experimental dots -->
+          <g fill="var(--ink)">
+            <circle cx="80"  cy="190" r="2.5"/>
+            <circle cx="160" cy="188" r="2.5"/>
+            <circle cx="240" cy="183" r="2.5"/>
+            <circle cx="290" cy="150" r="2.5"/>
+            <circle cx="335" cy="88"  r="2.5"/>
+            <circle cx="380" cy="52"  r="2.5"/>
+            <circle cx="450" cy="38"  r="2.5"/>
+            <circle cx="540" cy="34"  r="2.5"/>
+          </g>
+          <!-- 10% threshold -->
+          <line x1="48" y1="172" x2="588" y2="172" stroke="var(--tier-unsupp)" stroke-width="1" stroke-dasharray="3 3" opacity="0.55"/>
+          <text x="586" y="168" text-anchor="end" fill="var(--tier-unsupp)" font-family="IBM Plex Mono" font-size="9">10% breakthrough</text>
+        </svg>
+        <figcaption><strong>Figure 3.2.1.</strong> Breakthrough curve for BSA on Protein A agarose, dc=10mm L=15cm. Solid line: Yamamoto model fit. Dots: experimental measurements (n=128, run R-014 through R-021). Shaded band: 95% confidence ribbon from posterior over (<em>q<sub>max</sub></em>, <em>K</em>). The 10%-breakthrough threshold is the canonical operating point for production loading.</figcaption>
+      </figure>
+
+      <h2 data-pretext>Fitted parameters and their tiers</h2>
+
+      <table class="data">
+        <thead>
+          <tr><th>Parameter</th><th class="num">Value</th><th class="num">95% CI</th><th>Tier</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><em>q<sub>max</sub></em></td><td class="num">38.2 mg/mL</td><td class="num">[36.4, 40.1]</td><td><span class="tier tier-calibrated">CAL</span></td></tr>
+          <tr><td><em>K</em></td><td class="num">3.04 × 10⁵ M⁻¹</td><td class="num">[2.81, 3.29]</td><td><span class="tier tier-calibrated">CAL</span></td></tr>
+          <tr><td>Bed height</td><td class="num">15.0 cm</td><td class="num">—</td><td><span class="tier tier-validated">VAL</span></td></tr>
+          <tr><td>Linear velocity</td><td class="num">120 cm/min</td><td class="num">—</td><td><span class="tier tier-validated">VAL</span></td></tr>
+          <tr><td>Residence time</td><td class="num">7.5 s</td><td class="num">[7.3, 7.7]</td><td><span class="tier tier-validated">VAL</span></td></tr>
+          <tr><td>R²</td><td class="num">0.987</td><td class="num">—</td><td><span class="tier tier-calibrated">CAL</span></td></tr>
+        </tbody>
+      </table>
+
+      <h2 data-pretext>Limits of the fit</h2>
+
+      <p data-pretext>The Yamamoto two-parameter fit assumes monolayer adsorption with no cooperativity. For Protein A agarose with BSA in the calibrated range, that assumption holds to within experimental error. Three regimes break it. First, multilayer effects at very high <em>c</em> — out of scope for affinity capture but visible in ion-exchange. Second, multivalent ligand interactions with antibody fragments — DPSim downgrades these fits to <span class="tier tier-semi">SEMI-QUANT.</span> automatically. Third, mass-transport limitations at high linear velocity, where the fitted <em>K</em> apparent decreases with flowrate; we surface this as a velocity-dependence warning in the run footer and refuse to extrapolate beyond ±20% of the calibration velocity.</p>
+
+      <p data-pretext>The architecture choice we keep getting asked about is why the fit lives in <code>module3_performance/orchestrator.py</code> rather than in a dedicated isotherm module. The answer is that a fitted isotherm is not a standalone object in DPSim; it is an attribute of a run, scoped to the (reagent, ligand, matrix, velocity) tuple under which calibration was performed. Lifting it out of the orchestrator would force a parallel scope-tracking layer that the orchestrator already provides for free.</p>
+    </article>
+
+    <!-- Marginalia rail -->
+    <aside class="margin-rail" id="margin-rail" aria-label="Margin notes">
+      <div class="margin-note" data-note="1" id="note-1">
+        <div class="num">1 · EVIDENCE</div>
+        See <strong>ADR-003</strong> on tier enforcement at the renderer boundary. Every numeric output flows through <code>RunReport.compute_min_tier</code>; nothing escapes.
+      </div>
+      <div class="margin-note" data-note="2" id="note-2">
+        <div class="num">2 · SOLVERS</div>
+        Solver branching is documented in <strong>ADR-007</strong>. LSODA for the non-stiff case; BDF when the gradient program and the equilibrium adapter are both active. Mixing them is a 3× cost penalty.
+      </div>
+      <div class="margin-note" data-note="3" id="note-3">
+        <div class="num">3 · WET-LAB</div>
+        Calibration data for the BSA / Protein A pair comes from the GMExpression internal repository, runs <strong>R-014 through R-021</strong> (n=128 breakthrough curves, 2025-Q3).
+      </div>
+    </aside>
+
+  </main>
+</div>
+
+<footer>
+  <div class="footer-row">
+    <div>
+      <em>DPSim docs.</em> Volume 0.9 — methods.
+      <div class="colophon">SOURCE SERIF 4 · IBM PLEX SANS · IBM PLEX MONO · TYPESET BY PRETEXT</div>
+    </div>
+    <nav class="nav-foot" aria-label="Footer">
+      <a href="/methods/3.1-pressure-envelope">← 3.1 Pressure envelope</a>
+      <a href="/methods/3.3-lumped-rate-transport">3.3 Lumped-rate transport →</a>
+    </nav>
+  </div>
+</footer>
+
+<script type="module">
+  import { prepare, layout, clearCache } from '../vendor/pretext.js';
+
+  // ── Pretext wiring: prepare each [data-pretext] element, then layout on resize ──
+  const elements = Array.from(document.querySelectorAll('[data-pretext]'));
+  const prepared = new Map();
+
+  function getFontShorthand(el) {
+    const cs = getComputedStyle(el);
+    // Build CSS font shorthand: "weight size/lineHeight family"
+    const w = cs.fontWeight;
+    const s = cs.fontStyle === 'italic' ? 'italic ' : '';
+    const sz = cs.fontSize;
+    const lh = cs.lineHeight;
+    const fam = cs.fontFamily;
+    return `${s}${w} ${sz}/${lh} ${fam}`;
+  }
+
+  function preparedAll() {
+    prepared.clear();
+    for (const el of elements) {
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text) continue;
+      const font = getFontShorthand(el);
+      try {
+        prepared.set(el, prepare(text, font));
+      } catch (e) {
+        // If a single element fails we keep going; never let the page crash.
+        console.warn('Pretext prepare failed for', el, e);
+      }
+    }
+  }
+
+  function relayout() {
+    for (const [el, handle] of prepared) {
+      try {
+        const cs = getComputedStyle(el);
+        const lh = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.5);
+        const w = el.clientWidth;
+        if (!w) continue;
+        const { height } = layout(handle, w, lh);
+        // Pretext gives us the computed text height; we set min-height so block
+        // padding + drop caps don't get clobbered. Pretext is the authoritative
+        // measurement; we trust it.
+        el.style.minHeight = `${Math.ceil(height)}px`;
+      } catch (e) {
+        console.warn('Pretext layout failed for', el, e);
+      }
+    }
+    // After article layout settles, re-anchor the marginalia.
+    requestAnimationFrame(anchorMarginalia);
+  }
+
+  // ── Marginalia anchoring ──────────────────────────────────────────
+  // For each .citation in the article, find its corresponding .margin-note
+  // (matched by data-cite ↔ data-note) and snap the note's vertical position
+  // to the citation's top, clamped to avoid overlap with the previous note.
+  function anchorMarginalia() {
+    const rail = document.getElementById('margin-rail');
+    if (!rail) return;
+    // Skip absolute positioning when stacked on tablet/mobile.
+    if (window.matchMedia('(max-width: 1024px)').matches) {
+      for (const n of rail.querySelectorAll('.margin-note')) {
+        n.style.position = '';
+        n.style.top = '';
+      }
+      return;
+    }
+    const railRect = rail.getBoundingClientRect();
+    const notes = Array.from(rail.querySelectorAll('.margin-note'));
+    let lastBottom = 0;
+    const minGap = 12;
+    for (const note of notes) {
+      const id = note.dataset.note;
+      const cite = document.querySelector(`.citation[data-cite="${id}"]`);
+      if (!cite) continue;
+      const citeRect = cite.getBoundingClientRect();
+      // Want top of note aligned with top of citation, but never overlap previous.
+      let top = citeRect.top - railRect.top;
+      if (top < lastBottom + minGap) top = lastBottom + minGap;
+      note.style.position = 'absolute';
+      note.style.left = '0';
+      note.style.right = '0';
+      note.style.top = `${Math.round(top)}px`;
+      // Measure after positioning (height depends on width, which is now set).
+      const noteRect = note.getBoundingClientRect();
+      lastBottom = top + noteRect.height;
+    }
+    // Make rail tall enough to contain the last note + breathing room.
+    rail.style.minHeight = `${lastBottom + 24}px`;
+  }
+
+  // ── Citation hover sync ────────────────────────────────────────────
+  for (const cite of document.querySelectorAll('.citation')) {
+    const id = cite.dataset.cite;
+    const note = document.querySelector(`.margin-note[data-note="${id}"]`);
+    if (!note) continue;
+    cite.addEventListener('mouseenter', () => { cite.classList.add('active'); note.classList.add('active'); });
+    cite.addEventListener('mouseleave', () => { cite.classList.remove('active'); note.classList.remove('active'); });
+    note.addEventListener('mouseenter', () => { cite.classList.add('active'); note.classList.add('active'); });
+    note.addEventListener('mouseleave', () => { cite.classList.remove('active'); note.classList.remove('active'); });
+    // Click citation: scroll into view (only meaningful on mobile/stacked).
+    cite.addEventListener('click', (e) => {
+      if (window.matchMedia('(max-width: 1024px)').matches) {
+        e.preventDefault();
+        note.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  }
+
+  // ── Content-editable: re-prepare when text changes ─────────────────
+  // Make every article block editable (the magic: edit text, layout
+  // recomputes instantly). Excludes the equation block — math glyphs would
+  // get mangled.
+  for (const el of elements) {
+    if (!el.closest('.equation')) el.contentEditable = 'true';
+  }
+  const obs = new MutationObserver((mutations) => {
+    let touched = new Set();
+    for (const m of mutations) {
+      let target = m.target;
+      while (target && target.nodeType !== 1) target = target.parentNode;
+      if (!target) continue;
+      const owner = target.closest('[data-pretext]');
+      if (owner && elements.includes(owner)) touched.add(owner);
+    }
+    if (!touched.size) return;
+    for (const el of touched) {
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text) { prepared.delete(el); continue; }
+      try { prepared.set(el, prepare(text, getFontShorthand(el))); } catch (e) {}
+    }
+    relayout();
+  });
+  for (const el of elements) {
+    obs.observe(el, { characterData: true, subtree: true, childList: true });
+  }
+
+  // ── ResizeObserver: relayout on container resize ───────────────────
+  const ro = new ResizeObserver(() => relayout());
+  ro.observe(document.body);
+  ro.observe(document.getElementById('article'));
+
+  // ── Theme toggle ───────────────────────────────────────────────────
+  const root = document.documentElement;
+  const toggle = document.getElementById('theme-toggle');
+  // Honour OS pref initially; user can flip.
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (prefersDark && !root.dataset.theme) root.dataset.theme = 'dark';
+  function syncToggleLabel() {
+    const cur = root.dataset.theme || (prefersDark ? 'dark' : 'light');
+    toggle.textContent = cur === 'dark' ? 'Light register →' : 'Dark register →';
+  }
+  syncToggleLabel();
+  toggle.addEventListener('click', () => {
+    const cur = root.dataset.theme || (prefersDark ? 'dark' : 'light');
+    root.dataset.theme = cur === 'dark' ? 'light' : 'dark';
+    syncToggleLabel();
+    // Re-prepare with new computed fonts (just in case of a font swap on theme).
+    requestAnimationFrame(() => { preparedAll(); relayout(); });
+  });
+
+  // ── Boot: wait for fonts, then prepare + layout ────────────────────
+  document.fonts.ready.then(() => {
+    preparedAll();
+    relayout();
+    // Second pass after a frame — webfonts can shift metrics slightly even
+    // after fonts.ready resolves.
+    requestAnimationFrame(() => { preparedAll(); relayout(); });
+  }).catch(() => {
+    preparedAll();
+    relayout();
+  });
+</script>
+
+</body>
+</html>
