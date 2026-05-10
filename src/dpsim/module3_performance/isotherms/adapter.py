@@ -67,6 +67,12 @@ class EquilibriumAdapter:
             # absent field degrades to bare base behaviour.
             imidazole = self._state.get("imidazole")
             return self._isotherm.equilibrium_loading(C, imidazole)
+        elif _cls_name == "SaltModulatedSMA":
+            # B-1n / W-039 (v0.8.2): full-SMA single-component facade
+            # per ADR-006. Same routing as SaltModulatedLangmuir but
+            # the underlying solve is the SMA fixed-point on q_salt.
+            salt = self._state.get("salt_concentration")
+            return self._isotherm.equilibrium_loading(C, salt)
         else:
             return self._isotherm.equilibrium_loading(C)
 
