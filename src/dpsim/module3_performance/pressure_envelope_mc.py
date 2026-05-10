@@ -40,6 +40,77 @@ _MU_SIGMA_LOG: float = 0.05
 _G_DN_SIGMA_LOG: float = 0.30
 
 
+# ─── Per-family prior overrides (B-2p / W-048, v0.8.3) ──────────────────────
+
+
+@dataclass(frozen=True)
+class FamilyMCPrior:
+    """Per-family lognormal prior σ_log values for the forward MC.
+
+    Attributes
+    ----------
+    sigma_log_k_geom :
+        K_geom log-space σ. Defaults to the literature mid-range (0.20)
+        when the family is not in the registry.
+    sigma_log_mu :
+        μ log-space σ. Default 0.05 — μ uncertainty is family-independent
+        so most entries leave this at the default.
+    sigma_log_g_dn :
+        G_DN log-space σ. Bead-stiffness uncertainty varies the most
+        across families; this is where per-family priors matter most.
+    notes :
+        Free-form provenance for the chosen σ values.
+    """
+
+    sigma_log_k_geom: float = _K_GEOM_SIGMA_LOG
+    sigma_log_mu: float = _MU_SIGMA_LOG
+    sigma_log_g_dn: float = _G_DN_SIGMA_LOG
+    notes: str = ""
+
+
+# Per-family priors. Values reflect the ranges typically reported in
+# the chromatography literature for lot-to-lot variation, packing
+# variability, and bead-modulus measurement scatter. Conservative
+# choices when published data is sparse.
+_FAMILY_MC_PRIORS: dict[str, FamilyMCPrior] = {
+    PolymerFamily.AGAROSE.value: FamilyMCPrior(
+        sigma_log_k_geom=0.18,
+        sigma_log_g_dn=0.25,
+        notes="Sepharose-class agarose: tight K_geom across lots; "
+        "G_DN tracks the agarose-content × thermal-history scatter.",
+    ),
+    PolymerFamily.AGAROSE_CHITOSAN.value: FamilyMCPrior(
+        sigma_log_k_geom=0.20,
+        sigma_log_g_dn=0.35,
+        notes="Composite IPN: dual-network modulus has higher scatter "
+        "from chitosan crosslink-density variability.",
+    ),
+    PolymerFamily.CELLULOSE.value: FamilyMCPrior(
+        sigma_log_k_geom=0.22,
+        sigma_log_g_dn=0.30,
+        notes="Cellulose: porosity and surface area more variable "
+        "between vendors than agarose.",
+    ),
+    PolymerFamily.PLGA.value: FamilyMCPrior(
+        sigma_log_k_geom=0.30,
+        sigma_log_g_dn=0.40,
+        notes="Solid PLGA microspheres: K_geom and G_DN both heavily "
+        "process-dependent — the most uncertain family.",
+    ),
+    PolymerFamily.ALGINATE.value: FamilyMCPrior(
+        sigma_log_k_geom=0.25,
+        sigma_log_g_dn=0.45,
+        notes="Calcium-alginate: G_DN strongly depends on M/G ratio + "
+        "crosslink density — highest stiffness scatter of the families.",
+    ),
+}
+
+
+def lookup_family_mc_prior(family: PolymerFamily) -> FamilyMCPrior:
+    """Return the per-family prior or the default mid-range when missing."""
+    return _FAMILY_MC_PRIORS.get(family.value, FamilyMCPrior())
+
+
 @dataclass(frozen=True)
 class MCEnvelopeBands:
     """Forward-MC summary bands for the pressure envelope.
@@ -104,40 +175,52 @@ def monte_carlo_pressure_envelope(
     mobile_phase: MobilePhase,
     Q_set_m3_s: float,
     n_samples: int = 500,
-    sigma_log_k_geom: float = _K_GEOM_SIGMA_LOG,
-    sigma_log_mu: float = _MU_SIGMA_LOG,
-    sigma_log_g_dn: float = _G_DN_SIGMA_LOG,
+    sigma_log_k_geom: Optional[float] = None,
+    sigma_log_mu: Optional[float] = None,
+    sigma_log_g_dn: Optional[float] = None,
     seed: Optional[int] = None,
     G_DN_pa: Optional[float] = None,
     E_star_pa: Optional[float] = None,
     bead_d32_m: Optional[float] = None,
+    use_family_priors: bool = False,
+    log_cov: Optional[np.ndarray] = None,
 ) -> MCEnvelopeBands:
     """Forward MC propagation per ADR-007.
 
     Draws ``n_samples`` lognormal multiplicative errors on K_geom
     (via ``calibration_store`` injection), μ (via a custom
     ``MobilePhase.custom_mu_pa_s`` override), and G_DN (via the
-    ``G_DN_pa`` argument to ``compute_pressure_envelope``). The ν
-    prior is inactive in v0.8.2 because the deterministic envelope
-    does not yet take ν as an explicit input — the salt-modulated
-    isotherm path lives downstream of the envelope.
+    ``G_DN_pa`` argument to ``compute_pressure_envelope``).
 
     Parameters
     ----------
     polymer_family, column, mobile_phase, Q_set_m3_s :
         Same shape as ``compute_pressure_envelope``.
     n_samples :
-        MC draw count. Default 500 — empirical sweet spot for
-        ±2 % tail-probability stability without slow UI feel.
-    sigma_log_* :
-        Lognormal σ in log-space. Defaults from ADR-007.
+        MC draw count. Default 500.
+    sigma_log_k_geom, sigma_log_mu, sigma_log_g_dn :
+        Lognormal σ in log-space. ``None`` (default) resolves to:
+        - ``use_family_priors=True``: per-family registry value
+          via :func:`lookup_family_mc_prior`. (B-2p / W-048, v0.8.3)
+        - ``use_family_priors=False``: literature-anchored mid-range
+          (ADR-007 defaults: 0.20 / 0.05 / 0.30).
+        Explicit floats override the family / default lookup.
+    use_family_priors :
+        When True (and any σ_log_* is ``None``), resolve the missing
+        σ values from the per-family registry. Default ``False`` —
+        v0.8.2 / ADR-007 backwards-compatible behaviour.
+    log_cov :
+        Optional 3×3 log-space covariance matrix per ADR-011
+        (B-2q / W-049, v0.8.3). Parameter order ``[K_geom, μ, G_DN]``.
+        When supplied, draws come from a multivariate normal in
+        log-space and the ``sigma_log_*`` arguments are IGNORED with
+        a clear note. Must be symmetric and positive-semi-definite.
     seed :
         Optional RNG seed for reproducibility.
     G_DN_pa, E_star_pa, bead_d32_m :
         Optional explicit overrides forwarded to each per-draw envelope
-        call (mirrors ``compute_pressure_envelope`` signature). When
-        ``G_DN_pa`` is supplied, the lognormal error on G_DN scales
-        the override; otherwise it scales ``column.G_DN``.
+        call. When ``G_DN_pa`` is supplied, the lognormal error on
+        G_DN scales the override; otherwise it scales ``column.G_DN``.
 
     Returns
     -------
@@ -147,6 +230,39 @@ def monte_carlo_pressure_envelope(
     if n_samples < 10:
         raise ValueError(f"n_samples={n_samples} must be ≥ 10.")
     rng = np.random.default_rng(seed)
+
+    # ── Resolve effective σ values per ADR-007 / W-048 / W-049 ─────────
+    if use_family_priors:
+        family_prior = lookup_family_mc_prior(polymer_family)
+        eff_sigma_kg = (
+            float(sigma_log_k_geom)
+            if sigma_log_k_geom is not None
+            else family_prior.sigma_log_k_geom
+        )
+        eff_sigma_mu = (
+            float(sigma_log_mu)
+            if sigma_log_mu is not None
+            else family_prior.sigma_log_mu
+        )
+        eff_sigma_g = (
+            float(sigma_log_g_dn)
+            if sigma_log_g_dn is not None
+            else family_prior.sigma_log_g_dn
+        )
+    else:
+        eff_sigma_kg = (
+            float(sigma_log_k_geom)
+            if sigma_log_k_geom is not None
+            else _K_GEOM_SIGMA_LOG
+        )
+        eff_sigma_mu = (
+            float(sigma_log_mu) if sigma_log_mu is not None else _MU_SIGMA_LOG
+        )
+        eff_sigma_g = (
+            float(sigma_log_g_dn)
+            if sigma_log_g_dn is not None
+            else _G_DN_SIGMA_LOG
+        )
 
     # Resolve baseline G_DN that we'll multiplicatively perturb.
     g_dn_base = float(G_DN_pa) if G_DN_pa is not None else float(column.G_DN)
@@ -160,10 +276,32 @@ def monte_carlo_pressure_envelope(
     from dpsim.core.viscosity import resolve_mobile_phase_viscosity
     nominal_mu = resolve_mobile_phase_viscosity(mobile_phase).mu_pa_s
 
-    # Sample shocks once.
-    z_kg = rng.normal(0.0, sigma_log_k_geom, size=n_samples)
-    z_mu = rng.normal(0.0, sigma_log_mu, size=n_samples)
-    z_g = rng.normal(0.0, sigma_log_g_dn, size=n_samples)
+    # ── Sample log-space shocks (B-2q / W-049: multivariate path) ──────
+    if log_cov is not None:
+        cov = np.asarray(log_cov, dtype=float)
+        if cov.shape != (3, 3):
+            raise ValueError(
+                f"log_cov must be 3×3 (parameter order [K_geom, μ, G_DN]); "
+                f"got shape {cov.shape}."
+            )
+        if not np.allclose(cov, cov.T, atol=1e-12):
+            raise ValueError("log_cov must be symmetric.")
+        eigs = np.linalg.eigvalsh(cov)
+        if np.min(eigs) < -1e-9:
+            raise ValueError(
+                f"log_cov must be positive-semi-definite (min eigvalue "
+                f"= {float(np.min(eigs))!r})."
+            )
+        draws = rng.multivariate_normal(
+            mean=np.zeros(3), cov=cov, size=n_samples,
+        )
+        z_kg = draws[:, 0]
+        z_mu = draws[:, 1]
+        z_g = draws[:, 2]
+    else:
+        z_kg = rng.normal(0.0, eff_sigma_kg, size=n_samples)
+        z_mu = rng.normal(0.0, eff_sigma_mu, size=n_samples)
+        z_g = rng.normal(0.0, eff_sigma_g, size=n_samples)
 
     Q_max_arr = np.empty(n_samples, dtype=float)
     dP_pred_arr = np.empty(n_samples, dtype=float)
