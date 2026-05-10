@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.8.3 — Pure-coding open work close (post-v0.8.2) (2026-05-10)
+
+Closes 5/5 work-plan items from `docs/update_workplan_2026-05-10_v0_8_3.md` — the residual pure-coding items from the v0.8.2 cumulative open list. Hardware-bound (AKTA UNICORN) and physics-deep (cyclic SMB) items remain v0.9 candidates per ADR-008 / ADR-009; wet-lab K_geom / ν calibration stays user-side. Patch bump per the project versioning policy.
+
+Two new ADRs land alongside the code: ADR-010 (inverse pressure-envelope inference) and ADR-011 (correlated MC priors).
+
+### Closed — Tier 1 (B-1o)
+
+- **B-1o (W-046) — M2 widget tier-gating.** `tab_m2.py:744-745` had two raw `st.metric` calls for `G_DN_updated` and `E_star_updated` — both `OutputType.MODULUS` candidates. Routed through `render_metric` with the FunctionalMicrosphere's `model_manifest.evidence_tier` (defensive fall-through to SEMI_QUANTITATIVE). The conditional from the v0.8.2 release handover ("M2 plot tier-gating — extend W-037 to plots_m2.py once meaningful numeric annotations land there") is satisfied: the annotations were always there in `tab_m2`; v0.8.2's audit missed them.
+
+### Closed — Tier 2 (B-2o … B-2r)
+
+- **B-2o (W-047) — Inverse Bayesian inference via importance sampling + ADR-010.** New `module3_performance/pressure_envelope_inverse.py` ships `infer_posterior_envelope(measurements, ...)`. Importance-sampling weights against a Gaussian likelihood; reuses the v0.8.2 forward-MC infrastructure. Returns posterior P05/P50/P95 on K_geom / μ / G_DN, posterior bands on Q_max / dP_predicted / headroom_ratio at a user-specified Q_for_envelope, posterior-weighted `p_blocker` / `p_warning`, plus a 3×3 posterior `log_cov` directly consumable by the W-049 forward-MC `log_cov` path (the natural Bayesian round-trip). ESS diagnostic + warning when ESS < 10 % of n_samples. Tier stays SEMI_QUANTITATIVE per ADR-010 §"Tier mapping" — CALIBRATED_LOCAL promotion is wet-lab-driven. ADR-010 documents the choice of importance sampling over MCMC for v0.8.3 (no new deps, deterministic, ESS-flagged when posteriors are peaky; MCMC promotion is a v0.8.4+ candidate). 14 new tests.
+- **B-2p (W-048) — Per-family MC priors registry.** New `FamilyMCPrior` dataclass + `_FAMILY_MC_PRIORS` registry on `pressure_envelope_mc.py`, keyed by `PolymerFamily.value` with literature-anchored σ_log values per family (PLGA + ALGINATE have the widest G_DN scatter; AGAROSE the tightest). New `use_family_priors=True` flag on `monte_carlo_pressure_envelope`; `sigma_log_*` arguments transition to `Optional[float]` with `None` as the "fall back to family / default" sentinel. Backwards-compatible: 9/9 v0.8.2 MC tests pass unchanged.
+- **B-2q (W-049) — Correlated MC priors via covariance matrix + ADR-011.** New `log_cov: Optional[np.ndarray]` argument on `monte_carlo_pressure_envelope`. When supplied (3×3 in parameter order [K_geom, μ, G_DN]), draws come from a multivariate normal in log-space; symmetry + PSD validation. ADR-011 documents the convention. Strong correlation between K_geom and G_DN demonstrably widens the Q_max IQR vs the diagonal path.
+- **B-2r (W-050) — Multi-step coupled MC propagation.** New `monte_carlo_step_program` draws N parameter triples ONCE and re-uses them across every step in the recipe program — preserving the cross-step correlation that independent per-step MC would miss. Returns `StepProgramMCResult` with per-step `MCEnvelopeBands` + `worst_step_p_blocker` + `worst_step_index`. Honours `use_family_priors` and `log_cov` paths.
+
+### Verification
+
+- 12 + 14 + 10 = 36 new tests across W-047, W-048, W-049, W-050; plus 4 W-046 + tier-gated + the v0.8.2 backward-compat tests.
+- ruff + mypy clean on all new source files.
+- AST gate: no new `is` / `is not` comparisons against managed enums.
+
+### Validation gates closed in this release
+
+- **23:** M2 widget annotations carry tier labels (B-1o).
+- **24:** Inverse pressure-envelope inference is reachable from one constructor (B-2o + ADR-010).
+- **25:** MC envelope honours per-family priors (B-2p).
+- **26:** MC envelope accepts an explicit covariance matrix (B-2q + ADR-011).
+- **27:** MC envelope produces a coupled multi-step program with shared draws (B-2r).
+
+### Public-communication framing
+
+> v0.8.3 closes the residual pure-coding items from the v0.8.2 cumulative open list. Hardware-bound (AKTA UNICORN socket bridge — ADR-008) and physics-deep (cyclic SMB — ADR-009) items remain v0.9 candidates. Wet-lab K_geom / ν calibration stays user-side. None of the new modules ship at higher than SEMI_QUANTITATIVE tier without user-supplied calibration; the inverse-inference module ships the *machinery* for posterior fitting but not the wet-lab handshake that promotes the tier.
+
+### Detailed handover
+
+- `docs/handover/HANDOVER_v0_8_3_release.md` — combined release-level handover continuing the v0.8.2 consolidation pattern.
+
+### Architecture decisions
+
+- `docs/decisions/ADR-010-inverse-pressure-envelope-inference.md`
+- `docs/decisions/ADR-011-correlated-mc-priors.md`
+
 ## v0.8.2 — Cumulative open-future-work close (2026-05-10)
 
 Closes 10/10 code-work items from `docs/update_workplan_2026-05-10_v0_8_2.md` — the cumulative open list inherited via the v0.8.1 release handover. The 11th item (wet-lab K_geom / ν calibration) is explicitly user-side and is NOT a v0.8.2 deliverable. Patch bump per the project versioning policy; v0.9 stays available for a matured-status plateau.
