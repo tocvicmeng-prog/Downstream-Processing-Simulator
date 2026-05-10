@@ -329,10 +329,18 @@ _SCIENTIFIC_MODE_OPTIONS: tuple[tuple[str, str, str], ...] = (
     ("mechanistic", "Mechanistic Research", ModelMode.MECHANISTIC_RESEARCH.value),
 )
 _SCIENTIFIC_MODE_HELP = (
-    "Empirical Engineering: fast screening, suppresses model warnings. "
-    "Hybrid Coupled (default): phenomenological DN model with trust "
-    "warnings. Mechanistic Research: Flory-Rehner affine IPN model, "
-    "strictest trust gates."
+    "W-098 (v0.8.8) — clearer consequence framing per audit defect U-2:\n\n"
+    "EMPIRICAL ENGINEERING — fast screening (~30s/run). Phenomenological "
+    "fits; suppresses non-critical model warnings. Use for early-phase "
+    "what-if scoping. Outputs render as SEMI_QUANTITATIVE.\n\n"
+    "HYBRID COUPLED (default) — balanced fidelity (~60s/run). "
+    "Phenomenological DN model + trust gates. The recommended default for "
+    "wet-lab planning. Outputs honour the decision-grade ladder.\n\n"
+    "MECHANISTIC RESEARCH — full physics (~120s/run). Flory-Rehner affine "
+    "IPN model; strictest trust gates; emits ALL warnings including soft "
+    "out-of-domain ones. Use for publication-grade simulations.\n\n"
+    "Switching modes triggers a Streamlit rerun — unsaved sliders persist "
+    "via session_state, but the run report from the active mode does not."
 )
 
 # Consume ?dpsim_mode=… written by anchor clicks.
@@ -420,6 +428,46 @@ with st.sidebar:
     st.divider()
     st.caption("ANALYSIS TOOLS")
     st.caption("Calibration data is loaded and reviewed in workflow step 7.")
+
+    # W-099 (v0.8.8): guided workflow tour. Closes audit defects S-19 +
+    # U-1: surfaces the README's screen → calibrate → tighten loop as
+    # an actionable narrative inside the dashboard.
+    with st.sidebar.expander(
+        ":material/route: Guided workflow — screen → calibrate → tighten",
+        expanded=False,
+    ):
+        st.markdown(
+            "**1. SCREEN** — pick a first-run example below "
+            "(Protein A / IEX / IMAC) → review the inferred "
+            "M1/M2/M3 chain → press **Run** to see the breakthrough "
+            "curve at SEMI_QUANTITATIVE.\n\n"
+            "**2. CALIBRATE** — go to *Calibration & Uncertainty* → "
+            "Inverse Bayesian → enter ≥ 8 wet-lab (Q, ΔP, σ) "
+            "measurements → Fit posterior. The ESS chip flags "
+            "concentration; the round-trip button ports the posterior "
+            "log_cov to the forward MC.\n\n"
+            "**3. TIGHTEN** — return to *Forward MC* → enable "
+            "*Consume posterior log_cov* → re-run. The bands tighten "
+            "by ~50 % relative to literature priors. Tier promotes "
+            "to CALIBRATED_LOCAL once the wet-lab YAML / spreadsheet "
+            "is committed via *Wet-lab ingestion*.\n\n"
+            "**4. SHIP** — download the SOP from the M3 results page "
+            "and take it to the bench."
+        )
+
+    # W-097 (v0.8.8): first-run example loader — closes audit defects
+    # U-1, U-15, S-15, S-19. Three canonical recipes (Protein A, IEX,
+    # IMAC) one-click loadable.
+    from dpsim.visualization.panels import (
+        render_first_run_examples_panel,
+        render_session_io_panel,
+    )
+    render_first_run_examples_panel(container=st.sidebar)
+
+    # W-093 (v0.8.8): save/load session JSON snapshot. Closes audit
+    # defect U-25 — a returning bench user can now resume their
+    # configured session.
+    render_session_io_panel(container=st.sidebar)
     # v0.4.19 (B1/C1): Both Uncertainty MC and Resin lifetime projection
     # have been promoted to primary M3 cards (see tab_m3.py). Keeping
     # the sidebar popovers caused StreamlitDuplicateElementKey crashes

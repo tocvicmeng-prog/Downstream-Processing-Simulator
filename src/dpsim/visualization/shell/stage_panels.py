@@ -182,6 +182,51 @@ def render_run_lifecycle_stage(
         + "</div>"
     )
 
+    # W-082 (v0.8.8): pre-flight pressure envelope SUMMARY surfaced
+    # ABOVE the Run controls. Closes audit defect S-11 / U-11 / A-17:
+    # at v0.8.7 the envelope panel rendered post-Run inside the M3
+    # results page; users saw a BLOCKER only after a 90s simulation.
+    # This summary uses the most-recently-cached envelope from
+    # session_state["m3_pressure_envelope"] (populated by tab_m3's
+    # in-page preview) so the user sees the BLOCKER / WARNING state
+    # before pressing Run. Detailed envelope panel is kept on the
+    # results page as audit trail (post-Run).
+    _env_pre = session_state.get("m3_pressure_envelope")
+    if _env_pre is not None:
+        with st.container(border=True):
+            st.markdown(
+                ":material/speed: **Pre-flight pressure envelope**"
+            )
+            try:
+                if _env_pre.is_blocker:
+                    st.error(
+                        f":material/block: **BLOCKER** — Q_set / Q_max = "
+                        f"{_env_pre.headroom_ratio:.2f} > 1. Bed compression "
+                        "is likely. **Do NOT run** until Q is reduced to ≤ "
+                        f"{_env_pre.Q_recommended_m3_s * 60.0e6:.2f} mL/min."
+                    )
+                elif _env_pre.is_warning:
+                    st.warning(
+                        f":material/warning: **WARNING** — Q_set / Q_max = "
+                        f"{_env_pre.headroom_ratio:.2f} (target ≤ 0.70). "
+                        "Consider lowering Q before Run."
+                    )
+                else:
+                    st.success(
+                        f":material/check_circle: Pre-flight clean — headroom "
+                        f"{(1.0 - _env_pre.headroom_ratio) * 100:.0f} % "
+                        f"(Q_max={_env_pre.Q_max_m3_s * 60.0e6:.2f} mL/min, "
+                        f"tier `{_env_pre.decision_tier.value}`)."
+                    )
+            except Exception:  # noqa: BLE001
+                pass
+    else:
+        st.caption(
+            ":material/info: No pre-flight envelope cached yet. Configure "
+            "M3 column geometry, mobile phase, and flow rate first; the "
+            "envelope renders inline above this section once available."
+        )
+
     # Existing run controls (threaded orchestrator + 3 option checkboxes
     # + Run button + summary dataframe). Wrapped in an expander so the
     # pre-flight is the first thing the eye lands on, but the original

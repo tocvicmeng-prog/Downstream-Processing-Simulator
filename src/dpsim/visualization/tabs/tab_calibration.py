@@ -135,6 +135,19 @@ def render_tab_calibration() -> None:
 
     # Sub-section 2 — Multi-column series.
     with tabs[2]:
+        # W-085 (v0.8.8): clarifying caption — multi-column is a
+        # design-time tool, not a calibration activity. Per audit
+        # defect A-16 / U-18. Full IA hoist into a dedicated *Series
+        # Design* stage is queued for the v1.0 IA refactor; for
+        # v0.8.8 the caption corrects the misleading-by-placement
+        # framing.
+        st.warning(
+            ":material/architecture: **Design-time tool** — this is the "
+            "multi-column series envelope builder, not a calibration "
+            "activity. Use it during column-train layout planning. "
+            "(IA hoist into a dedicated *Series Design* stage is queued "
+            "for v1.0 per the joint plan §3 Bundle Z.)"
+        )
         if default_index == 2:
             st.caption("(jumped from the M3 next-step affordance)")
         try:
@@ -154,6 +167,14 @@ def render_tab_calibration() -> None:
             render_wetlab_ingestion_panel,
         )
         render_wetlab_ingestion_panel()
+
+        # W-089 (v0.8.8): spreadsheet (CSV / XLSX) calibration import
+        # with column-mapping wizard. Closes audit defect U-19 / S-18.
+        st.divider()
+        from dpsim.visualization.panels import (
+            render_spreadsheet_calibration_import_panel,
+        )
+        render_spreadsheet_calibration_import_panel()
 
 
 __all__ = ["render_tab_calibration"]

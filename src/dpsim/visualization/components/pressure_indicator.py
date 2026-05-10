@@ -137,6 +137,37 @@ def _help_modal_md(envelope: PressureEnvelope) -> str:
     return "\n".join(lines)
 
 
+def _format_dp_with_tier(dp_pa: float, tier_value: str) -> str:
+    """W-079 (v0.8.8): tier-aware formatting via the decision-grade policy.
+
+    Uses ``format_decision_graded`` so the SEMI_QUANTITATIVE displayed
+    digit carries the tier-aware INTERVAL bracket. Closes audit defect
+    A-14 — at v0.8.7 the indicator computed colour-by-headroom but
+    bypassed the decision-grade policy ladder.
+    """
+    try:
+        from dpsim.core.decision_grade import OutputType
+        from dpsim.datatypes import ModelEvidenceTier
+        from dpsim.visualization.decision_grade_render import (
+            format_decision_graded,
+        )
+        # Resolve the tier enum from the value string.
+        tier = next(
+            (t for t in ModelEvidenceTier if t.value == tier_value),
+            ModelEvidenceTier.SEMI_QUANTITATIVE,
+        )
+        _mode, formatted = format_decision_graded(
+            dp_pa,
+            OutputType.PRESSURE_DROP,
+            tier,
+            unit="kPa",
+            scale=1.0e-3,
+        )
+        return formatted
+    except Exception:  # noqa: BLE001 — fall back to bare display
+        return f"{dp_pa / 1.0e3:.1f} kPa"
+
+
 def _digit_html(
     *,
     dp_pa: float,
@@ -159,6 +190,8 @@ def _digit_html(
     dp_kpa = dp_pa / 1.0e3
     op_kpa = op_max_pa / 1.0e3
     headroom_pct = max(0.0, (1.0 - ratio) * 100.0)
+    # W-079 (v0.8.8): tier-aware bracket from the decision-grade policy.
+    tier_bracket = _format_dp_with_tier(dp_pa, decision_tier)
     return (
         '<div style="'
         'border:1px solid rgba(148,163,184,0.30);'
@@ -179,6 +212,15 @@ def _digit_html(
         f'{dp_kpa:.1f}'
         '<span style="font-size:13px;color:rgba(148,163,184,0.85);'
         'margin-left:4px;font-weight:500;">kPa</span>'
+        '</div>'
+        '<div style="'
+        'font-family:\'Geist Mono\',ui-monospace,monospace;'
+        'font-feature-settings:\'tnum\';'
+        'font-size:10px;'
+        'color:rgba(148,163,184,0.85);'
+        'margin-top:2px;'
+        '">'
+        f'tier interval: {tier_bracket}'
         '</div>'
         '<div style="'
         'font-family:\'Geist Mono\',ui-monospace,monospace;'
@@ -287,6 +329,30 @@ def render_pressure_indicator(
             source=source,
         )
     )
+
+    # W-091 (v0.8.8): action affordance — when the indicator is amber
+    # or red, surface a one-click button that sets the M3 flow rate to
+    # Q_recommended. Closes audit defect U-12 / U-23: the streaming
+    # monitor's RecoveryAction labels were text-only at v0.8.7; this
+    # is the first clickable remediation control. Writing to the
+    # widget's session_state key lets the next rerun pick up the
+    # value before the widget re-renders.
+    if band in ("amber", "red"):
+        q_rec_ml_min = float(envelope.Q_recommended_m3_s) * 60.0 * 1.0e6
+        try:
+            import streamlit as _st_btn
+            label = (
+                f"⤓ Set Q to Q_recommended ({q_rec_ml_min:.2f} mL/min)"
+            )
+            if container.button(
+                label,
+                key="pi_set_q_rec",
+                use_container_width=True,
+            ):
+                _st_btn.session_state["m3_flow"] = float(q_rec_ml_min)
+                _st_btn.rerun()
+        except Exception:  # noqa: BLE001 — never let action affordance break the page
+            pass
 
 
 __all__ = ["render_pressure_indicator"]

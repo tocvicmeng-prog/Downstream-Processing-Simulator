@@ -67,11 +67,32 @@ def render_tab_m3(tab_container) -> None:
         if "m2_result" not in st.session_state:
             st.warning("\u26a0\ufe0f Module 2 has not been run yet. Run M1 then M2 first to provide upstream data.")
         else:
+            # W-086 (v0.8.8): M2 -> M3 chain confirmation per audit defect U-7.
             _m2r_banner = st.session_state["m2_result"]
+            _m1c_b = getattr(_m2r_banner, "m1_contract", None)
+            _bead_d50_um_b = (
+                float(getattr(_m1c_b, "bead_d50", 0.0)) * 1.0e6
+                if _m1c_b is not None else 0.0
+            )
+            _porosity_b = (
+                float(getattr(_m1c_b, "porosity", 0.0))
+                if _m1c_b is not None else 0.0
+            )
+            _family_b = getattr(_m1c_b, "polymer_family", None)
+            _family_str_b = (
+                _family_b.value
+                if _family_b is not None and hasattr(_family_b, "value")
+                else "(unknown)"
+            )
             st.success(
-                f"\u2705 M2 data available \u2014 G_DN={_m2r_banner.G_DN_updated/1000:.1f} kPa | "
-                f"E*={_m2r_banner.E_star_updated/1000:.1f} kPa | "
-                f"Steps={len(_m2r_banner.modification_history)}"
+                f"\u2705 **M1 \u2192 M2 chain ready** \u2014 "
+                f"family `{_family_str_b}` \u00b7 "
+                f"d50 {_bead_d50_um_b:.1f} \u00b5m \u00b7 "
+                f"\u03b5_p {_porosity_b:.2f} \u00b7 "
+                f"G_DN={_m2r_banner.G_DN_updated/1000:.1f} kPa \u00b7 "
+                f"E*={_m2r_banner.E_star_updated/1000:.1f} kPa \u00b7 "
+                f"{len(_m2r_banner.modification_history)} M2 step(s). "
+                "These flow into the M3 column geometry below."
             )
 
         # ── M3 Inputs ───────────────────────────────────────────────────
@@ -1098,6 +1119,22 @@ def render_tab_m3(tab_container) -> None:
                             salt_profile=getattr(_bt, "salt_profile", None),
                         )
 
+                    # W-094 (v0.8.8): SOP export — closes audit defect
+                    # U-26. Generate a Markdown wet-lab procedure from
+                    # the current dashboard configuration.
+                    from dpsim.visualization.panels import (
+                        render_run_compare_panel,
+                        render_sop_export_panel,
+                    )
+                    with st.container(border=True):
+                        render_sop_export_panel()
+
+                    # W-095 (v0.8.8): run-vs-run comparison — closes
+                    # audit defect U-27. Snapshot the current run for
+                    # cross-run overlay.
+                    with st.container(border=True):
+                        render_run_compare_panel()
+
                     if "m2_result" in st.session_state:
                         from dpsim.core.mobile_phase import MobilePhase as _MP_bt
                         from dpsim.module3_performance.hydrodynamics import ColumnGeometry as _CG_bt
@@ -1114,6 +1151,17 @@ def render_tab_m3(tab_container) -> None:
                         )
                         _fam_bt = getattr(_m2r_bt, "polymer_family", None) or (
                             _m2r_bt.m1_contract.polymer_family
+                        )
+                        # W-101 (v0.8.8): publish the constructed column to
+                        # session_state so tab_calibration can recover it
+                        # for the forward MC + inverse inference inputs.
+                        # Closes the orphan-reader gap flagged in
+                        # AUDIT_v0_8_5_e2e_phase3_architecture.md §A-11.
+                        st.session_state["_m3_column_for_envelope"] = _col_bt
+                        # Mobile phase under the same key for tab_calibration's
+                        # session-state fallback (line 65 of tab_calibration.py).
+                        st.session_state["mobile_phase"] = (
+                            st.session_state.get("m3_mobile_phase") or _MP_bt()
                         )
                         # B-4d (W-072, v0.8.6): honour the user's mobile-phase
                         # choice from the method-conditions widget. Falls
@@ -1208,18 +1256,42 @@ def render_tab_m3(tab_container) -> None:
                             value=_pa.predicted_elution_recovery_fraction,
                             output_type=_OT_rec.RECOVERY, tier=_method_tier,
                             unit="%", scale=100.0, container=_pm1)
+                    # W-080 (v0.8.8): tier-aware metrics — cycle lifetime
+                    # routed through render_metric (was bare st.metric).
                     if _calibrated:
-                        _pm2.metric(
+                        _rm_rec(
                             "Cycle lifetime",
-                            f"{_pa.cycle_lifetime_to_70pct_capacity:.0f}",
+                            value=_pa.cycle_lifetime_to_70pct_capacity,
+                            output_type=_OT_rec.CYCLE_LIFE,
+                            tier=_method_tier,
+                            unit="cycles",
+                            container=_pm2,
                         )
                     else:
                         _pm2.metric(
                             "Cycle lifetime",
                             cycle_lifetime_label(_pa, is_calibrated=False),
+                            help=(
+                                "SEMI_QUANTITATIVE — calibrate with cycle "
+                                "studies to promote tier."
+                            ),
                         )
-                    _pm3.metric("Asymmetry", f"{_eff.asymmetry_factor:.2f}")
-                    _pm4.metric("Impurity risk", _imp.risk)
+                    _pm3.metric(
+                        "Asymmetry",
+                        f"{_eff.asymmetry_factor:.2f}",
+                        help=(
+                            "USP <621> peak-asymmetry factor. SEMI_QUANTITATIVE "
+                            "from the LRM solver."
+                        ),
+                    )
+                    _pm4.metric(
+                        "Impurity risk",
+                        _imp.risk,
+                        help=(
+                            "Qualitative — wash design check. Tier "
+                            "QUALITATIVE_TREND."
+                        ),
+                    )
                     st.caption(
                         f"Pressure={_op.pressure_drop_Pa / 1000:.1f} kPa; "
                         f"N={_eff.theoretical_plates:.0f}; "

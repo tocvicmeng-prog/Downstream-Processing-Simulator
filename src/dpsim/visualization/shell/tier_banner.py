@@ -32,6 +32,31 @@ _TIER_LABEL: dict[str, str] = {
 }
 
 
+_TIER_PROMOTION_HINTS: dict[str, str] = {
+    # W-090 (v0.8.8): per-tier "what experiment promotes me?" hints.
+    # Closes audit defect U-29: the banner now tells the user the
+    # path forward, not just the current state. Studies cross-link
+    # to docs/04_calibration_protocol.md.
+    ModelEvidenceTier.SEMI_QUANTITATIVE.value: (
+        "To promote to CALIBRATED_LOCAL: upload wet-lab measurements via "
+        "the Calibration & Uncertainty tab — Inverse Bayesian (≥ 8 Q-ΔP "
+        "points) for hydrodynamic parameters; Spreadsheet import for "
+        "isotherm K_L / q_max from batch uptake. See "
+        "docs/04_calibration_protocol.md Studies 1–6."
+    ),
+    ModelEvidenceTier.QUALITATIVE_TREND.value: (
+        "To promote to SEMI_QUANTITATIVE: re-run with at least one "
+        "modulus measurement (G_DN, E*) inside the family's valid "
+        "domain. See docs/04_calibration_protocol.md Studies 4–5."
+    ),
+    ModelEvidenceTier.UNSUPPORTED.value: (
+        "Critical input out-of-domain: check the validation report for "
+        "the BLOCKER entries and adjust inputs (temperature, salt, pH) "
+        "before promoting tier."
+    ),
+}
+
+
 def render_tier_banner(
     *,
     container: Any = None,
@@ -107,6 +132,13 @@ def render_tier_banner(
                 "approximate. Do **not** describe results as "
                 "\"validated\" without wet-lab handshake."
             )
+
+    # W-090 (v0.8.8): tier-promotion hint surfaced as a caption — tells
+    # the user what specific experiment unlocks the next tier. Closes
+    # audit defect U-29.
+    promo_hint = _TIER_PROMOTION_HINTS.get(tier_value)
+    if promo_hint:
+        target.caption(f":material/upgrade: {promo_hint}")
 
 
 __all__ = ["render_tier_banner"]

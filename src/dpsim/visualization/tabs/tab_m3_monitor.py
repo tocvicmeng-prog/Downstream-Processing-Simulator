@@ -92,6 +92,21 @@ def _build_timeline_figure(
         )
     )
 
+    # W-100 (v0.8.8): predicted ΔP overlay from the active envelope.
+    # Closes audit defect U-22 — at v0.8.7 the streaming monitor showed
+    # only the measured trace against the operational threshold; users
+    # could not directly compare against the simulator's prediction.
+    # The predicted trace is constant per envelope (no time variation
+    # in the v0.8 model) — render as a horizontal dashed line so the
+    # comparison band is visible.
+    fig.add_hline(
+        y=envelope.dP_predicted_pa / 1.0e3,
+        line_dash="dashdot",
+        line_color="#0EA5E9",
+        annotation_text="ΔP predicted (envelope)",
+        annotation_position="bottom right",
+    )
+
     # Operational ceiling (red dashed).
     fig.add_hline(
         y=envelope.dP_max_operational_pa / 1.0e3,

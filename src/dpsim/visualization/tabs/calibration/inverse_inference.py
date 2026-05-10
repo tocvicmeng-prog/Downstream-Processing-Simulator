@@ -189,6 +189,25 @@ def render_inverse_inference_panel(
                 "positive σ_ΔP."
             )
             return None
+
+        # W-088 (v0.8.8): input-time blocker for under-determined fits.
+        # Per audit defect S-12 / U-16: a posterior fit on < 8 measurements
+        # is ill-posed — ESS will be near 1 and the result misleads. The
+        # ADR-010 §"Tier mapping" guidance recommends MCMC for low-N data;
+        # for the importance-sampling path we block at the input.
+        _MIN_MEASUREMENTS = 8
+        if len(measurements) < _MIN_MEASUREMENTS:
+            target.error(
+                f":material/block: **{len(measurements)} measurement(s) is "
+                f"insufficient for the importance-sampling posterior fit.** "
+                f"Minimum recommended: {_MIN_MEASUREMENTS} (Q, ΔP, σ) rows. "
+                "Below this, ESS collapses and the posterior is dominated "
+                "by the prior — the result misleads. Either add more "
+                "measurement rows above, or wait for the v1.0 MCMC path "
+                "(ADR-010 §Tier mapping)."
+            )
+            return None
+
         try:
             posterior_in_state = infer_posterior_envelope(
                 measurements,

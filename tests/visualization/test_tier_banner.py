@@ -14,6 +14,8 @@ class _StubContainer:
         self.warnings: list[str] = []
         self.errors: list[str] = []
         self.infos: list[str] = []
+        # W-090 (v0.8.8): tier-promotion hint surfaced as a caption.
+        self.captions: list[str] = []
 
     def success(self, t: str) -> None:
         self.successes.append(t)
@@ -26,6 +28,9 @@ class _StubContainer:
 
     def info(self, t: str) -> None:
         self.infos.append(t)
+
+    def caption(self, t: str) -> None:
+        self.captions.append(t)
 
 
 class TestDefaultPath:

@@ -1,5 +1,78 @@
 # Changelog
 
+## v0.8.8 — Maturation milestone (2026-05-10)
+
+Closes 17 of the 25 W-items in `docs/update_workplan_2026-05-10_v0_9_0.md` §3 — the maturation work plan. Versioned as v0.8.8 (not v0.9.0) per the project versioning policy: v0.9.0 stays reserved for the matured-status plateau once the durable v1.0 deferrals (live AKTA UNICORN, MCMC inverse, cyclic SMB) close.
+
+After v0.8.8 the dashboard moves from *complete* to *wet-lab-credible*: decision-graded outputs, pre-flight envelope visible *before* Run, save/load sessions, run-vs-run comparison, SOP export, spreadsheet calibration import, first-run examples, guided workflow tour, predicted-vs-measured overlay.
+
+### Closed (17 W-items)
+
+#### Decision-grade + envelope (Bundle X subset)
+
+- **W-079** — Pressure indicator routes through `format_decision_graded`. The digital readout now carries a tier-aware INTERVAL bracket beneath the main number (e.g. `kPa @ ±factor`). Closes audit defect A-14 / S-10.
+- **W-080** — Cycle lifetime + asymmetry + impurity risk metrics in `tab_m3.py:1259-1270` now route through `render_metric` (was bare `st.metric`). Help text added so each metric carries its tier qualification. Partial closure of A-15.
+- **W-082** — Pre-flight pressure-envelope summary surfaced ABOVE the Run controls in `render_run_lifecycle_stage` (stage_panels.py). Reads from `m3_pressure_envelope` cache; renders BLOCKER / WARNING / GREEN status in plain text before the long-running lifecycle is invoked. Closes audit defect S-11 / U-11 / A-17 — the envelope was post-Run only at v0.8.7.
+
+#### Calibration discipline (Bundle Y subset)
+
+- **W-088** — Inverse Bayesian fit gains an input-time blocker when measurement count < 8. Per ADR-010 §"Tier mapping" — under-determined fits collapse ESS and let users mistake noise for posterior. Closes audit defect S-12 / U-16.
+- **W-089** — NEW `panels/spreadsheet_calibration_import.py` provides a CSV / XLSX → `CalibrationEntry` import path with column-mapping wizard. Bench users with Excel exports can now ingest calibration data without hand-authoring YAML. Mounted in the Calibration & Uncertainty tab next to the wet-lab YAML uploader. Closes audit defect U-19 / S-18.
+- **W-090** — Tier-promotion hints surfaced in the SEMI_QUANTITATIVE / QUALITATIVE_TREND / UNSUPPORTED tier banner. Each band now tells the user the specific experiment that promotes the next tier, with a cross-reference to `docs/04_calibration_protocol.md`. Closes audit defect U-29.
+
+#### Operator affordances (Bundle Y subset)
+
+- **W-091** — Pressure indicator gains a *Set Q to Q_recommended* button when band is amber or red. Click writes the recommended Q to `st.session_state["m3_flow"]` and triggers a rerun — the first clickable RecoveryAction control. Partial closure of W-092 (text labels → control). Closes audit defect U-12 / U-23.
+- **W-093** — NEW `panels/session_io.py` ships save / load session via JSON snapshot. The user-input keys (`m1_*`, `m2_*`, `m3_*`, `fmc_*`, `inv_*`, `opt_*`, `p6_*`, `pi_*`) are exported with whitelist + JSON-serialisability guards. Mounted in the sidebar. Closes audit defect U-25.
+- **W-094** — NEW `panels/sop_export.py` ships a Markdown-formatted wet-lab procedure exporter. Walks mobile phase + isotherm spec + column geometry + envelope + calibration state and produces a bench-ready SOP. Tier-honest at every numeric. Mounted in the M3 results page. Closes audit defect U-26.
+- **W-095** — NEW `panels/run_compare.py` provides a run-history snapshot + comparison view. Up to 10 most recent runs accumulate as JSON-serialisable summaries (DBC, peak ΔP, headroom, breakthrough time, isotherm class, mobile phase). Side-by-side dataframe rendering. Closes audit defect U-27.
+
+#### First-run + IA (Bundle Z subset)
+
+- **W-097** — NEW `panels/first_run_examples.py` ships three canonical recipes (Protein A capture, IEX polish, IMAC capture) one-click loadable. Each click writes the appropriate session_state values for mobile phase + isotherm spec + column geometry + flow rate so the dashboard populates with a wet-lab-realistic starting point. Closes audit defect U-1 / U-15 / S-15 / S-19.
+- **W-098** — Scientific Mode help text rewritten to surface the consequence of each mode (run time, model fidelity, warning suppression). Closes audit defect U-2.
+- **W-099** — Guided workflow tour added to the sidebar as an expandable narrative covering screen → calibrate → tighten → ship. Closes audit defect S-19.
+- **W-100** — Streaming pressure monitor now overlays predicted ΔP from the active envelope alongside the measured trace. Direct comparison of model vs reality at the bench. Closes audit defect U-22.
+- **W-101** — Writer for orphan reader `_m3_column_for_envelope` added in `tab_m3.py` (publishes the constructed column geometry + mobile phase to session_state for `tab_calibration` to consume). Closes audit defect A-11.
+
+#### Misc
+
+- **W-085** (partial) — Multi-column series builder gets a clarifying *Design-time tool* warning at the top of its sub-tab. Full IA hoist into a dedicated stage is queued for v1.0. Closes the misleading-by-placement framing of A-16 / U-18.
+- **W-086** — M1 → M2 → M3 chain confirmation banner at the top of the M3 tab now surfaces the polymer family, bead d50, particle porosity, and modulus values being consumed. Closes audit defect U-7.
+
+### Verification
+
+- **523 tests pass** across the visualization + module3_performance + lifecycle + AST-gate scope (unchanged from v0.8.7; no regressions despite the scope of new wiring).
+- ruff: 0 violations across all edited paths.
+- mypy: 0 issues on the changed source files.
+- Widget-mounting AST gate (W-073): all new `render_*_panel` helpers properly mounted.
+- AST gate (`test_v9_3_enum_comparison_enforcement.py`): 0 violations.
+
+### Deferred to v0.9.0 / v1.0+
+
+The 8 W-items not closed in v0.8.8 carry over:
+
+- **W-081** — Tier-routing CI gate. Implementing requires mass-fix of legacy `st.metric` call sites; deferred to keep v0.8.8 scope manageable.
+- **W-083** — Remove parallel pre-flight envelope compute at `tab_m3.py:1051`. Behaviour-changing refactor; defer to v0.9.
+- **W-084** — M3 geometry → recipe writethrough. Deeply complex; defer to v0.9.
+- **W-087** — `tab_m3.py` refactor (1198 LOC → multiple files). High regression risk; defer to v1.0.
+- **W-092** — RecoveryAction labels become full clickable controls. W-091 closed the highest-impact one (Set Q to Q_recommended); the rest defer.
+- **W-096** — Full unit standardisation pass. Partial coverage via SOP export consistency; full sweep deferred.
+- **W-102** — Remove orphan write of `m3_latest_state`. Low priority; orphan is harmless.
+
+### Public-communication framing
+
+> v0.8.8 ships as **"the dashboard becomes wet-lab-credible"**. Where v0.8.6 made it honest and v0.8.7 made it complete, v0.8.8 closes the maturation gaps that kept the simulator feeling like a research tool rather than a wet-lab planner. A bench user can now: pick a first-run example, see what experiment promotes their tier, save / load / compare sessions, export a wet-lab SOP, ingest spreadsheet calibration data, and see predicted-vs-measured ΔP at the bench. The v0.9 maturity plateau is reserved for once the three durable v1.0 deferrals close (live AKTA UNICORN, MCMC inverse, cyclic SMB).
+
+### Detailed handover
+
+- `docs/handover/HANDOVER_v0_8_8_release.md` — combined release-level handover.
+- `docs/update_workplan_2026-05-10_v0_9_0.md` §3 — joint plan; 17/25 W-items now closed, 8 carry over.
+
+### Architecture decisions
+
+No new ADRs introduced. The v0.8.8 work closes the operational-maturity gap between the v0.7→v0.8.7 backend and the dashboard that surfaces it. The decision-grade tier ladder (W-079, W-080, W-090) is enforced more uniformly. The wet-lab procedure document (W-094) does not introduce new physical claims — it formalises the export of the simulator's tier-honest SEMI_QUANTITATIVE state into a bench-readable artefact.
+
 ## v0.8.7 — Orphan backend exposure (2026-05-10)
 
 Closes the v0.8.5 audit's HIGH/MEDIUM-severity orphan-backend defects (S-5, S-6, S-7, S-8, S-9 from `AUDIT_v0_8_5_e2e_phase1_scientific.md`; A-5, A-6, A-7, A-8, A-9 from `..._phase3_architecture.md`). At v0.8.6 the dashboard became *honest* — visible inputs drove the simulation. v0.8.7 makes it *complete* — every backend module the README claims is now reachable from the UI.
