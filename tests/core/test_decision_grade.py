@@ -82,7 +82,7 @@ class TestDecideRenderMode:
     def test_unsupported_always_suppresses(self):
         # An UNSUPPORTED model never produces decision-grade output.
         # Outputs with floor at SEMI_QUANTITATIVE → RANK_BAND under UNSUPPORTED
-        # (gap = 2). PRESSURE_HEADROOM has floor QUALITATIVE_TREND → INTERVAL
+        # (gap = 2). Outputs with floor at QUALITATIVE_TREND → INTERVAL
         # (gap = 1). Every other output suppresses.
         for out in OutputType:
             mode = decide_render_mode(out, ModelEvidenceTier.UNSUPPORTED)
@@ -93,10 +93,21 @@ class TestDecideRenderMode:
                 OutputType.PRESSURE_LIMIT,
                 OutputType.Q_MAX,
                 OutputType.U_CRIT,
+                # B-0i (W-051, v0.8.4) — Bayesian uncertainty outputs.
+                # MC_PROBABILITY + POSTERIOR_PARAMETER share the
+                # SEMI_QUANTITATIVE floor (priors-based bands).
+                OutputType.MC_PROBABILITY,
+                OutputType.POSTERIOR_PARAMETER,
             }:
                 assert mode == RenderMode.RANK_BAND
-            elif out == OutputType.PRESSURE_HEADROOM:
-                # Tier-independent ratio; floor at QUALITATIVE_TREND.
+            elif out in {
+                # Tier-independent outputs (floor at QUALITATIVE_TREND):
+                # PRESSURE_HEADROOM is the ΔP / ΔP_max ratio; ESS is the
+                # importance-sampling diagnostic — both render NUMBER at
+                # any reasonable tier and INTERVAL only at UNSUPPORTED.
+                OutputType.PRESSURE_HEADROOM,
+                OutputType.ESS,
+            }:
                 assert mode == RenderMode.INTERVAL
             else:
                 assert mode == RenderMode.SUPPRESS

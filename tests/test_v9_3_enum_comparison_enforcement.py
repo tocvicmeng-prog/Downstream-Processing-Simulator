@@ -31,11 +31,19 @@ from pathlib import Path
 
 # Enums that are subject to the .value-comparison rule (per CLAUDE.md).
 # Add new enums here when they need the same protection.
+#
+# B-0i / W-052 (v0.8.4): IsothermChoice and OutputType added. Both are
+# managed enums that survive Streamlit ``importlib.reload`` aliasing
+# only when compared by ``.value``. IsothermChoice drives the
+# `panels/isotherm_selector.py` dispatch; OutputType drives the
+# decision-grade render-mode policy gate.
 ENFORCED_ENUMS: frozenset[str] = frozenset({
     "PolymerFamily",
     "ACSSiteType",
     "ModelEvidenceTier",
     "ModelMode",
+    "IsothermChoice",
+    "OutputType",
 })
 
 

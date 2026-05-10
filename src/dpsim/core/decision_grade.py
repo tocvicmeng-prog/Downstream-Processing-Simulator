@@ -74,6 +74,12 @@ class OutputType(Enum):
     U_CRIT = "u_crit"                    # critical superficial velocity
     PRESSURE_HEADROOM = "pressure_headroom"  # ΔP / ΔP_max ratio (0..1)
 
+    # M3 — Bayesian uncertainty (B-0i / W-051, v0.8.4). Consumed by the
+    # forward MC and inverse Bayesian inference UI panels (Bundle C).
+    MC_PROBABILITY = "mc_probability"    # P[blocker] / P[warning] tail probabilities
+    POSTERIOR_PARAMETER = "posterior_parameter"  # K_geom / μ / G_DN posterior quantiles
+    ESS = "ess"                          # effective sample size (importance-sampling diagnostic)
+
 
 class RenderMode(Enum):
     """How a numeric output should be presented to the user.
@@ -142,6 +148,21 @@ DECISION_GRADE_POLICY: dict[OutputType, ModelEvidenceTier] = {
     # *thresholds* (0.70, 0.85) belong to pressure_monitor.py (B-3d) and
     # depend on the envelope's tier separately.
     OutputType.PRESSURE_HEADROOM: ModelEvidenceTier.QUALITATIVE_TREND,
+    # B-0i (W-051) — Bayesian uncertainty outputs (v0.8.4).
+    # MC_PROBABILITY: P[blocker] / P[warning] under the prior. The tail
+    # probability is meaningful as an advisory at SEMI_QUANTITATIVE
+    # (mirrors PRESSURE_HEADROOM's policy choice — the band itself is
+    # what the user reads, not the underlying point estimate).
+    OutputType.MC_PROBABILITY: ModelEvidenceTier.SEMI_QUANTITATIVE,
+    # POSTERIOR_PARAMETER: posterior quantiles on K_geom / μ / G_DN.
+    # ADR-010 §"Tier mapping" anchors these at SEMI_QUANTITATIVE — the
+    # posterior reflects priors, not measured posteriors, until the
+    # wet-lab handshake step that lives outside the UI.
+    OutputType.POSTERIOR_PARAMETER: ModelEvidenceTier.SEMI_QUANTITATIVE,
+    # ESS: effective sample size from importance sampling. Always a
+    # diagnostic, not a prediction; QUALITATIVE_TREND floor → renders
+    # NUMBER for any tier, including QUALITATIVE_TREND results.
+    OutputType.ESS: ModelEvidenceTier.QUALITATIVE_TREND,
 }
 
 
